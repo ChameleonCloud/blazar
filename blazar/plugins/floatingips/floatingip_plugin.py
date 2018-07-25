@@ -262,6 +262,7 @@ class FloatingIpPlugin(base.BasePlugin):
         for alloc in allocations:
             fip = db_api.floatingip_get(alloc['floatingip_id'])
             fip_pool.delete_reserved_floatingip(fip['floating_ip_address'])
+            db_api.fip_allocation_destroy(alloc['id'])
 
     def _matching_fips(self, network_id, fip_addresses, amount,
                        start_date, end_date):

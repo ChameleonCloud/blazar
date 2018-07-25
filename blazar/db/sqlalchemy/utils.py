@@ -33,17 +33,6 @@ def get_backend():
     return sys.modules[__name__]
 
 
-def _get_leases_from_resource_id(resource_id, start_date, end_date):
-    session = get_session()
-    border0 = start_date <= models.Lease.end_date
-    border1 = models.Lease.start_date <= end_date
-    query = (session.query(models.Lease).join(models.Reservation)
-             .filter(models.Reservation.resource_id == resource_id)
-             .filter(sa.and_(border0, border1)))
-    for lease in query:
-        yield lease
-
-
 def _get_leases_from_network_id(network_id, start_date, end_date):
     session = get_session()
     border0 = sa.and_(models.Lease.start_date < start_date,
@@ -66,6 +55,7 @@ def _get_leases_from_host_id(host_id, start_date, end_date):
     border1 = models.Lease.start_date <= end_date
     query = (session.query(models.Lease).join(models.Reservation)
              .join(models.ComputeHostAllocation)
+             .filter(models.ComputeHostAllocation.deleted.is_(None))
              .filter(models.ComputeHostAllocation.compute_host_id == host_id)
              .filter(sa.and_(border0, border1)))
     for lease in query:
@@ -80,6 +70,7 @@ def _get_leases_from_fip_id(fip_id, start_date, end_date):
                       models.Lease.end_date > end_date)
     query = (session.query(models.Lease).join(models.Reservation)
              .join(models.FloatingIPAllocation)
+             .filter(models.FloatingIPAllocation.deleted.is_(None))
              .filter(models.FloatingIPAllocation.floatingip_id == fip_id)
              .filter(~sa.or_(border0, border1)))
     for lease in query:
@@ -92,6 +83,7 @@ def get_reservations_by_host_id(host_id, start_date, end_date):
     border1 = models.Lease.start_date <= end_date
     query = (session.query(models.Reservation).join(models.Lease)
              .join(models.ComputeHostAllocation)
+             .filter(models.ComputeHostAllocation.deleted.is_(None))
              .filter(models.ComputeHostAllocation.compute_host_id == host_id)
              .filter(sa.and_(border0, border1)))
     return query.all()
@@ -103,6 +95,7 @@ def get_reservations_by_host_ids(host_ids, start_date, end_date):
     border1 = models.Lease.start_date <= end_date
     query = (session.query(models.Reservation).join(models.Lease)
              .join(models.ComputeHostAllocation)
+             .filter(models.ComputeHostAllocation.deleted.is_(None))
              .filter(models.ComputeHostAllocation.compute_host_id
                      .in_(host_ids))
              .filter(sa.and_(border0, border1)))
@@ -169,6 +162,8 @@ def get_reservation_allocations_by_host_ids(host_ids, start_date, end_date,
     allocations_query = (session.query(
         models.ComputeHostAllocation.reservation_id,
         models.ComputeHostAllocation.compute_host_id)
+        .filter(models.ComputeHostAllocation.deleted.is_(None))
+        .filter(models.ComputeHostAllocation.compute_host_id.in_(host_ids))
         .filter(models.ComputeHostAllocation.reservation_id.in_(
             list(set([x['id'] for x in reservations])))))
 
@@ -193,6 +188,8 @@ def get_reservation_allocations_by_network_ids(network_ids, start_date,
     allocations_query = (session.query(
         models.NetworkAllocation.reservation_id,
         models.NetworkAllocation.network_id)
+        .filter(models.NetworkAllocation.deleted.is_(None))
+        .filter(models.NetworkAllocation.network_id.in_(network_ids))
         .filter(models.NetworkAllocation.reservation_id.in_(
             list(set([x['id'] for x in reservations])))))
 
