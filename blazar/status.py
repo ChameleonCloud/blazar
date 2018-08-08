@@ -231,7 +231,8 @@ class LeaseStatus(BaseStatus):
                         else:
                             LOG.exception('Lease %s went into ERROR status.',
                                           lease_id)
-                            db_api.lease_update(lease_id, {'status': cls.ERROR})
+                            db_api.lease_update(lease_id,
+                                                {'status': cls.ERROR})
                 else:
                     # Update a lease status if it exists
                     if db_api.lease_get(lease_id):
