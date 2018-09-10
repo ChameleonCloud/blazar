@@ -23,6 +23,7 @@ from novaclient import client as nova_client
 from novaclient import exceptions as nova_exceptions
 from oslo_config import cfg
 from oslo_config import fixture as conf_fixture
+import random
 import testtools
 
 from blazar import context, policy
@@ -2414,7 +2415,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             '[]', '[]', '1-3',
             datetime.datetime(2013, 12, 19, 20, 00),
             datetime.datetime(2013, 12, 19, 21, 00),
-            None
+            'fake-project'
         )
         self.assertEqual(set(['host2', 'host3']), set(result))
 
@@ -2487,9 +2488,130 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             '[]', '[]', '3-3',
             datetime.datetime(2013, 12, 19, 20, 00),
             datetime.datetime(2013, 12, 19, 21, 00),
-            None
+            None)
+        self.addCleanup(CONF.clear_override, 'cleaning_time')
+        self.assertEqual(['host1', 'host2', 'host3'], result)
+
+    @mock.patch.object(random.Random, "shuffle")
+    def test_random_matching_hosts_not_allocated_hosts(self, mock_shuffle):
+        def host_allocation_get_all_by_values(**kwargs):
+            if kwargs['compute_host_id'] == 'host1':
+                return True
+        self.cfg.CONF.set_override('randomize_host_selection', True,
+                                   group=plugin.RESOURCE_TYPE)
+        host_get = self.patch(
+            self.db_api,
+            'reservable_host_get_all_by_queries')
+        host_get.return_value = [
+            {'id': 'host1'},
+            {'id': 'host2'},
+            {'id': 'host3'},
+        ]
+        host_get = self.patch(
+            self.db_api,
+            'host_allocation_get_all_by_values')
+        host_get.side_effect = host_allocation_get_all_by_values
+        host_get = self.patch(
+            self.db_utils,
+            'get_free_periods')
+        host_get.return_value = [
+            (datetime.datetime(2013, 12, 19, 20, 00),
+             datetime.datetime(2013, 12, 19, 21, 00)),
+        ]
+        is_admin = self.patch(
+            policy, 'enforce'
         )
-        self.assertEqual(set(['host1', 'host2', 'host3']), set(result))
+        is_admin.return_value = False
+        self.fake_phys_plugin._matching_hosts(
+            '[]', '[]', '1-3',
+            datetime.datetime(2013, 12, 19, 20, 00),
+            datetime.datetime(2013, 12, 19, 21, 00),
+            None)
+        self.addCleanup(CONF.clear_override, 'randomize_host_selection',
+                        group=plugin.RESOURCE_TYPE)
+        mock_shuffle.assert_called_once_with(['host2', 'host3'])
+
+    @mock.patch.object(random.Random, "shuffle")
+    def test_random_matching_hosts_allocated_hosts(self, mock_shuffle):
+        def host_allocation_get_all_by_values(**kwargs):
+            if kwargs['compute_host_id'] == 'host1':
+                return True
+        self.cfg.CONF.set_override('randomize_host_selection', True,
+                                   group=plugin.RESOURCE_TYPE)
+        host_get = self.patch(
+            self.db_api,
+            'reservable_host_get_all_by_queries')
+        host_get.return_value = [
+            {'id': 'host1'},
+            {'id': 'host2'},
+            {'id': 'host3'},
+        ]
+        host_get = self.patch(
+            self.db_api,
+            'host_allocation_get_all_by_values')
+        host_get.side_effect = host_allocation_get_all_by_values
+        host_get = self.patch(
+            self.db_utils,
+            'get_free_periods')
+        host_get.return_value = [
+            (datetime.datetime(2013, 12, 19, 20, 00),
+             datetime.datetime(2013, 12, 19, 21, 00)),
+        ]
+        is_admin = self.patch(
+            policy, 'enforce'
+        )
+        is_admin.return_value = False
+        self.fake_phys_plugin._matching_hosts(
+            '[]', '[]', '3-3',
+            datetime.datetime(2013, 12, 19, 20, 00),
+            datetime.datetime(2013, 12, 19, 21, 00),
+            None)
+        self.addCleanup(CONF.clear_override, 'randomize_host_selection',
+                        group=plugin.RESOURCE_TYPE)
+        mock_shuffle.assert_called_once_with(['host1', 'host2', 'host3'])
+
+    @mock.patch.object(random.Random, "shuffle")
+    def test_random_matching_hosts_allocated_cleaning_time(self, mock_shuffle):
+        def host_allocation_get_all_by_values(**kwargs):
+            if kwargs['compute_host_id'] == 'host1':
+                return True
+        self.cfg.CONF.set_override('randomize_host_selection', True,
+                                   group=plugin.RESOURCE_TYPE)
+        self.cfg.CONF.set_override('cleaning_time', '5')
+        host_get = self.patch(
+            self.db_api,
+            'reservable_host_get_all_by_queries')
+        host_get.return_value = [
+            {'id': 'host1'},
+            {'id': 'host2'},
+            {'id': 'host3'},
+        ]
+        host_get = self.patch(
+            self.db_api,
+            'host_allocation_get_all_by_values')
+        host_get.side_effect = host_allocation_get_all_by_values
+        host_get = self.patch(
+            self.db_utils,
+            'get_free_periods')
+        host_get.return_value = [
+            (datetime.datetime(2013, 12, 19, 20, 00)
+             - datetime.timedelta(minutes=5),
+             datetime.datetime(2013, 12, 19, 21, 00)
+             + datetime.timedelta(minutes=5))
+        ]
+        is_admin = self.patch(
+            policy, 'enforce'
+        )
+        is_admin.return_value = False
+        self.fake_phys_plugin._matching_hosts(
+            '[]', '[]', '3-3',
+            datetime.datetime(2013, 12, 19, 20, 00),
+            datetime.datetime(2013, 12, 19, 21, 00),
+            None)
+        self.addCleanup(CONF.clear_override, 'randomize_host_selection',
+                        group=plugin.RESOURCE_TYPE)
+        self.addCleanup(CONF.clear_override, 'cleaning_time')
+        mock_shuffle.assert_called_once_with(['host1', 'host2', 'host3'])
 
     def test_matching_hosts_not_matching(self):
         host_get = self.patch(
