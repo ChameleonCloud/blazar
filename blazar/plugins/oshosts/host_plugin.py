@@ -18,6 +18,7 @@ import datetime
 from random import shuffle
 import shlex
 import subprocess
+from uuid import UUID
 
 from novaclient import exceptions as nova_exceptions
 from oslo_config import cfg
@@ -31,6 +32,7 @@ from blazar.manager import exceptions as manager_ex
 from blazar.plugins import base
 from blazar.plugins import oshosts as plugin
 from blazar import status
+from blazar.utils.openstack import heat
 from blazar.utils.openstack import keystone
 from blazar.utils.openstack import nova
 from blazar.utils import plugins as plugins_utils
@@ -73,6 +75,7 @@ LOG = logging.getLogger(__name__)
 
 
 before_end_options = ['', 'snapshot', 'default', 'email']
+on_start_options = ['', 'default', 'orchestration']
 
 
 class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
@@ -133,7 +136,8 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             'hypervisor_properties': values['hypervisor_properties'],
             'count_range': values['count_range'],
             'status': 'pending',
-            'before_end': values['before_end']
+            'before_end': values['before_end'],
+            'on_start': values['on_start']
         }
         host_reservation = db_api.host_reservation_create(host_rsrv_values)
         for host_id in host_ids:
@@ -210,6 +214,18 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                         pool.remove_computehost(
                             host_reservation['aggregate_id'], host)
                 raise
+
+        action = host_reservation.get('on_start', 'default')
+
+        if 'orchestration' in action:
+            stack_id = action.split(':')[-1]
+            heat_client = heat.BlazarHeatClient()
+            heat_client.heat.stacks.update(
+                stack_id=stack_id,
+                existing=True,
+                converge=True,
+                parameters=dict(
+                    reservation_id=host_reservation['reservation_id']))
 
     def before_end(self, resource_id):
         """Take an action before the end of a lease."""
@@ -643,6 +659,23 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             values['before_end'] = 'default'
         if values['before_end'] not in before_end_options:
             raise manager_ex.MalformedParameter(param='before_end')
+
+        if 'on_start' not in values:
+            values['on_start'] = 'default'
+        if not self._is_valid_on_start_option(values['on_start']):
+            raise manager_ex.MalformedParameter(param='on_start')
+
+    def _is_valid_on_start_option(self, value):
+
+        if 'orchestration' in value:
+            stack = value.split(':')[-1]
+            try:
+                UUID(stack)
+                return True
+            except Exception:
+                return False
+        else:
+            return value in on_start_options
 
     def _update_allocations(self, dates_before, dates_after, reservation_id,
                             reservation_status, host_reservation, values,
