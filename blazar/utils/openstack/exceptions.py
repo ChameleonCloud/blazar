@@ -25,3 +25,7 @@ class ResourceProviderCreationFailed(exceptions.BlazarException):
 
 class ResourceProviderDeletionFailed(exceptions.BlazarException):
     msg_fmt = _("Failed to delete resource provider %(uuid)s")
+
+
+class FloatingIPNetworkNotFound(exceptions.InvalidInput):
+    msg_fmt = _("Failed to find network %(network)s")
