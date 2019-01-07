@@ -1,0 +1,14 @@
+---
+prelude: >
+  Adds support for reserving VLAN or VXLAN network segments.
+features:
+  - |
+    Site operators can now add network segments to Blazar's reservable
+    inventory. Users can create a lease that includes one or more reservations
+    for a network segment. While the user's lease is active, Neutron networks
+    for any reserved segments will be associated with the user's project.
+other:
+  - |
+    When tearing down a network reservation, the Neutron network is deleted.
+    As part of this, any instances connected to the network will have their ports
+    deleted, and will lose connectivity if not attached to any other networks.
