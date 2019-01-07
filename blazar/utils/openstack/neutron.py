@@ -13,20 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keystoneauth1.identity import v3
-from keystoneauth1 import session
 import netaddr
 from neutronclient.common import exceptions as neutron_exceptions
 from neutronclient.v2_0 import client as neutron_client
 
-from oslo_config import cfg
 from oslo_log import log as logging
 
-from blazar import context
 from blazar.utils.openstack import base
 from blazar.utils.openstack import exceptions
 
-CONF = cfg.CONF
 LOG = logging.getLogger(__name__)
 
 
@@ -74,6 +69,9 @@ class BlazarNeutronClient(object):
         kwargs.setdefault('session', sess)
         kwargs.setdefault('region_name', region_name)
         self.neutron = neutron_client.Client(**kwargs)
+
+    def __getattr__(self, attr):
+        return getattr(self.neutron, attr)
 
 
 class FloatingIPPool(BlazarNeutronClient):
