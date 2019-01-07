@@ -13,9 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from keystoneauth1.identity import v3
+from keystoneauth1 import session
 import netaddr
+from oslo_config import cfg
 
+from blazar import context
 from blazar.manager import exceptions
+
+CONF = cfg.CONF
 
 
 def get_os_auth_host(conf):
@@ -27,6 +33,59 @@ def get_os_auth_host(conf):
     if netaddr.valid_ipv6(os_auth_host, netaddr.core.INET_PTON):
         os_auth_host = "[%s]" % os_auth_host
     return os_auth_host
+
+
+def client_kwargs(**_kwargs):
+    kwargs = _kwargs.copy()
+
+    ctx = kwargs.pop('ctx', None)
+    username = kwargs.pop('username',
+                          CONF.os_admin_username)
+    password = kwargs.pop('password',
+                          CONF.os_admin_password)
+    project_name = kwargs.pop('project_name',
+                              CONF.os_admin_project_name)
+    user_domain_name = kwargs.pop('user_domain_name',
+                                  CONF.os_admin_user_domain_name)
+    project_domain_name = kwargs.pop('project_domain_name',
+                                     CONF.os_admin_project_domain_name)
+    trust_id = kwargs.pop('trust_id', None)
+    auth_url = kwargs.pop('auth_url', None)
+    region_name = kwargs.pop('region_name', CONF.os_region_name)
+    if ctx is None:
+        try:
+            ctx = context.current()
+        except RuntimeError:
+            pass
+    if ctx is not None:
+        kwargs.setdefault('global_request_id', ctx.global_request_id)
+
+    if auth_url is None:
+        auth_url = "%s://%s:%s/%s/%s" % (CONF.os_auth_protocol,
+                                         get_os_auth_host(CONF),
+                                         CONF.os_auth_port,
+                                         CONF.os_auth_prefix,
+                                         CONF.os_auth_version)
+
+    auth_kwargs = dict(
+        auth_url=auth_url,
+        username=username,
+        password=password,
+        user_domain_name=user_domain_name,
+        project_domain_name=project_domain_name
+    )
+
+    if trust_id is not None:
+        auth_kwargs.update(trust_id=trust_id)
+    else:
+        auth_kwargs.update(project_name=project_name)
+
+    auth = v3.Password(**auth_kwargs)
+    sess = session.Session(auth=auth)
+
+    kwargs.setdefault('session', sess)
+    kwargs.setdefault('region_name', region_name)
+    return kwargs
 
 
 def url_for(service_catalog, service_type, admin=False,

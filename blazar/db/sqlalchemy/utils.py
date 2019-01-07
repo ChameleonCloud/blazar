@@ -44,6 +44,22 @@ def _get_leases_from_resource_id(resource_id, start_date, end_date):
         yield lease
 
 
+def _get_leases_from_network_id(network_id, start_date, end_date):
+    session = get_session()
+    border0 = sa.and_(models.Lease.start_date < start_date,
+                      models.Lease.end_date < start_date)
+    border1 = sa.and_(models.Lease.start_date > end_date,
+                      models.Lease.end_date > end_date)
+    query = (api.model_query(models.Lease, session=session)
+             .join(models.Reservation)
+             .join(models.NetworkAllocation)
+             .filter(models.NetworkAllocation.deleted.is_(None))
+             .filter(models.NetworkAllocation.network_id == network_id)
+             .filter(~sa.or_(border0, border1)))
+    for lease in query:
+        yield lease
+
+
 def _get_leases_from_host_id(host_id, start_date, end_date):
     session = get_session()
     border0 = start_date <= models.Lease.end_date
@@ -93,28 +109,102 @@ def get_reservations_by_host_ids(host_ids, start_date, end_date):
     return query.all()
 
 
+def get_reservations_by_network_id(network_id, start_date, end_date):
+    session = get_session()
+    border0 = sa.and_(models.Lease.start_date < start_date,
+                      models.Lease.end_date < start_date)
+    border1 = sa.and_(models.Lease.start_date > end_date,
+                      models.Lease.end_date > end_date)
+    query = (api.model_query(models.Reservation, session=session)
+             .join(models.Lease)
+             .join(models.NetworkAllocation)
+             .filter(models.NetworkAllocation.deleted.is_(None))
+             .filter(models.NetworkAllocation.network_id == network_id)
+             .filter(~sa.or_(border0, border1)))
+    return query.all()
+
+
+def get_reservations_for_allocations(session, start_date, end_date,
+                                     lease_id=None, reservation_id=None):
+    border0 = models.Lease.end_date < start_date
+    border1 = models.Lease.start_date > end_date
+    fields = ['id', 'status', 'lease_id', 'start_date',
+              'end_date', 'lease_name', 'project_id']
+
+    reservations_query = (session.query(
+        models.Reservation.id,
+        models.Reservation.status,
+        models.Reservation.lease_id,
+        models.Lease.start_date,
+        models.Lease.end_date,
+        models.Lease.name,
+        models.Lease.project_id)
+        .join(models.Lease)
+        .filter(models.Reservation.deleted.is_(None))
+        .filter(sa.or_(
+            models.Lease.status.like(status.lease.ACTIVE),
+            models.Lease.status.like(status.lease.PENDING)))
+        .filter(sa.or_(
+            models.Reservation.status.like(status.reservation.ACTIVE),
+            models.Reservation.status.like(status.reservation.PENDING)))
+        .filter(~sa.or_(border0, border1)))
+
+    if lease_id:
+        reservations_query = reservations_query.filter(
+            models.Reservation.lease_id == lease_id)
+    if reservation_id:
+        reservations_query = reservations_query.filter(
+            models.Reservation.id == reservation_id)
+
+    return [dict(zip(fields, r)) for r in reservations_query.all()]
+
+
 def get_reservation_allocations_by_host_ids(host_ids, start_date, end_date,
                                             lease_id=None,
                                             reservation_id=None):
     session = get_session()
-    border0 = start_date <= models.Lease.end_date
-    border1 = models.Lease.start_date <= end_date
-    query = (session.query(models.Reservation.id,
-                           models.Reservation.lease_id,
-                           models.ComputeHostAllocation.compute_host_id)
-             .join(models.Lease,
-                   models.Lease.id == models.Reservation.lease_id)
-             .join(models.ComputeHostAllocation,
-                   models.ComputeHostAllocation.reservation_id ==
-                   models.Reservation.id)
-             .filter(models.ComputeHostAllocation.compute_host_id
-                     .in_(host_ids))
-             .filter(sa.and_(border0, border1)))
-    if lease_id:
-        query = query.filter(models.Reservation.lease_id == lease_id)
-    if reservation_id:
-        query = query.filter(models.Reservation.id == reservation_id)
-    return query.all()
+    reservations = get_reservations_for_allocations(
+        session, start_date, end_date, lease_id, reservation_id)
+
+    allocations_query = (session.query(
+        models.ComputeHostAllocation.reservation_id,
+        models.ComputeHostAllocation.compute_host_id)
+        .filter(models.ComputeHostAllocation.reservation_id.in_(
+            list(set([x['id'] for x in reservations])))))
+
+    allocations = defaultdict(list)
+
+    for row in allocations_query.all():
+        allocations[row[0]].append(row[1])
+
+    for r in reservations:
+        r['host_ids'] = allocations[r['id']]
+
+    return reservations
+
+
+def get_reservation_allocations_by_network_ids(network_ids, start_date,
+                                               end_date, lease_id=None,
+                                               reservation_id=None):
+    session = get_session()
+    reservations = get_reservations_for_allocations(
+        session, start_date, end_date, lease_id, reservation_id)
+
+    allocations_query = (session.query(
+        models.NetworkAllocation.reservation_id,
+        models.NetworkAllocation.network_id)
+        .filter(models.NetworkAllocation.reservation_id.in_(
+            list(set([x['id'] for x in reservations])))))
+
+    allocations = defaultdict(list)
+
+    for row in allocations_query.all():
+        allocations[row[0]].append(row[1])
+
+    for r in reservations:
+        r['network_ids'] = allocations[r['id']]
+
+    return reservations
 
 
 def get_plugin_reservation(resource_type, resource_id):
@@ -158,6 +248,8 @@ def _get_events(resource_id, start_date, end_date, resource_type):
         leases = _get_leases_from_host_id(resource_id, start_date, end_date)
     elif resource_type == 'floatingip':
         leases = _get_leases_from_fip_id(resource_id, start_date, end_date)
+    elif resource_type == 'network':
+        leases = _get_leases_from_network_id(resource_id, start_date, end_date)
     else:
         mgr_exceptions.UnsupportedResourceType(resource_type)
 

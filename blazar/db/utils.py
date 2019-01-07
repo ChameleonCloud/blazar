@@ -111,13 +111,23 @@ def get_reservations_by_host_ids(host_ids, start_date, end_date):
     return IMPL.get_reservations_by_host_ids(host_ids, start_date, end_date)
 
 
+def get_reservations_by_network_id(network_id, start_date, end_date):
+    return IMPL.get_reservations_by_network_id(
+        network_id, start_date, end_date)
+
+
 def get_reservation_allocations_by_host_ids(host_ids, start_date, end_date,
                                             lease_id=None,
                                             reservation_id=None):
-    return IMPL.get_reservation_allocations_by_host_ids(host_ids,
-                                                        start_date, end_date,
-                                                        lease_id,
-                                                        reservation_id)
+    return IMPL.get_reservation_allocations_by_host_ids(
+        host_ids, start_date, end_date, lease_id, reservation_id)
+
+
+def get_reservation_allocations_by_network_ids(network_ids, start_date,
+                                               end_date, lease_id=None,
+                                               reservation_id=None):
+    return IMPL.get_reservation_allocations_by_network_ids(
+        network_ids, start_date, end_date, lease_id, reservation_id)
 
 
 def get_plugin_reservation(resource_type, resource_id):
