@@ -559,3 +559,27 @@ def network_extra_capability_get_latest_per_name(network_id,
     return IMPL.network_extra_capability_get_latest_per_name(
         network_id, extra_capability_name
     )
+
+
+# Floating ip
+
+def floatingip_create(values):
+    """Create a floating ip from the values."""
+    return IMPL.floatingip_create(values)
+
+
+@to_dict
+def floatingip_get(floatingip_id):
+    """Return a specific floating ip."""
+    return IMPL.floatingip_get(floatingip_id)
+
+
+@to_dict
+def floatingip_list():
+    """Return a list of floating ip."""
+    return IMPL.floatingip_list()
+
+
+def floatingip_destroy(floatingip_id):
+    """Delete specific floating ip."""
+    IMPL.floatingip_destroy(floatingip_id)

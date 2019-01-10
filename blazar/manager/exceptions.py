@@ -230,3 +230,14 @@ class NetworkCreationFailed(exceptions.BlazarException):
 class NetworkDeletionFailed(exceptions.BlazarException):
     msg_fmt = _("Failed to delete network %(network_id)s for reservation "
                 "%(reservation_id)s")
+
+
+# floating ip plugin related exceptions
+
+class FloatingIPNotFound(exceptions.NotFound):
+    msg_fmt = _("Floating IP %(floatingip)s not found.")
+
+
+class CantDeleteFloatingIP(exceptions.BlazarException):
+    code = 409
+    msg_fmt = _("Can't delete floating IP %(floatingip)s. %(msg)s")
