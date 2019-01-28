@@ -33,6 +33,10 @@ LOG = logging.getLogger(__name__)
 class Rest(flask.Blueprint):
     """REST helper class."""
 
+    def __init__(self, *args, **kwargs):
+        super(Rest, self).__init__(*args, **kwargs)
+        self.url_prefix = kwargs.get('url_prefix', None)
+
     def get(self, rule, status_code=200):
         return self._mroute('GET', rule, status_code)
 
