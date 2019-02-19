@@ -232,7 +232,7 @@ class UsageEnforcer(object):
             password=CONF.os_admin_password,
             tenant_name=CONF.os_admin_project_name)
         project = self.keystone_client.projects.get(project_id)
-        return project.name
+        return project.charge_code
 
     def get_balance(self, project_name):
         try:
