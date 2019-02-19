@@ -169,7 +169,7 @@ class UsageEnforcer(object):
         lease_duration = end_date - start_date
 
         user_name = self._get_user_name(lease_values['user_id'])
-        project_name = self._get_project_name(lease_values['project_id'])
+        project_name = self._get_project_charge_code(lease_values['project_id'])
 
         if lease is not None:
             if lease['start_date'] < now and now < lease['end_date']:
@@ -225,8 +225,8 @@ class UsageEnforcer(object):
         user = self.keystone_client.users.get(user_id)
         return user.name
 
-    def _get_project_name(self, project_id):
-        """Get project name from Keystone"""
+    def _get_project_charge_code(self, project_id):
+        """Get project charge_code from Keystone"""
         self.keystone_client = keystone.BlazarKeystoneClient(
             username=CONF.os_admin_username,
             password=CONF.os_admin_password,
@@ -274,7 +274,7 @@ class UsageEnforcer(object):
             pass
 
         user_name = self._get_user_name(lease_values['user_id'])
-        project_name = self._get_project_name(lease_values['project_id'])
+        project_name = self._get_project_charge_code(lease_values['project_id'])
         self.setup_usage_enforcement(project_name)
 
         if allocated_host_ids is not None:
@@ -320,7 +320,7 @@ class UsageEnforcer(object):
         if not CONF.enforcement.usage_enforcement:
             pass
 
-        project_name = self._get_project_name(lease['project_id'])
+        project_name = self._get_project_charge_code(lease['project_id'])
         self.setup_usage_enforcement(project_name)
 
         old_su_factor = self._total_billrate(allocations)
@@ -351,7 +351,7 @@ class UsageEnforcer(object):
             pass
 
         user_name = self._get_user_name(lease['user_id'])
-        project_name = self._get_project_name(lease['project_id'])
+        project_name = self._get_project_charge_code(lease['project_id'])
         self.setup_usage_enforcement(project_name)
 
         old_su_factor = self._total_billrate(old_allocations)
@@ -411,7 +411,7 @@ class UsageEnforcer(object):
         if not CONF.enforcement.usage_enforcement:
             pass
 
-        project_name = self._get_project_name(lease['project_id'])
+        project_name = self._get_project_charge_code(lease['project_id'])
         self.setup_usage_enforcement(project_name)
 
         total_su_factor = self._total_billrate(allocations)
