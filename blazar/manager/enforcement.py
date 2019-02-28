@@ -85,7 +85,6 @@ class UsageEnforcer(object):
 
     def _project_max_lease_durations(self):
         """Parses per-project maximum lease duration
-
         Parses the list of project:max_duration pairs provided for
         configuration parameter [enforcement]/project_max_lease_durations.
         """
@@ -150,15 +149,12 @@ class UsageEnforcer(object):
 
     def check_lease_duration(self, lease_values, lease=None):
         """Verifies that lease duration is within enforcement limits
-
            This function checks:
            * one-time exception for user
            * project limit
            * default limit
-
            It takes into account the prolongation window set via
            [enforcement]/prolong_seconds_before_lease_end.
-
            Raises a NotAuthorized exception if lease duration is too long.
         """
         start_date = lease_values['start_date']
@@ -265,7 +261,6 @@ class UsageEnforcer(object):
                                        allocated_host_ids=None,
                                        allocated_network_ids=None):
         """Check if we have enough available SUs for this reservation
-
         Raises a BillingError if we don't have enough available SUs. If
         allocated_host_ids or allocated_network_ids is set and there are enough
         SUs, it increases the encumbered value in Redis.
@@ -450,4 +445,4 @@ class UsageEnforcer(object):
             )
         else:
             raise Exception("Allocation list not in an expected format: %s",
-                            allocations)
+allocations)
