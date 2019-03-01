@@ -413,7 +413,7 @@ class UsageEnforcer(object):
             raise exceptions.RedisConnectionError(
                 host=CONF.enforcement.usage_db_host)
         LOG.info('Encumbered usage for project {} now {:.2f}'
-                 .format(project_enforcement_id, self.get_encumbered(charge_code)))
+                 .format(project_enforcement_id, self.get_encumbered(project_enforcement_id)))
 
     def check_su_factor_identical(self, allocs, allocs_to_remove,
                                   ids_to_add):
