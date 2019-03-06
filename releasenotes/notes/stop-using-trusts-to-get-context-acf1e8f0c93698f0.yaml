@@ -1,0 +1,11 @@
+---
+fixes:
+  - |
+    Fixes an issue wherein operations modifying existing leases (update or
+    delete) and events such as ``start_lease`` or ``end_lease`` would fail
+    after the user who created the lease was disabled or removed from the
+    project. For more details, see `bug 1712381
+    <https://bugs.launchpad.net/blazar/+bug/1712381>`_.
+deprecations:
+  - |
+    Context information has been removed from all notification messages.
