@@ -395,10 +395,8 @@ class ServiceTestCase(tests.TestCase):
         start_lease.assert_called_once_with(lease_id=event['lease_id'],
                                             event_id=event['id'])
         self.lease_get.assert_called_once_with(event['lease_id'])
-        expected_context = self.trust_ctx.return_value
         self.fake_notifier.assert_called_once_with(
-            expected_context.__enter__.return_value,
-            notifier_api.format_lease_payload(self.lease),
+            {}, notifier_api.format_lease_payload(self.lease),
             'lease.event.start_lease')
 
     def test_exec_event_invalid_event_type(self):
@@ -492,11 +490,8 @@ class ServiceTestCase(tests.TestCase):
         self.trust_ctx.assert_called_once_with(lease_values['trust_id'])
         self.lease_create.assert_called_once_with(lease_values)
         self.assertEqual(lease, self.lease)
-        expected_context = self.trust_ctx.return_value
-
         self.fake_notifier.assert_called_once_with(
-            expected_context.__enter__.return_value,
-            notifier_api.format_lease_payload(lease),
+            {}, notifier_api.format_lease_payload(lease),
             'lease.create')
 
     def test_create_lease_some_time(self):
@@ -1072,12 +1067,9 @@ class ServiceTestCase(tests.TestCase):
                 'end_date': datetime.datetime(2013, 12, 20, 16, 00)
             }
         )
-        expected_context = self.trust_ctx.return_value
-        calls = [mock.call(expected_context.__enter__.return_value,
-                           notifier_api.format_lease_payload(self.lease),
+        calls = [mock.call({}, notifier_api.format_lease_payload(self.lease),
                            'lease.update'),
-                 mock.call(expected_context.__enter__.return_value,
-                           notifier_api.format_lease_payload(self.lease),
+                 mock.call({}, notifier_api.format_lease_payload(self.lease),
                            'lease.event.before_end_lease.stop'),
                  ]
         self.fake_notifier.assert_has_calls(calls)
@@ -1137,12 +1129,9 @@ class ServiceTestCase(tests.TestCase):
                 'end_date': datetime.datetime(2013, 12, 20, 16, 00)
             }
         )
-        expected_context = self.trust_ctx.return_value
-        calls = [mock.call(expected_context.__enter__.return_value,
-                           notifier_api.format_lease_payload(self.lease),
+        calls = [mock.call({}, notifier_api.format_lease_payload(self.lease),
                            'lease.update'),
-                 mock.call(expected_context.__enter__.return_value,
-                           notifier_api.format_lease_payload(self.lease),
+                 mock.call({}, notifier_api.format_lease_payload(self.lease),
                            'lease.event.before_end_lease.stop'),
                  ]
         self.fake_notifier.assert_has_calls(calls)
@@ -1451,7 +1440,6 @@ class ServiceTestCase(tests.TestCase):
 
         self.manager.delete_lease(self.lease_id)
 
-        self.trust_ctx.assert_called_once_with(self.lease['trust_id'])
         self.lease_destroy.assert_called_once_with(self.lease_id)
         self.fake_plugin.on_end.assert_called_with('111')
         enforcement_on_end.assert_called_once()
@@ -1474,11 +1462,9 @@ class ServiceTestCase(tests.TestCase):
 
         self.manager.delete_lease(self.lease_id)
 
-        expected_context = self.trust_ctx.return_value
         self.lease_destroy.assert_called_once_with(self.lease_id)
         self.fake_notifier.assert_called_once_with(
-            expected_context.__enter__.return_value,
-            self.notifier_api.format_lease_payload(self.lease),
+            {}, self.notifier_api.format_lease_payload(self.lease),
             'lease.delete')
         self.fake_plugin.on_end.assert_not_called()
         enforcement_on_end.assert_not_called()
@@ -1566,7 +1552,6 @@ class ServiceTestCase(tests.TestCase):
 
         self.manager.start_lease(self.lease_id, '1')
 
-        self.trust_ctx.assert_called_once_with(self.lease['trust_id'])
         basic_action.assert_called_once_with(self.lease_id, '1', 'on_start',
                                              'active')
 
@@ -1576,7 +1561,6 @@ class ServiceTestCase(tests.TestCase):
 
         self.manager.end_lease(self.lease_id, '1')
 
-        self.trust_ctx.assert_called_once_with(self.lease['trust_id'])
         basic_action.assert_called_once_with(self.lease_id, '1', 'on_end',
                                              'deleted')
         enforcement_on_end.assert_called_once()

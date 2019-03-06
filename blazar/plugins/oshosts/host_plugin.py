@@ -39,7 +39,6 @@ from blazar.utils.openstack import keystone
 from blazar.utils.openstack import nova
 from blazar.utils.openstack import placement
 from blazar.utils import plugins as plugins_utils
-from blazar.utils import trusts
 
 plugin_opts = [
     cfg.StrOpt('blazar_az_prefix',
@@ -402,60 +401,63 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         if host_ref is None:
             raise manager_ex.InvalidHost(host=host_values)
 
-        with trusts.create_ctx_from_trust(trust_id):
-            inventory = nova.NovaInventory()
-            servers = inventory.get_servers_per_host(host_ref)
-            if servers:
-                raise manager_ex.HostHavingServers(host=host_ref,
-                                                   servers=servers)
-            host_details = inventory.get_host_details(host_ref)
-            # NOTE(sbauza): Only last duplicate name for same extra capability
-            # will be stored
-            to_store = set(host_values.keys()) - set(host_details.keys())
-            extra_capabilities_keys = to_store
-            extra_capabilities = dict(
-                (key, host_values[key]) for key in extra_capabilities_keys
-            )
+        inventory = nova.NovaInventory()
+        servers = inventory.get_servers_per_host(host_ref)
+        if servers:
+            raise manager_ex.HostHavingServers(host=host_ref,
+                                               servers=servers)
+        host_details = inventory.get_host_details(host_ref)
+        # NOTE(sbauza): Only last duplicate name for same extra capability
+        # will be stored
+        to_store = set(host_values.keys()) - set(host_details.keys())
+        extra_capabilities_keys = to_store
+        extra_capabilities = dict(
+            (key, host_values[key]) for key in extra_capabilities_keys
+        )
 
-            if any([len(key) > 64 for key in extra_capabilities_keys]):
-                raise manager_ex.ExtraCapabilityTooLong()
+        if any([len(key) > 64 for key in extra_capabilities_keys]):
+            raise manager_ex.ExtraCapabilityTooLong()
 
-            self.placement_client.create_reservation_provider(
+        self.placement_client.create_reservation_provider(
+            host_details['hypervisor_hostname'])
+
+        pool = nova.ReservationPool()
+        # NOTE(jason): CHAMELEON-ONLY
+        # changed from 'service_name' to 'hypervisor_hostname'
+        pool.add_computehost(self.freepool_name,
+                             host_details['hypervisor_hostname'])
+
+        host = None
+        cantaddextracapability = []
+        try:
+            if trust_id:
+                host_details.update({'trust_id': trust_id})
+            host = db_api.host_create(host_details)
+        except db_ex.BlazarDBException as e:
+            # We need to rollback
+            # TODO(sbauza): Investigate use of Taskflow for atomic
+            # transactions
+            # NOTE(jason): CHAMELEON-ONLY
+            # changed from 'service_name' to 'hypervisor_hostname'
+            pool.remove_computehost(self.freepool_name,
+                                    host_details['hypervisor_hostname'])
+            self.placement_client.delete_reservation_provider(
                 host_details['hypervisor_hostname'])
-
-            pool = nova.ReservationPool()
-            pool.add_computehost(self.freepool_name,
-                                 host_details['hypervisor_hostname'])
-
-            host = None
-            cantaddextracapability = []
+            raise e
+        for key in extra_capabilities:
+            values = {'computehost_id': host['id'],
+                      'capability_name': key,
+                      'capability_value': extra_capabilities[key],
+                      }
             try:
-                if trust_id:
-                    host_details.update({'trust_id': trust_id})
-                host = db_api.host_create(host_details)
-            except db_ex.BlazarDBException as e:
-                # We need to rollback
-                # TODO(sbauza): Investigate use of Taskflow for atomic
-                # transactions
-                pool.remove_computehost(self.freepool_name,
-                                        host_details['hypervisor_hostname'])
-                self.placement_client.delete_reservation_provider(
-                    host_details['hypervisor_hostname'])
-                raise e
-            for key in extra_capabilities:
-                values = {'computehost_id': host['id'],
-                          'capability_name': key,
-                          'capability_value': extra_capabilities[key],
-                          }
-                try:
-                    db_api.host_extra_capability_create(values)
-                except db_ex.BlazarDBException:
-                    cantaddextracapability.append(key)
-            if cantaddextracapability:
-                raise manager_ex.CantAddExtraCapability(
-                    keys=cantaddextracapability,
-                    host=host['id'])
-            return self.get_computehost(host['id'])
+                db_api.host_extra_capability_create(values)
+            except db_ex.BlazarDBException:
+                cantaddextracapability.append(key)
+        if cantaddextracapability:
+            raise manager_ex.CantAddExtraCapability(
+                keys=cantaddextracapability,
+                host=host['id'])
+        return self.get_computehost(host['id'])
 
     def is_updatable_extra_capability(self, capability, capability_name):
         reservations = db_utils.get_reservations_by_host_id(
@@ -534,34 +536,35 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         if not host:
             raise manager_ex.HostNotFound(host=host_id)
 
-        with trusts.create_ctx_from_trust(host['trust_id']):
-            if db_api.host_allocation_get_all_by_values(
-                    compute_host_id=host_id):
-                raise manager_ex.CantDeleteHost(
-                    host=host_id,
-                    msg='The host is reserved.'
-                )
+        if db_api.host_allocation_get_all_by_values(
+                compute_host_id=host_id):
+            raise manager_ex.CantDeleteHost(
+                host=host_id,
+                msg='The host is reserved.'
+            )
 
-            inventory = nova.NovaInventory()
-            servers = inventory.get_servers_per_host(
+        inventory = nova.NovaInventory()
+        servers = inventory.get_servers_per_host(
+            host['hypervisor_hostname'])
+        if servers:
+            raise manager_ex.HostHavingServers(
+                host=host['hypervisor_hostname'], servers=servers)
+
+        try:
+            pool = nova.ReservationPool()
+            # NOTE(jason): CHAMELEON-ONLY
+            # changed from 'service_name' to 'hypervisor_hostname'
+            pool.remove_computehost(self.freepool_name,
+                                    host['hypervisor_hostname'])
+            self.placement_client.delete_reservation_provider(
                 host['hypervisor_hostname'])
-            if servers:
-                raise manager_ex.HostHavingServers(
-                    host=host['hypervisor_hostname'], servers=servers)
-
-            try:
-                pool = nova.ReservationPool()
-                pool.remove_computehost(self.freepool_name,
-                                        host['hypervisor_hostname'])
-                self.placement_client.delete_reservation_provider(
-                    host['hypervisor_hostname'])
-                # NOTE(sbauza): Extracapabilities will be destroyed thanks to
-                #  the DB FK.
-                db_api.host_destroy(host_id)
-            except db_ex.BlazarDBException as e:
-                # Nothing so bad, but we need to alert admins
-                # they have to rerun
-                raise manager_ex.CantDeleteHost(host=host_id, msg=str(e))
+            # NOTE(sbauza): Extracapabilities will be destroyed thanks to
+            #  the DB FK.
+            db_api.host_destroy(host_id)
+        except db_ex.BlazarDBException as e:
+            # Nothing so bad, but we need to alert admins
+            # they have to rerun
+            raise manager_ex.CantDeleteHost(host=host_id, msg=str(e))
 
     def list_allocations(self, query, detail=False):
         hosts_id_list = [h['id'] for h in db_api.host_list()]
@@ -839,7 +842,6 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                          reserved_periods[0][0] == max_start and
                          reserved_periods[0][1] == min_end)):
                     allocs_to_remove.append(alloc)
-                    continue
 
         kept_hosts = len(allocs) - len(allocs_to_remove)
         if kept_hosts > max_hosts:

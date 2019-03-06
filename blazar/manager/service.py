@@ -274,9 +274,8 @@ class ManagerService(service_utils.RPCServer):
                           'lease %s.', event['event_type'], event['lease_id'])
         else:
             lease = db_api.lease_get(event['lease_id'])
-            with trusts.create_ctx_from_trust(lease['trust_id']) as ctx:
-                self._send_notification(
-                    lease, ctx, events=['event.%s' % event['event_type']])
+            self._send_notification(
+                lease, events=['event.%s' % event['event_type']])
 
     def _date_from_string(self, date_string, date_format=LEASE_DATE_FORMAT):
         try:
@@ -459,7 +458,7 @@ class ManagerService(service_utils.RPCServer):
                         lease_id,
                         {'status': status.lease.PENDING})
                     lease = db_api.lease_get(lease_id)
-                    self._send_notification(lease, ctx, events=['create'])
+                    self._send_notification(lease, events=['create'])
                     return lease
 
     @status.lease.lease_status(
@@ -488,77 +487,76 @@ class ManagerService(service_utils.RPCServer):
 
         self._check_for_invalid_date_inputs(lease, values, now)
 
-        with trusts.create_ctx_from_trust(lease['trust_id']):
-            if before_end_date:
-                try:
-                    before_end_date = self._date_from_string(before_end_date)
-                    self._check_date_within_lease_limits(before_end_date,
-                                                         values)
-                except common_ex.BlazarException as e:
-                    LOG.error("Invalid before_end_date param. %s", str(e))
-                    raise e
-
-            reservations = values.get('reservations', [])
-            existing_reservations = (
-                db_api.reservation_get_all_by_lease_id(lease_id))
-
+        if before_end_date:
             try:
-                invalid_ids = set([r['id'] for r in reservations]).difference(
-                    [r['id'] for r in existing_reservations])
-            except KeyError:
-                raise exceptions.MissingParameter(param='reservation ID')
+                before_end_date = self._date_from_string(before_end_date)
+                self._check_date_within_lease_limits(before_end_date,
+                                                     values)
+            except common_ex.BlazarException as e:
+                LOG.error("Invalid before_end_date param. %s", str(e))
+                raise e
 
-            if invalid_ids:
-                raise common_ex.InvalidInput(
-                    'Please enter valid reservation IDs. Invalid reservation '
-                    'IDs are: %s' % ','.join([str(id) for id in invalid_ids]))
+        # TODO(frossigneux) rollback if an exception is raised
+        reservations = values.get('reservations', [])
+        existing_reservations = (
+            db_api.reservation_get_all_by_lease_id(lease_id))
+        try:
+            invalid_ids = set([r['id'] for r in reservations]).difference(
+                [r['id'] for r in existing_reservations])
+        except KeyError:
+            raise exceptions.MissingParameter(param='reservation ID')
 
+        if invalid_ids:
+            raise common_ex.InvalidInput(
+                'Please enter valid reservation IDs. Invalid reservation '
+                'IDs are: %s' % ','.join([str(id) for id in invalid_ids]))
+
+        try:
+            [
+                self.plugins[r['resource_type']] for r
+                in (reservations + existing_reservations)]
+        except KeyError:
+            raise exceptions.CantUpdateParameter(param='resource_type')
+
+        existing_allocs = self._existing_allocations(existing_reservations)
+
+        if reservations:
+            new_reservations = reservations
+            new_allocs = self._allocation_candidates(values,
+                                                     existing_reservations)
+        else:
+            # User is not updating reservation parameters, e.g., is only
+            # adjusting lease start/end dates.
+            new_reservations = existing_reservations
+            new_allocs = existing_allocs
+
+        try:
+            self.enforcement.check_update(context.current(), lease, values,
+                                          existing_allocs, new_allocs,
+                                          existing_reservations,
+                                          new_reservations)
+        except common_ex.NotAuthorized as e:
+            LOG.error("Enforcement checks failed. %s", str(e))
+            raise common_ex.NotAuthorized(e)
+
+        # TODO(frossigneux) rollback if an exception is raised
+        for reservation in (existing_reservations):
+            v = {}
+            v['start_date'] = values['start_date']
+            v['end_date'] = values['end_date']
             try:
-                [
-                    self.plugins[r['resource_type']] for r
-                    in (reservations + existing_reservations)]
-            except KeyError:
-                raise exceptions.CantUpdateParameter(param='resource_type')
+                v.update([r for r in reservations
+                          if r['id'] == reservation['id']].pop())
+            except IndexError:
+                pass
+            resource_type = v.get('resource_type',
+                                  reservation['resource_type'])
 
-            existing_allocs = self._existing_allocations(existing_reservations)
-
-            if reservations:
-                new_reservations = reservations
-                new_allocs = self._allocation_candidates(values,
-                                                         existing_reservations)
-            else:
-                # User is not updating reservation parameters, e.g., is only
-                # adjusting lease start/end dates.
-                new_reservations = existing_reservations
-                new_allocs = existing_allocs
-
-            try:
-                self.enforcement.check_update(context.current(), lease, values,
-                                              existing_allocs, new_allocs,
-                                              existing_reservations,
-                                              new_reservations)
-            except common_ex.NotAuthorized as e:
-                LOG.error("Enforcement checks failed. %s", str(e))
-                raise common_ex.NotAuthorized(e)
-
-            # TODO(frossigneux) rollback if an exception is raised
-            for reservation in (existing_reservations):
-                v = {}
-                v['start_date'] = values['start_date']
-                v['end_date'] = values['end_date']
-                try:
-                    v.update([r for r in reservations
-                              if r['id'] == reservation['id']].pop())
-                except IndexError:
-                    pass
-                resource_type = v.get('resource_type',
-                                      reservation['resource_type'])
-
-                if resource_type != reservation['resource_type']:
-                    raise exceptions.CantUpdateParameter(
-                        param='resource_type')
-                self.plugins[resource_type].update_reservation(
-                    reservation['id'], v)
+            if resource_type != reservation['resource_type']:
+                raise exceptions.CantUpdateParameter(
+                    param='resource_type')
+            self.plugins[resource_type].update_reservation(
+                reservation['id'], v)
 
         event = db_api.event_get_first_sorted_by_filters(
             'lease_id',
@@ -597,8 +595,7 @@ class ManagerService(service_utils.RPCServer):
         db_api.lease_update(lease_id, values)
 
         lease = db_api.lease_get(lease_id)
-        with trusts.create_ctx_from_trust(lease['trust_id']) as ctx:
-            self._send_notification(lease, ctx, events=notifications)
+        self._send_notification(lease, events=notifications)
 
         return lease
 
@@ -642,72 +639,65 @@ class ManagerService(service_utils.RPCServer):
             db_api.event_update(end_event['id'],
                                 {'status': status.event.IN_PROGRESS})
 
-        with trusts.create_ctx_from_trust(lease['trust_id']) as ctx:
-            reservations = self._reservations_execution_ordered(lease)
+        reservations = self._reservations_execution_ordered(lease)
 
-            if lease_not_started or lease_not_ended:
-                # Only run the on_end enforcement if we're explicitly
-                # ending the lease for the first time OR if we're terminating
-                # it before the lease ever started. It's important to run
-                # on_end in the second case to inform enforcement that the
-                # lease is no longer in play.
-                allocations = self._existing_allocations(reservations)
+        if lease_not_started or lease_not_ended:
+            # Only run the on_end enforcement if we're explicitly
+            # ending the lease for the first time OR if we're terminating
+            # it before the lease ever started. It's important to run
+            # on_end in the second case to inform enforcement that the
+            # lease is no longer in play.
+            allocations = self._existing_allocations(reservations)
+            try:
+                self.enforcement.on_end(context.current(), lease, allocations)
+            except Exception as e:
+                LOG.error(e)
+
+        unclean_end = False
+        for reservation in self._reservations_execution_ordered(lease):
+            if reservation['status'] != status.reservation.DELETED:
+                plugin = self.plugins[reservation['resource_type']]
                 try:
-                    self.enforcement.on_end(ctx, lease, allocations)
-                except Exception as e:
-                    LOG.error(e)
+                    plugin.on_end(reservation['resource_id'])
+                except (db_ex.BlazarDBException, RuntimeError):
+                    LOG.exception("Failed to delete reservation %s",
+                                  reservation['id'])
+                    unclean_end = True
+        if unclean_end:
+            raise exceptions.EventError(
+                error="Failed to cleanly end lease %(lease_id)s",
+                lease_id=lease['id'])
 
-            unclean_end = False
-            for reservation in self._reservations_execution_ordered(lease):
-                if reservation['status'] != status.reservation.DELETED:
-                    plugin = self.plugins[reservation['resource_type']]
-                    try:
-                        plugin.on_end(reservation['resource_id'])
-                    except (db_ex.BlazarDBException, RuntimeError):
-                        LOG.exception("Failed to delete reservation %s",
-                                      reservation['id'])
-                        unclean_end = True
-            if unclean_end:
-                raise exceptions.EventError(
-                    error="Failed to cleanly end lease %(lease_id)s",
-                    lease_id=lease['id'])
-
-            if end_lease:
-                db_api.event_update(end_event['id'],
-                                    {'status': status.event.DONE})
-            db_api.lease_destroy(lease_id)
-            self._send_notification(lease, ctx, events=['delete'])
+        if end_lease:
+            db_api.event_update(end_event['id'],
+                                {'status': status.event.DONE})
+        db_api.lease_destroy(lease_id)
+        self._send_notification(lease, events=['delete'])
 
     @status.lease.lease_status(
         transition=status.lease.STARTING,
         result_in=(status.lease.ACTIVE, status.lease.ERROR))
     def start_lease(self, lease_id, event_id):
-        lease = self.get_lease(lease_id)
-        with trusts.create_ctx_from_trust(lease['trust_id']):
-            self._basic_action(lease_id, event_id, 'on_start',
-                               status.reservation.ACTIVE)
+        self._basic_action(lease_id, event_id, 'on_start',
+                           status.reservation.ACTIVE)
 
     @status.lease.lease_status(
         transition=status.lease.TERMINATING,
         result_in=(status.lease.TERMINATED, status.lease.ERROR))
     def end_lease(self, lease_id, event_id):
         lease = self.get_lease(lease_id)
+        allocations = self._existing_allocations(lease['reservations'])
+        try:
+            self.enforcement.on_end(context.current(), lease, allocations)
+        except Exception as e:
+            LOG.error(e)
 
-        with trusts.create_ctx_from_trust(lease['trust_id']) as ctx:
-            allocations = self._existing_allocations(lease['reservations'])
-            try:
-                self.enforcement.on_end(ctx, lease, allocations)
-            except Exception as e:
-                LOG.error(e)
-
-            self._basic_action(lease_id, event_id, 'on_end',
-                               status.reservation.DELETED)
-            db_api.lease_destroy(lease_id)
+        self._basic_action(lease_id, event_id, 'on_end',
+                           status.reservation.DELETED)
+        db_api.lease_destroy(lease_id)
 
     def before_end_lease(self, lease_id, event_id):
-        lease = self.get_lease(lease_id)
-        with trusts.create_ctx_from_trust(lease['trust_id']):
-            self._basic_action(lease_id, event_id, 'before_end')
+        self._basic_action(lease_id, event_id, 'before_end')
 
     def _basic_action(self, lease_id, event_id, action_time,
                       reservation_status=None):
@@ -837,11 +827,11 @@ class ManagerService(service_utils.RPCServer):
 
         return allocations
 
-    def _send_notification(self, lease, ctx, events=[]):
+    def _send_notification(self, lease, events=[]):
         payload = notification_api.format_lease_payload(lease)
 
         for event in events:
-            notification_api.send_lease_notification(ctx, payload,
+            notification_api.send_lease_notification({}, payload,
                                                      'lease.%s' % event)
 
     def _check_date_within_lease_limits(self, date, lease):
