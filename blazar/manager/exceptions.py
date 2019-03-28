@@ -227,6 +227,11 @@ class NotEnoughFloatingIPAvailable(exceptions.InvalidInput):
     msg_fmt = _("Not enough floating IPs available")
 
 
+class CantUpdateFloatingIPReservation(exceptions.BlazarException):
+    code = 400
+    msg_fmt = _("Floating IP reservation update is not yet supported")
+
+
 # Network plugin related exceptions
 
 class CantDeleteNetwork(exceptions.BlazarException):
