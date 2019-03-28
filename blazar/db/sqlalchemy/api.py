@@ -1301,7 +1301,7 @@ def fip_reservation_destroy(fip_reservation_id):
             raise db_exc.BlazarDBNotFound(
                 id=fip_reservation_id, model='FloatingIPReservation')
 
-        session.delete(fip_reservation)
+        fip_reservation.soft_delete(session=session)
 
 
 # Required FIP
@@ -1353,7 +1353,7 @@ def required_fip_destroy(required_fip_id):
             raise db_exc.BlazarDBNotFound(
                 id=required_fip_id, model='RequiredFloatingIP')
 
-        session.delete(required_fip)
+        required_fip.soft_delete(session=session)
 
 
 # FloatingIP Allocation
@@ -1404,7 +1404,7 @@ def fip_allocation_destroy(allocation_id):
             raise db_exc.BlazarDBNotFound(
                 id=allocation_id, model='FloatingIPAllocation')
 
-        session.delete(fip_allocation)
+        fip_allocation.soft_delete(session=session)
 
 
 def fip_allocation_update(allocation_id, allocation_values):
