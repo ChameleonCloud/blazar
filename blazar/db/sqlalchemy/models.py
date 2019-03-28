@@ -413,4 +413,3 @@ class NetworkSegmentExtraCapability(mb.BlazarBase):
 
     def to_dict(self):
         return super(NetworkSegmentExtraCapability, self).to_dict()
-
