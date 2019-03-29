@@ -125,11 +125,12 @@ class FloatingIPPool(BlazarNeutronClient):
                 'project_id': project_id
             }
         }
-        fip = self.neutron.create_floatingip(body)['floatingip']
-        body = {
-            'tags': ['blazar', 'reservation:%s' % reservation_id]
-        }
-        self.neutron.replace_tag('floatingips', fip['id'], body)
+        # XXX(priteau): Disabled tagging until supported in Neutron
+        self.neutron.create_floatingip(body)['floatingip']
+        # body = {
+        #     'tags': ['blazar', 'reservation:%s' % reservation_id]
+        # }
+        # self.neutron.replace_tag('floatingips', fip['id'], body)
 
     def delete_reserved_floatingip(self, address):
         query = {
