@@ -77,11 +77,12 @@ class TestFloatingIPPool(tests.TestCase):
             }
         }
         mock_fip.assert_called_once_with(expected_body)
-        mock_tag.assert_called_once_with(
-            'floatingips',
-            'fip-id',
-            {'tags': ['blazar', 'reservation:reservation-id']}
-        )
+        # XXX(priteau): Disable due to lack of Neutron support
+        # mock_tag.assert_called_once_with(
+        #     'floatingips',
+        #     'fip-id',
+        #     {'tags': ['blazar', 'reservation:reservation-id']}
+        # )
 
     @mock.patch.object(neutronclient.v2_0.client.Client, 'list_floatingips')
     @mock.patch.object(neutronclient.v2_0.client.Client, 'update_floatingip')
