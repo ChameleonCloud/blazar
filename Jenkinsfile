@@ -1,11 +1,17 @@
 pipeline {
   agent any
- 
+
   options {
     copyArtifactPermission(projectNames: 'blazar*')
   }
 
   stages {
+    stage('test') {
+      steps {
+        sh 'tox -e pep8,py27'
+      }
+    }
+
     stage('package') {
       steps {
         dir('dist') {
@@ -18,4 +24,3 @@ pipeline {
     }
   }
 }
-
