@@ -895,7 +895,6 @@ def fip_reservation_create(fip_reservation_values):
     fip_reservation = models.FloatingIPReservation()
     fip_reservation.update(values)
 
-
     session = get_session()
     with session.begin():
         try:

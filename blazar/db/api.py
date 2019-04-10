@@ -660,4 +660,3 @@ def network_extra_capability_get_latest_per_name(network_id,
     return IMPL.network_extra_capability_get_latest_per_name(
         network_id, extra_capability_name
     )
-

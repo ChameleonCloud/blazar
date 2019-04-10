@@ -14,7 +14,6 @@
 import functools
 
 from oslo_log import log as logging
-from oslo_utils import excutils
 
 from blazar.db import api as db_api
 from blazar import exceptions

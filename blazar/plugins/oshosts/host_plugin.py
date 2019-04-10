@@ -211,7 +211,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         for allocation in db_api.host_allocation_get_all_by_values(
                 reservation_id=host_reservation['reservation_id']):
             host = db_api.host_get(allocation['compute_host_id'])
-            hosts.append(host['service_name'])
+            hosts.append(host['hypervisor_hostname'])
         pool.add_computehost(host_reservation['aggregate_id'], hosts)
 
         action = host_reservation.get('on_start', 'default')
@@ -466,7 +466,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                 # TODO(sbauza): Investigate use of Taskflow for atomic
                 # transactions
                 pool.remove_computehost(self.freepool_name,
-                                        host_details['service_name'])
+                                        host_details['hypervisor_hostname'])
                 self.placement_client.delete_reservation_provider(
                     host_details['hypervisor_hostname'])
 
@@ -581,7 +581,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             try:
                 pool = nova.ReservationPool()
                 pool.remove_computehost(self.freepool_name,
-                                        host['service_name'])
+                                        host['hypervisor_hostname'])
                 self.placement_client.delete_reservation_provider(
                     host['hypervisor_hostname'])
                 # NOTE(sbauza): Extracapabilities will be destroyed thanks to
@@ -780,29 +780,30 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                         {'compute_host_id': host_id,
                          'reservation_id': reservation_id})
                     new_host = db_api.host_get(host_id)
-                    new_hosts.append(new_host['service_name'])
+                    new_hosts.append(new_host['hypervisor_hostname'])
                 if reservation_status == status.reservation.ACTIVE:
                     # Add new hosts into the aggregate.
                     pool.add_computehost(host_reservation['aggregate_id'],
                                          new_hosts)
 
+                self.usage_enforcer.check_su_factor_identical(
+                    allocs, allocs_to_remove, new_hosts)
+                allocs_to_keep = [
+                    a for a in allocs if a not in allocs_to_remove]
+                allocs_to_add = [{'compute_host_id': h} for h in new_hosts]
+                new_allocations = allocs_to_keep + allocs_to_add
+
+                try:
+                    ue = self.usage_enforcer
+                    ue.check_usage_against_allocation_post_update(
+                        values, lease,
+                        allocs,
+                        new_allocations)
+                except manager_ex.RedisConnectionError:
+                    pass
+
             else:
                 raise manager_ex.NotEnoughHostsAvailable()
-
-        self.usage_enforcer.check_su_factor_identical(
-            allocs, allocs_to_remove, host_ids)
-
-        allocs_to_keep = [a for a in allocs if a not in allocs_to_remove]
-        allocs_to_add = [{'compute_host_id': h} for h in host_ids_to_add]
-        new_allocations = allocs_to_keep + allocs_to_add
-        
-        try:
-            self.usage_enforcer.check_usage_against_allocation_post_update(
-                values, lease,
-                allocs,
-                new_allocations)
-        except manager_ex.RedisConnectionError:
-            pass
 
         for allocation in allocs_to_remove:
             LOG.debug('Removing host {} from reservation {}'.format(

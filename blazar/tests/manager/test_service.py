@@ -124,6 +124,7 @@ class ServiceTestCase(tests.TestCase):
             reload_module(service)
         self.service = service
         self.manager = self.service.ManagerService()
+        self.usage_enforcer = self.patch(self.manager, 'usage_enforcer')
 
         self.lease_id = '11-22-33'
         self.user_id = '123'
@@ -329,7 +330,8 @@ class ServiceTestCase(tests.TestCase):
         events = self.patch(self.db_api, 'event_get_all_sorted_by_filters')
         events.return_value = [{'id': '111-222-333',
                                 'lease_id': self.lease_id,
-                                'time': self.good_date}]
+                                'time': self.good_date,
+                                'event_type': 'start_lease'}]
 
         self.lease_get = self.patch(self.db_api, 'lease_get')
         lease = self.lease.copy()
@@ -338,7 +340,7 @@ class ServiceTestCase(tests.TestCase):
 
         event_update = self.patch(self.db_api, 'event_update')
 
-        self.manager._event()
+        self.manager._process_events()
 
         event_update.assert_not_called()
 
@@ -445,6 +447,7 @@ class ServiceTestCase(tests.TestCase):
         trust_id = 'exxee111qwwwwe'
         lease_values = {
             'id': self.lease_id,
+            'user_id': self.user_id,
             'name': 'lease-name',
             'reservations': [{'id': '111',
                               'resource_id': '111',
@@ -458,6 +461,8 @@ class ServiceTestCase(tests.TestCase):
         self.usage_enforcer.check_lease_duration.assert_called_once_with(
             lease_values)
 
+        self.usage_enforcer.check_lease_duration.assert_called_once_with(
+            lease_values)
         self.trust_ctx.assert_called_once_with(trust_id)
         self.lease_create.assert_called_once_with(lease_values)
         self.assertEqual(lease, self.lease)
@@ -471,6 +476,7 @@ class ServiceTestCase(tests.TestCase):
         trust_id = 'exxee111qwwwwe'
         lease_values = {
             'id': self.lease_id,
+            'user_id': self.user_id,
             'name': 'lease-name',
             'reservations': [{'id': '111',
                               'resource_id': '111',
@@ -491,6 +497,7 @@ class ServiceTestCase(tests.TestCase):
     def test_create_lease_validate_created_events(self):
         lease_values = {
             'id': self.lease_id,
+            'user_id': self.user_id,
             'name': 'lease-name',
             'reservations': [{'id': '111',
                               'resource_id': '111',
@@ -535,6 +542,7 @@ class ServiceTestCase(tests.TestCase):
     def test_create_lease_before_end_event_is_before_lease_start(self):
         lease_values = {
             'id': self.lease_id,
+            'user_id': self.user_id,
             'name': 'lease-name',
             'reservations': [{'id': '111',
                               'resource_id': '111',
@@ -602,6 +610,7 @@ class ServiceTestCase(tests.TestCase):
         start_date = '2026-11-13 13:13'
         lease_values = {
             'id': self.lease_id,
+            'user_id': self.user_id,
             'name': 'lease-name',
             'reservations': [{'id': '111',
                               'resource_id': '111',
@@ -620,6 +629,7 @@ class ServiceTestCase(tests.TestCase):
         before_end_date = '2026-11-15 13:13'
         lease_values = {
             'id': self.lease_id,
+            'user_id': self.user_id,
             'name': 'lease-name',
             'reservations': [{'id': '111',
                               'resource_id': '111',
@@ -637,6 +647,7 @@ class ServiceTestCase(tests.TestCase):
     def test_create_lease_no_before_end_event(self):
         lease_values = {
             'id': self.lease_id,
+            'user_id': self.user_id,
             'name': 'lease-name',
             'reservations': [{'id': '111',
                               'resource_id': '111',
@@ -676,6 +687,7 @@ class ServiceTestCase(tests.TestCase):
         before_end_date = '2026-11-14 10:13'
         lease_values = {
             'id': self.lease_id,
+            'user_id': self.user_id,
             'name': 'lease-name',
             'reservations': [{'id': '111',
                               'resource_id': '111',
@@ -766,6 +778,7 @@ class ServiceTestCase(tests.TestCase):
     def test_create_lease_unsupported_resource_type(self):
         lease_values = {
             'id': self.lease_id,
+            'user_id': self.user_id,
             'name': 'lease-name',
             'reservations': [{'id': '111',
                               'resource_id': '111',
