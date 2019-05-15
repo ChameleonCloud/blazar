@@ -887,6 +887,7 @@ def host_extra_capability_get_latest_per_name(host_id, capability_name):
                  .order_by(models.ComputeHostExtraCapability.created_at.desc())
                  .first())
 
+
 # FloatingIP reservation
 
 def fip_reservation_create(fip_reservation_values):
@@ -1166,6 +1167,7 @@ def floatingip_destroy(floatingip_id):
 
         session.delete(floatingip)
 
+
 # Networks
 
 def _network_get(session, network_id):
@@ -1354,9 +1356,10 @@ def network_get_all_by_filters(filters):
 
 
 def network_get_all_by_queries(queries):
-    """Returns networks filtered by an array of queries.
+    """Return networks filtered by an array of queries.
+
     :param queries: array of queries "key op value" where op can be
-        http://docs.sqlalchemy.org/en/rel_0_7/core/expression_api.html
+    http://docs.sqlalchemy.org/en/rel_0_7/core/expression_api.html
             #sqlalchemy.sql.operators.ColumnOperators
     """
     networks_query = model_query(models.NetworkSegment, get_session())
@@ -1426,22 +1429,23 @@ def network_get_all_by_queries(queries):
 
 
 def reservable_network_get_all_by_queries(queries):
-    """Returns reservable networks filtered by an array of queries.
+    """Return reservable networks filtered by an array of queries.
+
     :param queries: array of queries "key op value" where op can be
-        http://docs.sqlalchemy.org/en/rel_0_7/core/expression_api.html
-            #sqlalchemy.sql.operators.ColumnOperators
+    http://docs.sqlalchemy.org/en/rel_0_7/core/expression_api.html
+        #sqlalchemy.sql.operators.ColumnOperators
     """
     queries.append('reservable == 1')
     return network_get_all_by_queries(queries)
 
 
 def unreservable_network_get_all_by_queries(queries):
-    """Returns unreservable networks filtered by an array of queries.
-    :param queries: array of queries "key op value" where op can be
-        http://docs.sqlalchemy.org/en/rel_0_7/core/expression_api.html
-            #sqlalchemy.sql.operators.ColumnOperators
-    """
+    """Return unreservable networks filtered by an array of queries.
 
+    :param queries: array of queries "key op value" where op can be
+    http://docs.sqlalchemy.org/en/rel_0_7/core/expression_api.html
+        #sqlalchemy.sql.operators.ColumnOperators
+    """
     # TODO(hiro-kobayashi): support the expression 'reservable == False'
     queries.append('reservable == 0')
     return network_get_all_by_queries(queries)
