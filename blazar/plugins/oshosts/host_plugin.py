@@ -591,9 +591,10 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                 # they have to rerun
                 raise manager_ex.CantDeleteHost(host=host_id, msg=str(e))
 
-    def list_allocations(self, query):
+    def list_allocations(self, query, detail=False):
         hosts_id_list = [h['id'] for h in db_api.host_list()]
         options = self.get_query_options(query, QUERY_TYPE_ALLOCATION)
+        options['detail'] = detail
 
         hosts_allocations = self.query_host_allocations(hosts_id_list,
                                                         **options)
@@ -609,7 +610,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         return {"resource_id": host_id, "reservations": allocs}
 
     def query_host_allocations(self, hosts, lease_id=None,
-                               reservation_id=None):
+                               reservation_id=None, detail=False):
         """Return dict of host and its allocations.
 
         The list element forms
@@ -617,7 +618,9 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
           'host-id': [
                        {
                          'lease_id': lease_id,
-                         'id': reservation_id
+                         'id': reservation_id,
+                         'start_date': lease_start_date,
+                         'end_date': lease_end_date
                        },
                      ]
         }.
@@ -630,18 +633,31 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         allocs = db_utils.get_reservation_allocations_by_host_ids(
             hosts, start, end, lease_id, reservation_id)
 
+        leases = {l['id']: l for l in db_api.lease_list()}
+
         hosts_allocs = {}
         for reservation, alloc in allocs:
+
+            lease = leases[reservation['lease_id']]
+
+            allocation_dict = dict(
+                lease_id=reservation['lease_id'],
+                id=reservation['id'],
+                start_date=lease['start_date'],
+                end_date=lease['end_date'])
+
+            if detail:
+                allocation_dict['project_id'] = lease['project_id']
+                allocation_dict['lease_name'] = lease['name']
+                allocation_dict['status'] = reservation['status']
+
             if alloc['compute_host_id'] in hosts_allocs:
-                hosts_allocs[alloc['compute_host_id']].append({
-                    'lease_id': reservation['lease_id'],
-                    'id': reservation['id']
-                })
+                hosts_allocs[alloc['compute_host_id']].append(
+                    allocation_dict)
             else:
-                hosts_allocs[alloc['compute_host_id']] = [{
-                    'lease_id': reservation['lease_id'],
-                    'id': reservation['id']
-                }]
+                hosts_allocs[alloc['compute_host_id']] = [
+                    allocation_dict]
+
         return hosts_allocs
 
     def _matching_hosts(self, hypervisor_properties, resource_properties,

@@ -69,7 +69,7 @@ def computehosts_delete(host_id):
 
 
 @rest.get('/allocations', query=True)
-def allocations_list(query):
+def allocations_list(query, detail=False):
     """List all allocations on all computehosts."""
     return api_utils.render(allocations=_api.list_allocations(query))
 
