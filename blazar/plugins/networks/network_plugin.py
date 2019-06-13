@@ -329,9 +329,8 @@ class NetworkPlugin(base.BasePlugin):
     def delete_port(self, neutron, ironic, port):
         if port['binding:vnic_type'] == 'baremetal':
             node = port.get('binding:host_id')
-            if node:
-                ironic.node.vif_detach(node, port['id'])
-            else:
+
+            if not node:
                 raise Exception("Expected to find attribute binding:host_id "
                                 "on port %s" % port['id'])
 
