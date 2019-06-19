@@ -634,11 +634,17 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             hosts, start, end, lease_id, reservation_id)
 
         leases = {l['id']: l for l in db_api.lease_list()}
+        hosts_allocs = {h['id']: [] for h in db_api.host_list()}
 
-        hosts_allocs = {}
         for reservation, alloc in allocs:
 
-            lease = leases[reservation['lease_id']]
+            # Reservations for leases the ended uncleanly may still show
+            # as active even though the leases will not be returned by
+            # lease_list().
+            lease = leases.get(reservation['lease_id'], {})
+
+            if not lease:
+                continue
 
             allocation_dict = dict(
                 lease_id=reservation['lease_id'],
@@ -651,12 +657,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                 allocation_dict['lease_name'] = lease['name']
                 allocation_dict['status'] = reservation['status']
 
-            if alloc['compute_host_id'] in hosts_allocs:
-                hosts_allocs[alloc['compute_host_id']].append(
-                    allocation_dict)
-            else:
-                hosts_allocs[alloc['compute_host_id']] = [
-                    allocation_dict]
+            hosts_allocs[alloc['compute_host_id']].append(allocation_dict)
 
         return hosts_allocs
 
