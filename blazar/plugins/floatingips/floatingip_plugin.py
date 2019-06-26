@@ -27,6 +27,7 @@ from blazar import exceptions
 from blazar.manager import exceptions as manager_ex
 from blazar.plugins import base
 from blazar.plugins import floatingips as plugin
+from blazar import status
 from blazar.utils.openstack import neutron
 from blazar.utils import plugins as plugins_utils
 
@@ -75,6 +76,96 @@ class FloatingIpPlugin(base.BasePlugin):
             if not (netutils.is_valid_ipv4(ip) or netutils.is_valid_ipv6(ip)):
                 raise manager_ex.InvalidIPFormat(ip=ip)
 
+    def _update_allocations(self, dates_before, dates_after, reservation_id,
+                            reservation_status, fip_reservation, values,
+                            lease, fip_allocations):
+        allocs_to_remove = self._allocations_to_remove(
+            dates_before, dates_after, fip_allocations, values('amount', 1))
+
+        if (allocs_to_remove and
+                reservation_status == status.reservation.ACTIVE):
+            raise manager_ex.CantUpdateFloatingIPReservation()
+
+        kept_fips = len(fip_allocations) - len(allocs_to_remove)
+        fip_ids_to_add = []
+        amount = int(values.get('amount', 1))
+
+        if kept_fips < amount:
+            needed_fips = amount - kept_fips
+            required_fips = values.get('required_fips', [])
+            fip_ids_to_add = self._matching_fips(
+                values['floatingip_id'], required_fips, amount,
+                dates_after['start_date'], dates_after['end_date'])
+
+            if len(fip_ids_to_add) < needed_fips:
+                raise manager_ex.NotEnoughFloatingIPAvailable()
+
+        allocs_to_keep = [
+            a for a in fip_allocations if a not in allocs_to_remove]
+        allocs_to_add = [{'floatingip_id': f} for f in fip_ids_to_add]
+        new_allocations = allocs_to_keep + allocs_to_add
+
+        try:
+            self.usage_enforcer.check_usage_against_allocation_post_update(
+                values, lease, fip_allocations, new_allocations)
+        except manager_ex.RedisConnectionError:
+            pass
+
+        for fip_id in fip_ids_to_add:
+            LOG.debug('Adding floating ip {} to reservation {}'.format(
+                fip_id, reservation_id))
+            db_api.fip_allocation_create({
+                'floatingip_id': fip_id,
+                'reservation_id': reservation_id})
+
+        for allocation in allocs_to_remove:
+            LOG.debug('Removing floating ip {} from reservation {}'.format(
+                allocation['floatingip_id'], reservation_id))
+            db_api.fip_allocation_destroy(allocation['id'])
+
+    def _allocations_to_remove(self, dates_before, dates_after, allocs,
+                               amount):
+        """Find candidate floating ip allocations to remove."""
+        allocs_to_remove = []
+        all_fip_ids = [fip['id'] for fip in db_api.floatingip_list()]
+
+        for alloc in allocs:
+            if alloc['floatingip_id'] not in all_fip_ids:
+                allocs_to_remove.append(alloc)
+                continue
+
+            is_extension = (
+                dates_before['start_date'] > dates_after['start_date'] or
+                dates_before['end_date'] < dates_after['end_date'])
+
+            if is_extension:
+                reserved_periods = db_utils.get_reserved_periods(
+                    alloc['floatingip_id'],
+                    dates_after['start_date'],
+                    dates_after['end_date'],
+                    datetime.timedelta(seconds=1),
+                    resource_type='floatingip')
+
+                max_start = max(dates_before['start_date'],
+                                dates_after['start_date'])
+                min_end = min(dates_before['end_date'],
+                              dates_after['end_date'])
+
+                if not (len(reserved_periods) == 0 or
+                        (len(reserved_periods) == 1 and
+                         reserved_periods[0][0] == max_start and
+                         reserved_periods[0][1] == min_end)):
+                    allocs_to_remove.append(alloc)
+                    continue
+
+        allocs_to_keep = [a for a in allocs if a not in allocs_to_remove]
+
+        if len(allocs_to_keep) > amount:
+            allocs_to_remove.extend(
+                allocs_to_keep[:(len(allocs_to_keep) - amount)])
+
+        return allocs_to_remove
+
     def reserve_resource(self, reservation_id, values):
         """Create floating IP reservation."""
         self.check_params(values)
@@ -118,6 +209,42 @@ class FloatingIpPlugin(base.BasePlugin):
             db_api.fip_allocation_create({'floatingip_id': fip_id,
                                           'reservation_id': reservation_id})
         return fip_reservation['id']
+
+    def update_reservation(self, reservation_id, values):
+        """Update reservation."""
+        reservation = db_api.reservation_get(reservation_id)
+        lease = db_api.lease_get(reservation['lease_id'])
+        fip_allocations = db_api.fip_allocation_get_all_by_values(
+            reservation_id=reservation_id)
+
+        if (values['start_date'] >= lease['start_date'] and
+                values['end_date'] <= lease['end_date']):
+            # Nothing to update
+            try:
+                self.usage_enforcer.check_usage_against_allocation_post_update(
+                    values, lease,
+                    fip_allocations,
+                    fip_allocations)
+            except manager_ex.RedisConnectionError:
+                pass
+
+        # Check if we have enough available SUs for update
+        try:
+            self.usage_enforcer.check_usage_against_allocation_pre_update(
+                values, lease, fip_allocations)
+        except manager_ex.RedisConnectionError:
+            pass
+
+        dates_before = {'start_date': lease['start_date'],
+                        'end_date': lease['end_date']}
+        dates_after = {'start_date': values['start_date'],
+                       'end_date': values['end_date']}
+        fip_reservation = db_api.fip_reservation_get(
+            reservation['resource_id'])
+
+        self._update_allocations(dates_before, dates_after, reservation_id,
+                                 reservation['status'], fip_reservation,
+                                 values, lease, fip_allocations)
 
     def on_start(self, resource_id):
         fip_reservation = db_api.fip_reservation_get(resource_id)
