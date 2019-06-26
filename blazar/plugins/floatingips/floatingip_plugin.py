@@ -134,7 +134,7 @@ class FloatingIpPlugin(base.BasePlugin):
         allocs_to_remove = []
 
         for alloc in allocs:
-            is_extension = (
+           is_extension = (
                 dates_before['start_date'] > dates_after['start_date'] or
                 dates_before['end_date'] < dates_after['end_date'])
 
@@ -245,7 +245,7 @@ class FloatingIpPlugin(base.BasePlugin):
                     values, lease, fip_allocations, fip_allocations)
 
             # Check if we have enough available SUs for update
-            self.usage_enforcer.check_usage_against_allocation_pre_update(
+           self.usage_enforcer.check_usage_against_allocation_pre_update(
                 values, lease, fip_allocations)
         except manager_ex.RedisConnectionError:
             pass
