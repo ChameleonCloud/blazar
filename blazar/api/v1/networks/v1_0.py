@@ -66,3 +66,17 @@ def networks_delete(req, network_id):
     """Delete specified network."""
     _api.delete_network(network_id)
     return api_utils.render(status=200)
+
+
+@rest.get('/allocations', query=True)
+def allocations_list(req, query, detail=False):
+    """List all allocations on all network segments."""
+    return api_utils.render(allocations=_api.list_allocations(query))
+
+
+@rest.get('/<network_id>/allocation')
+@validation.check_exists(_api.get_network, network_id='network_id')
+def allocations_get(req, network_id, query):
+    """List all allocations on a specific network segment."""
+    return api_utils.render(allocation=_api.get_allocations(network_id,
+                                                            query))

@@ -147,10 +147,8 @@ def get_reservations_by_network_id(network_id, start_date, end_date):
     return query.all()
 
 
-def get_reservation_allocations_by_host_ids(host_ids, start_date, end_date,
-                                            lease_id=None,
-                                            reservation_id=None):
-    session = get_session()
+def get_reservations_for_allocations(session, start_date, end_date,
+                                     lease_id=None, reservation_id=None):
     border0 = models.Lease.end_date < start_date
     border1 = models.Lease.start_date > end_date
     fields = ['id', 'status', 'lease_id', 'start_date',
@@ -181,7 +179,15 @@ def get_reservation_allocations_by_host_ids(host_ids, start_date, end_date,
         reservations_query = reservations_query.filter(
             models.Reservation.id == reservation_id)
 
-    reservations = [dict(zip(fields, r)) for r in reservations_query.all()]
+    return [dict(zip(fields, r)) for r in reservations_query.all()]
+
+
+def get_reservation_allocations_by_host_ids(host_ids, start_date, end_date,
+                                            lease_id=None,
+                                            reservation_id=None):
+    session = get_session()
+    reservations = get_reservations_for_allocations(
+        session, start_date, end_date, lease_id, reservation_id)
 
     allocations_query = (session.query(
         models.ComputeHostAllocation.reservation_id,
@@ -196,6 +202,30 @@ def get_reservation_allocations_by_host_ids(host_ids, start_date, end_date,
 
     for r in reservations:
         r['host_ids'] = allocations[r['id']]
+
+    return reservations
+
+
+def get_reservation_allocations_by_network_ids(network_ids, start_date,
+                                               end_date, lease_id=None,
+                                               reservation_id=None):
+    session = get_session()
+    reservations = get_reservations_for_allocations(
+        session, start_date, end_date, lease_id, reservation_id)
+
+    allocations_query = (session.query(
+        models.NetworkAllocation.reservation_id,
+        models.NetworkAllocation.network_id)
+        .filter(models.NetworkAllocation.reservation_id.in_(
+            list(set([x['id'] for x in reservations])))))
+
+    allocations = defaultdict(list)
+
+    for row in allocations_query.all():
+        allocations[row[0]].append(row[1])
+
+    for r in reservations:
+        r['network_ids'] = allocations[r['id']]
 
     return reservations
 

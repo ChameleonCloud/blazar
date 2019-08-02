@@ -53,7 +53,22 @@ networks_policies = [
                 'method': 'DELETE'
             }
         ]
-    )
+    ),
+    policy.DocumentedRuleDefault(
+        name=POLICY_ROOT % 'get_allocations',
+        check_str=base.RULE_ADMIN,
+        description='Policy rule for List/Get Network(s) Allocations API.',
+        operations=[
+            {
+                'path': '/{api_version}/networks/allocations',
+                'method': 'GET'
+            },
+            {
+                'path': '/{api_version}/networks/{network_id}/allocation',
+                'method': 'GET'
+            }
+        ]
+    ),
 ]
 
 
