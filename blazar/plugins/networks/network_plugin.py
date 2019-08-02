@@ -54,6 +54,8 @@ LOG = logging.getLogger(__name__)
 
 before_end_options = ['', 'snapshot', 'default', 'email']
 
+QUERY_TYPE_ALLOCATION = 'allocation'
+
 
 class NetworkPlugin(base.BasePlugin):
     """Plugin for network resource."""
@@ -633,6 +635,59 @@ class NetworkPlugin(base.BasePlugin):
             # Nothing so bad, but we need to alert admins
             # they have to rerun
             raise manager_ex.CantDeleteNetwork(network=network_id, msg=str(e))
+
+    def list_allocations(self, query, detail=False):
+        network_id_list = [n['id'] for n in db_api.network_list()]
+        options = self.get_query_options(query, QUERY_TYPE_ALLOCATION)
+        options['detail'] = detail
+
+        network_allocations = self.query_network_allocations(network_id_list,
+                                                             **options)
+        return [{"resource_id": network, "reservations": allocs}
+                for network, allocs in network_allocations.items()]
+
+    def get_allocations(self, network_id, query):
+        options = self.get_query_options(query, QUERY_TYPE_ALLOCATION)
+        network_allocations = self.query_network_allocations([network_id],
+                                                             **options)
+        allocs = network_allocations.get(network_id, [])
+        return {"resource_id": network_id, "reservations": allocs}
+
+    def query_host_allocations(self, networks, lease_id=None,
+                               reservation_id=None, detail=False):
+        """Return dict of network and its allocations
+
+        The list element forms
+        {
+            'network-id': [
+                            {
+                              'lease_id': lease_id,
+                              'id': reservation_id,
+                              'start_date': lease_start_date,
+                              'end_date': lease_end_date
+                            }
+                          ]
+        }.
+        """
+        start = datetime.datetime.utcnow()
+        end = datetime.date.max
+
+        reservations = db_utils.get_reservation_allocations_by_network_ids(
+            networks, start, end, lease_id, reservation_id)
+        network_allocations = {n: [] for n in networks}
+
+        for reservation in reservations:
+
+            if not detail:
+                del reservation['project_id']
+                del reservation['lease_name']
+                del reservation['status']
+
+            for network_id in reservation['network_ids']:
+                if network_id in network_allocations.keys():
+                    network_allocations[network_id].append({
+                        k: v for k, v in reservation.items()
+                        if k != 'network_ids'})
 
     def _matching_networks(self, network_properties, resource_properties,
                            start_date, end_date):

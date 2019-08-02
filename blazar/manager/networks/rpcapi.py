@@ -55,3 +55,13 @@ class ManagerRPCAPI(service.RPCClient):
         """Delete specified network."""
         return self.call('network:delete_network',
                          network_id=network_id)
+
+    def list_allocations(self, query, detail=False):
+        """List all allocations on all network segments."""
+        return self.call('network:list_allocations',
+                         query=query, detail=detail)
+
+    def get_allocations(self, network_id, query):
+        """List all allocations on a specified network segment."""
+        return self.call('network:get_allocations',
+                         network_id=network_id, query=query)
