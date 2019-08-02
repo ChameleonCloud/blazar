@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from blazar import context
 from blazar.manager.networks import rpcapi as manager_rpcapi
 from blazar import policy
 from blazar.utils import trusts
@@ -66,3 +67,29 @@ class API(object):
         :type network_id: str
         """
         self.manager_rpcapi.delete_network(network_id)
+
+    @policy.authorize('networks', 'get_allocations')
+    def list_allocations(self, query):
+        """List all allocations on all network segments.
+
+        :param query: parameter to query allocations
+        :type query: dict
+        """
+        ctx = context.current()
+        detail = False
+
+        if policy.enforce(ctx, 'admin', {}, do_raise=False):
+            detail = True
+
+        return self.manager_rpcapi.list_allocations(query, detail=detail)
+
+    @policy.authorize('networks', 'get_allocations')
+    def get_allocations(self, network_id, query):
+        """List all allocations on a specificied network segment.
+
+        :param network_id: ID of the network segment in Blazar BDself.
+        :type network_id: str
+        :param query: parameters to query allocation
+        :type query: dict
+        """
+        return self.manager_rpcapi.get_allocations(network_id, query)
