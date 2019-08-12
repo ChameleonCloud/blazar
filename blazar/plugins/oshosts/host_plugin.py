@@ -14,7 +14,6 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-import collections
 import datetime
 from random import shuffle
 import shlex
@@ -559,24 +558,44 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                 # they have to rerun
                 raise manager_ex.CantDeleteHost(host=host_id, msg=str(e))
 
-    def list_allocations(self, query):
+    def list_allocations(self, query, detail=False):
         hosts_id_list = [h['id'] for h in db_api.host_list()]
         options = self.get_query_options(query, QUERY_TYPE_ALLOCATION)
-
+        options['detail'] = detail
         hosts_allocations = self.query_host_allocations(hosts_id_list,
                                                         **options)
         return [{"resource_id": host, "reservations": allocs}
                 for host, allocs in hosts_allocations.items()]
 
-    def get_allocations(self, host_id, query):
+    def get_allocations(self, host_id, query, detail=False):
         options = self.get_query_options(query, QUERY_TYPE_ALLOCATION)
+        options['detail'] = detail
         host_allocations = self.query_host_allocations([host_id], **options)
-        if host_id not in host_allocations:
-            host_allocations = {host_id: []}
-        allocs = host_allocations[host_id]
+        allocs = host_allocations.get(host_id, [])
         return {"resource_id": host_id, "reservations": allocs}
 
-    def query_host_allocations(self, hosts, lease_id=None,
+    def reallocate_computehost(self, host_id, data):
+        allocations = self.get_allocations(host_id, data, detail=True)
+
+        for alloc in allocations['reservations']:
+            reservation_flags = {}
+            host_allocation = db_api.host_allocation_get_all_by_values(
+                compute_host_id=host_id,
+                reservation_id=alloc['id'])[0]
+
+            if self._reallocate(host_allocation):
+                if alloc['status'] == status.reservation.ACTIVE:
+                    reservation_flags.update(dict(resources_changed=True))
+                    db_api.lease_update(alloc['lease_id'], dict(degraded=True))
+            else:
+                reservation_flags.update(dict(missing_resources=True))
+                db_api.lease_update(alloc['lease_id'], dict(degraded=True))
+
+            db_api.reservation_update(alloc['id'], reservation_flags)
+
+        return self.get_allocations(host_id, data)
+
+    def query_host_allocations(self, hosts, detail=None, lease_id=None,
                                reservation_id=None):
         """Return dict of host and its allocations.
 
@@ -585,7 +604,9 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
           'host-id': [
                        {
                          'lease_id': lease_id,
-                         'id': reservation_id
+                         'id': reservation_id,
+                         'start_date': lease_start_date,
+                         'end_date': lease_end_date
                        },
                      ]
         }.
@@ -593,15 +614,23 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         start = datetime.datetime.utcnow()
         end = datetime.date.max
 
-        # To reduce overhead, this method only executes one query
-        # to get the allocation information
-        rsv_lease_host = db_utils.get_reservation_allocations_by_host_ids(
+        reservations = db_utils.get_reservation_allocations_by_host_ids(
             hosts, start, end, lease_id, reservation_id)
+        host_allocations = {h: [] for h in hosts}
 
-        hosts_allocs = collections.defaultdict(list)
-        for rsv, lease, host in rsv_lease_host:
-            hosts_allocs[host].append({'lease_id': lease, 'id': rsv})
-        return hosts_allocs
+        for reservation in reservations:
+            if not detail:
+                del reservation['project_id']
+                del reservation['lease_name']
+                del reservation['status']
+
+            for host_id in reservation['host_ids']:
+                if host_id in host_allocations.keys():
+                    host_allocations[host_id].append({
+                        k: v for k, v in reservation.items()
+                        if k != 'host_ids'})
+
+        return host_allocations
 
     def _matching_hosts(self, hypervisor_properties, resource_properties,
                         count_range, start_date, end_date):
