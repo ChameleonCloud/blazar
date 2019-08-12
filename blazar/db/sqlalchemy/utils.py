@@ -14,6 +14,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from collections import defaultdict
 import sys
 
 import sqlalchemy as sa
@@ -24,6 +25,7 @@ from blazar.db.sqlalchemy import models
 from blazar.manager import exceptions as mgr_exceptions
 from blazar.plugins import instances as instance_plugin
 from blazar.plugins import oshosts as host_plugin
+from blazar import status
 
 get_session = facade_wrapper.get_session
 

@@ -56,11 +56,17 @@ class ManagerRPCAPI(service.RPCClient):
         return self.call('physical:host:delete_computehost',
                          host_id=host_id)
 
-    def list_allocations(self, query):
+    def list_allocations(self, query, detail=False):
         """List all allocations on all computehosts."""
-        return self.call('physical:host:list_allocations', query=query)
+        return self.call('physical:host:list_allocations', query=query,
+                         detail=detail)
 
     def get_allocations(self, host_id, query):
         """List all allocations on a specified computehost."""
         return self.call('physical:host:get_allocations',
                          host_id=host_id, query=query)
+
+    def reallocate(self, host_id, data):
+        """Exchange host from current allocations."""
+        return self.call('physical:host:reallocate_computehost',
+                         host_id=host_id, data=data)
