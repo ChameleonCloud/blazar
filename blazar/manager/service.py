@@ -347,6 +347,8 @@ class ManagerService(service_utils.RPCServer):
             # Chameleon lease duration policy
             try:
                 self.usage_enforcer.check_lease_duration(lease_values)
+                self.usage_enforcer.check_user_max_leases(
+                    lease_values, 'physical:host')
             except exceptions.RedisConnectionError:
                 pass
 

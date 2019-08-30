@@ -248,7 +248,8 @@ def lease_get_all_by_project(project_id):
 
 
 def lease_get_all_by_user(user_id):
-    raise NotImplementedError
+    query = model_query(models.Lease, get_session())
+    return query.filter_by(user_id=user_id).all()
 
 
 def lease_list(project_id=None):

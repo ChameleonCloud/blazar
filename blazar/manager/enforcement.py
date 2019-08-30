@@ -19,12 +19,15 @@ from oslo_config import cfg
 from oslo_log import log as logging
 import redis
 
+from blazar.db import api as db_api
 from blazar import exceptions as common_ex
 from blazar.manager import exceptions
 from blazar.plugins.floatingips import billrate as floatingip_billrate
 from blazar.plugins.networks import billrate as network_billrate
 from blazar.plugins.oshosts import billrate
+from blazar import status
 from blazar.utils.openstack import keystone
+
 
 enforcement_opts = [
     cfg.IntOpt('default_max_lease_duration',
@@ -32,11 +35,17 @@ enforcement_opts = [
                help='Maximum lease duration in seconds. If this is set to -1, '
                     'there is not limit. For active leases being updated, the '
                     'limit applies between now and the new end date.'),
-    cfg.ListOpt('project_max_lease_durations',
-                default=[],
-                help='Maximum lease durations overriding the default for '
+    # TODO(jakecoll) Remove hardcoded defaults for exempt_projects and
+    # default_max_leases_by_resource_type.
+    cfg.ListOpt('exempt_projects',
+                default=['Chameleon', 'maintenance', 'openstack'],
+                help='List of specific projects exempt from lease limitations'
                      'specific projects. Syntax is a comma-separated list of '
                      '<project_name>:<seconds> pairs.'),
+    cfg.DictOpt('default_max_leases_by_resource_type',
+                default={'physical:host': 3},
+                help='Maximum number of leases an individual user can have '
+                     'that contain physical host reservations.'),
     cfg.IntOpt('prolong_seconds_before_lease_end',
                default=48 * 3600,
                help='Number of seconds prior to lease end in which a user can '
@@ -92,7 +101,6 @@ def handle_redis_errors(fn):
 
 class UsageEnforcer(object):
     def __init__(self):
-        self.project_max_lease_durations = self._project_max_lease_durations()
 
         if CONF.enforcement.usage_enforcement:
             if not CONF.enforcement.usage_db_host:
@@ -102,23 +110,6 @@ class UsageEnforcer(object):
         self.redis = redis.StrictRedis(host=CONF.enforcement.usage_db_host,
                                        port=6379, db=0,
                                        socket_connect_timeout=5.0)
-
-    def _project_max_lease_durations(self):
-        """Parses per-project maximum lease duration
-
-        Parses the list of project:max_duration pairs provided for
-        configuration parameter [enforcement]/project_max_lease_durations.
-        """
-        max_durations = {}
-        max_durations_config = CONF.enforcement.project_max_lease_durations
-        for kv in max_durations_config:
-            try:
-                project_name, seconds = kv.split(':')
-                max_durations[project_name] = int(seconds)
-            except ValueError:
-                msg = "%s is not a valid project:max_duration pair" % kv
-                raise exceptions.ConfigurationError(error=msg)
-        return max_durations
 
     @handle_redis_errors
     def initialize_project_allocation(self, project_name):
@@ -156,6 +147,36 @@ class UsageEnforcer(object):
     def setup_usage_enforcement(self, project_name):
         self.initialize_project_allocation(project_name)
 
+    def check_user_max_leases(self, lease_values, resource_type):
+        user_leases = [
+            l for l in db_api.lease_get_all_by_user(lease_values['user_id'])
+            if l['status'] in [status.lease.ACTIVE, status.lease.PENDING]]
+
+        leases_matching_resource_type = [
+            l['id'] for l in user_leases
+            if any([
+                x['resource_type'] == resource_type for x
+                in l['reservations']])
+        ]
+
+        num_existing = len(leases_matching_resource_type)
+        max_leases = CONF.enforcement.default_max_leases_by_resource_type.get(
+            resource_type, -1)
+        is_exempt_project = self._is_exempt_project(lease_values['project_id'])
+
+        if ((num_existing >= max_leases) and (max_leases != -1) and
+                not is_exempt_project):
+            user_name = self._get_user_name(lease_values['user_id'])
+            raise common_ex.NotAuthorized(
+                'Requested lease contains a %s reservations, and user %s '
+                'already has %d leases containing a %s reservation. The '
+                'The maximum number of leases containing any numbers of %s '
+                'reservations is %d.' %
+                (resource_type, user_name, num_existing, resource_type,
+                 resource_type, max_leases))
+
+        return True
+
     def check_lease_duration(self, lease_values, lease=None):
         """Verifies that lease duration is within enforcement limits
 
@@ -176,11 +197,6 @@ class UsageEnforcer(object):
                                 now.minute)
         lease_duration = end_date - start_date
 
-        user_name = self._get_user_name(lease_values['user_id'])
-
-        project_enforcement_id = self._get_project_enforcement_id(
-            lease_values['project_id'])
-
         if lease is not None:
             if lease['start_date'] < now and now < lease['end_date']:
                 # Note: an updated end date doesn't necessarily mean that the
@@ -198,31 +214,29 @@ class UsageEnforcer(object):
                     lease_duration = end_date - now
 
         lease_duration = lease_duration.total_seconds()
+        lease_violates_max_duration = (
+            CONF.enforcement.default_max_lease_duration != -1 and
+            lease_duration > CONF.enforcement.default_max_lease_duration)
 
+        if not lease_violates_max_duration:
+            return True
+
+        if self._is_exempt_project(lease_values['project_id']):
+            return True
+
+        user_name = self._get_user_name(lease_values['user_id'])
         lease_exception = self.get_lease_exception(user_name)
-        # A one-time lease exception can be set for the user
-        if lease_exception is not None:
-            lease_exception = int(lease_exception)
-            if lease_duration > lease_exception:
-                raise common_ex.NotAuthorized(
-                    'Requested lease to last %d seconds, which is longer than '
-                    'maximum allowed of %d seconds for user %s' %
-                    (lease_exception, user_name))
-        elif project_enforcement_id in self.project_max_lease_durations:
-            project_max_lease_duration = self.project_max_lease_durations.get(
-                project_enforcement_id)
-            if project_max_lease_duration != -1:
-                if (lease_duration) > project_max_lease_duration:
-                    raise common_ex.NotAuthorized(
-                        'Requested lease to last %d seconds, which is longer '
-                        'than maximum allowed of %d seconds for project %s' %
-                        (lease_duration, project_max_lease_duration,
-                         project_enforcement_id))
-        elif CONF.enforcement.default_max_lease_duration != -1:
-            if (lease_duration) > CONF.enforcement.default_max_lease_duration:
-                raise common_ex.NotAuthorized(
-                    'Lease is longer than maximum allowed of %d seconds' %
-                    CONF.enforcement.default_max_lease_duration)
+
+        if not lease_exception:
+            raise common_ex.NotAuthorized(
+                'Lease is longer than maximum allowed of %d seconds' %
+                CONF.enforcement.default_max_lease_duration)
+
+        if lease_duration > int(lease_exception):
+            raise common_ex.NotAuthorized(
+                'Requested lease to last %d seconds, which is longer '
+                'than maximum allowed of %d seconds for user %s' %
+                (lease_exception, user_name))
 
         return True
 
@@ -243,6 +257,10 @@ class UsageEnforcer(object):
             tenant_name=CONF.os_admin_project_name)
         project = self.keystone_client.projects.get(project_id)
         return project.name
+
+    def _is_exempt_project(self, project_id):
+        project_enforcement_id = self._get_project_enforcement_id(project_id)
+        return project_enforcement_id in CONF.enforcement.exempt_projects
 
     def _get_project_enforcement_id(self, project_id):
         """Get project name or charge_code from Keystone"""

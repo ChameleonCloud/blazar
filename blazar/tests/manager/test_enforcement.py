@@ -99,10 +99,13 @@ class UsageEnforcementTestCase(tests.TestCase):
     def test_new_lease_against_project_limits(self):
         self.cfg.CONF.set_override('default_max_lease_duration', 86400,
                                    group='enforcement')
-        self.enforcement.project_max_lease_durations = {
-            'project_bar': 86400 * 2,
-        }
+        self.cfg.CONF.set_override('exempt_projects', ['project_bar'],
+                                   group='enforcement')
+        self.get_project_enforcement_id = self.patch(
+            self.enforcement, '_get_project_enforcement_id')
+        self.get_project_enforcement_id.return_value = 'project_bar'
 
+        # Test exempt project with lease length violation
         lease_values = {
             'start_date': datetime.datetime(2015, 12, 1, 20, 0),
             'end_date': datetime.datetime(2015, 12, 3, 20, 0),
@@ -112,22 +115,26 @@ class UsageEnforcementTestCase(tests.TestCase):
         self.assertTrue(
             self.enforcement.check_lease_duration(
                 lease_values, lease=None))
+
+        # Test non-exempt project with lease length violation
+        self.get_project_enforcement_id.return_value = 'project_foo'
         lease_values = {
             'start_date': datetime.datetime(2015, 12, 1, 20, 0),
             'end_date': datetime.datetime(2015, 12, 3, 20, 1),
-            'user_id': 'id_user_foo',
-            'project_id': 'id_project_bar'
-        }
-        self.assertRaises(
-            exceptions.NotAuthorized, self.enforcement.check_lease_duration,
-            lease_values, lease=None)
-
-        lease_values = {
-            'start_date': datetime.datetime(2015, 12, 1, 20, 0),
-            'end_date': datetime.datetime(2015, 12, 2, 20, 1),
             'user_id': 'id_user_foo',
             'project_id': 'id_project_foo'
         }
         self.assertRaises(
             exceptions.NotAuthorized, self.enforcement.check_lease_duration,
             lease_values, lease=None)
+
+        # Test non-exempt project and no lease length violation
+        lease_values = {
+            'start_date': datetime.datetime(2015, 12, 1, 20, 0),
+            'end_date': datetime.datetime(2015, 12, 2, 20, 0),
+            'user_id': 'id_user_foo',
+            'project_id': 'id_project_foo'
+        }
+        self.assertTrue(
+            self.enforcement.check_lease_duration(
+                lease_values, lease=None))
