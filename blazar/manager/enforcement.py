@@ -85,8 +85,10 @@ class UsageEnforcer(object):
             if not CONF.enforcement.usage_db_host:
                 raise common_ex.ConfigurationError(
                     'usage_db_host must be set when using usage_enforcement')
-        self.redis = redis.StrictRedis(host=CONF.enforcement.usage_db_host,
-                                       port=6379, db=0)
+
+            self.redis = redis.StrictRedis(host=CONF.enforcement.usage_db_host,
+                                           port=6379, db=0,
+                                           socket_connect_timeout=5.0)
 
     def _project_max_lease_durations(self):
         """Parses per-project maximum lease duration
