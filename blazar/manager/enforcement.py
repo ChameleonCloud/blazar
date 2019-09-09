@@ -134,10 +134,14 @@ class UsageEnforcer(object):
                 host=CONF.enforcement.usage_db_host)
 
     def get_lease_exception(self, user_name):
+        if not CONF.enforcement.usage_enforcement:
+            return None
+
         try:
             lease_exception = self.redis.hget('user_exceptions', user_name)
             return lease_exception
-        except redis.exceptions.ConnectionError:
+        except (redis.exceptions.ConnectionError,
+                redis.exceptions.TimeoutError):
             LOG.exception('Cannot connect to Redis host %s',
                           CONF.enforcement.usage_db_host)
             return None
@@ -305,7 +309,7 @@ class UsageEnforcer(object):
         Redis.
         """
         if not CONF.enforcement.usage_enforcement:
-            pass
+            return
 
         user_name = self._get_user_name(lease_values['user_id'])
 
@@ -361,7 +365,7 @@ class UsageEnforcer(object):
                                                   lease, allocations):
         """Check if we have enough available SUs for update"""
         if not CONF.enforcement.usage_enforcement:
-            pass
+            return
 
         project_enforcement_id = self._get_project_enforcement_id(
             lease['project_id'])
@@ -393,7 +397,7 @@ class UsageEnforcer(object):
                                                    new_allocations):
         """Check if we have enough available SUs for update"""
         if not CONF.enforcement.usage_enforcement:
-            pass
+            return
 
         user_name = self._get_user_name(lease['user_id'])
 
@@ -458,7 +462,7 @@ class UsageEnforcer(object):
 
     def release_encumbered(self, lease, reservation, allocations):
         if not CONF.enforcement.usage_enforcement:
-            pass
+            return
 
         project_enforcement_id = self._get_project_enforcement_id(
             lease['project_id'])
