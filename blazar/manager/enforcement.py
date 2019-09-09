@@ -127,7 +127,8 @@ class UsageEnforcer(object):
             encumbered = self.redis.hget('encumbered', project_name)
             if encumbered is None:
                 self.redis.hset('encumbered', project_name, 0.0)
-        except redis.exceptions.ConnectionError:
+        except (redis.exceptions.ConnectionError,
+                redis.exceptions.TimeoutError):
             LOG.exception('Cannot connect to Redis host %s',
                           CONF.enforcement.usage_db_host)
             raise exceptions.RedisConnectionError(
@@ -150,7 +151,8 @@ class UsageEnforcer(object):
         LOG.info('Removing lease exception for user {}'.format(user_name))
         try:
             self.redis.hdel('user_exceptions', user_name)
-        except redis.exceptions.ConnectionError:
+        except (redis.exceptions.ConnectionError,
+                redis.exceptions.TimeoutError):
             LOG.exception('Cannot connect to Redis host %s',
                           CONF.enforcement.usage_db_host)
             raise exceptions.RedisConnectionError(
@@ -272,7 +274,8 @@ class UsageEnforcer(object):
     def get_balance(self, project_enforcement_id):
         try:
             return float(self.redis.hget('balance', project_enforcement_id))
-        except redis.exceptions.ConnectionError:
+        except (redis.exceptions.ConnectionError,
+                redis.exceptions.TimeoutError):
             LOG.exception('Cannot connect to Redis host %s',
                           CONF.enforcement.usage_db_host)
             raise exceptions.RedisConnectionError(
@@ -281,7 +284,8 @@ class UsageEnforcer(object):
     def get_encumbered(self, project_enforcement_id):
         try:
             return float(self.redis.hget('encumbered', project_enforcement_id))
-        except redis.exceptions.ConnectionError:
+        except (redis.exceptions.ConnectionError,
+                redis.exceptions.TimeoutError):
             LOG.exception('Cannot connect to Redis host %s',
                           CONF.enforcement.usage_db_host)
             raise exceptions.RedisConnectionError(
@@ -291,7 +295,8 @@ class UsageEnforcer(object):
         try:
             self.redis.hincrbyfloat(
                 'encumbered', project_enforcement_id, str(amount))
-        except redis.exceptions.ConnectionError:
+        except (redis.exceptions.ConnectionError,
+                redis.exceptions.TimeoutError):
             LOG.exception('Cannot connect to Redis host %s',
                           CONF.enforcement.usage_db_host)
             raise exceptions.RedisConnectionError(
@@ -355,7 +360,8 @@ class UsageEnforcer(object):
                                  self.get_encumbered(project_enforcement_id)))
                 if self.get_lease_exception(user_name):
                     self.remove_lease_exception(user_name)
-        except redis.exceptions.ConnectionError:
+        except (redis.exceptions.ConnectionError,
+                redis.exceptions.TimeoutError):
             LOG.exception('Cannot connect to Redis host %s',
                           CONF.enforcement.usage_db_host)
             raise exceptions.RedisConnectionError(
@@ -386,7 +392,8 @@ class UsageEnforcer(object):
                 raise BillingError(
                     'Reservation update would spend {:.2f} more SUs, only '
                     '{:.2f} left'.format(estimated_requested, left))
-        except redis.exceptions.ConnectionError:
+        except (redis.exceptions.ConnectionError,
+                redis.exceptions.TimeoutError):
             LOG.exception('Cannot connect to Redis host %s',
                           CONF.enforcement.usage_db_host)
             raise exceptions.RedisConnectionError(
@@ -433,7 +440,8 @@ class UsageEnforcer(object):
                 'encumbered', project_enforcement_id, str(change_encumbered))
             if self.get_lease_exception(user_name):
                 self.remove_lease_exception(user_name)
-        except redis.exceptions.ConnectionError:
+        except (redis.exceptions.ConnectionError,
+                redis.exceptions.TimeoutError):
             LOG.exception('Cannot connect to Redis host %s',
                           CONF.enforcement.usage_db_host)
             raise exceptions.RedisConnectionError(
