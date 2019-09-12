@@ -229,8 +229,8 @@ class NotEnoughFloatingIPAvailable(exceptions.InvalidInput):
 
 class CantUpdateFloatingIPReservation(exceptions.BlazarException):
     code = 400
-    msg_fmt = _("Floating IP reservation update is not yet supported")
-
+    msg_fmt = _("Floating IP reservation cannot be updated with requested "
+                "parameters. %(msg)s")
 
 # Network plugin related exceptions
 
