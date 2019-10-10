@@ -20,6 +20,7 @@ from oslo_config import cfg
 from blazar import context
 from blazar.db import api as db_api
 from blazar.db import utils as db_utils
+from blazar.manager import enforcement
 from blazar.manager import exceptions as mgr_exceptions
 from blazar.plugins import floatingips as plugin
 from blazar.plugins.floatingips import floatingip_plugin
@@ -47,8 +48,13 @@ class FloatingIpPluginTest(tests.TestCase):
 
         self.fip_plugin = floatingip_plugin.FloatingIpPlugin()
         self.usage_enforcer = self.patch(self.fip_plugin, 'usage_enforcer')
+        self.usage_enforcer = enforcement.UsageEnforcer()
         self.check_usage_against_allocation = self.patch(
             self.usage_enforcer, 'check_usage_against_allocation')
+        self.check_usage_against_allocation_pre_update = self.patch(
+            self.usage_enforcer, 'check_usage_against_allocation_pre_update')
+        self.check_usage_against_allocation_post_update = self.patch(
+            self.usage_enforcer, 'check_usage_against_allocation_post_update')
         self.release_encumbered = self.patch(
             self.usage_enforcer, 'release_encumbered')
 
@@ -329,7 +335,6 @@ class FloatingIpPluginTest(tests.TestCase):
             values)
 
     def test_update_reservation_increase_amount_fips_available(self):
-        fip_plugin = floatingip_plugin.FloatingIpPlugin()
         values = {
             'start_date': datetime.datetime(2013, 12, 19, 20, 0),
             'end_date': datetime.datetime(2013, 12, 19, 21, 0),
@@ -364,13 +369,13 @@ class FloatingIpPluginTest(tests.TestCase):
             'network_id': 'f548089e-fb3e-4013-a043-c5ed809c7a67',
             'required_floatingips': [],
         }
-        matching_fips = self.patch(fip_plugin, '_matching_fips')
+        matching_fips = self.patch(self.fip_plugin, '_matching_fips')
         matching_fips.return_value = ['fip2']
         fip_reservation_update = self.patch(self.db_api,
                                             'fip_reservation_update')
         fip_allocation_create = self.patch(
             self.db_api, 'fip_allocation_create')
-        fip_plugin.update_reservation(
+        self.fip_plugin.update_reservation(
             u'441c1476-9f8f-4700-9f30-cd9b6fef3509',
             values)
         fip_reservation_update.assert_called_once_with(
@@ -384,7 +389,6 @@ class FloatingIpPluginTest(tests.TestCase):
         fip_allocation_create.assert_has_calls(calls)
 
     def test_update_reservation_increase_amount_fips_unavailable(self):
-        fip_plugin = floatingip_plugin.FloatingIpPlugin()
         values = {
             'start_date': datetime.datetime(2013, 12, 19, 20, 0),
             'end_date': datetime.datetime(2013, 12, 19, 21, 0),
@@ -419,14 +423,13 @@ class FloatingIpPluginTest(tests.TestCase):
             'network_id': 'f548089e-fb3e-4013-a043-c5ed809c7a67',
             'required_floatingips': [],
         }
-        matching_fips = self.patch(fip_plugin, '_matching_fips')
+        matching_fips = self.patch(self.fip_plugin, '_matching_fips')
         matching_fips.return_value = []
         self.assertRaises(mgr_exceptions.NotEnoughFloatingIPAvailable,
-                          fip_plugin.update_reservation,
+                          self.fip_plugin.update_reservation,
                           '441c1476-9f8f-4700-9f30-cd9b6fef3509', values)
 
     def test_update_reservation_decrease_amount(self):
-        fip_plugin = floatingip_plugin.FloatingIpPlugin()
         values = {
             'start_date': datetime.datetime(2013, 12, 19, 20, 0),
             'end_date': datetime.datetime(2013, 12, 19, 21, 0),
@@ -466,7 +469,7 @@ class FloatingIpPluginTest(tests.TestCase):
                                             'fip_allocation_destroy')
         fip_reservation_update = self.patch(self.db_api,
                                             'fip_reservation_update')
-        fip_plugin.update_reservation(
+        self.fip_plugin.update_reservation(
             u'441c1476-9f8f-4700-9f30-cd9b6fef3509',
             values)
         fip_reservation_update.assert_called_once_with(
@@ -477,7 +480,6 @@ class FloatingIpPluginTest(tests.TestCase):
         fip_allocation_destroy.assert_has_calls(calls)
 
     def test_update_reservation_remove_required_fips(self):
-        fip_plugin = floatingip_plugin.FloatingIpPlugin()
         values = {
             'start_date': datetime.datetime(2013, 12, 19, 20, 0),
             'end_date': datetime.datetime(2013, 12, 19, 21, 0),
@@ -514,14 +516,13 @@ class FloatingIpPluginTest(tests.TestCase):
         }
         required_fip_destroy_by_fip_reservation_id = self.patch(
             self.db_api, 'required_fip_destroy_by_fip_reservation_id')
-        fip_plugin.update_reservation(
+        self.fip_plugin.update_reservation(
             u'441c1476-9f8f-4700-9f30-cd9b6fef3509',
             values)
         calls = [mock.call('fip_resv_id1')]
         required_fip_destroy_by_fip_reservation_id.assert_has_calls(calls)
 
     def test_update_reservation_change_required_fips(self):
-        fip_plugin = floatingip_plugin.FloatingIpPlugin()
         values = {
             'start_date': datetime.datetime(2013, 12, 19, 20, 0),
             'end_date': datetime.datetime(2013, 12, 19, 21, 0),
@@ -551,7 +552,7 @@ class FloatingIpPluginTest(tests.TestCase):
             'required_floatingips': ['172.24.4.100']
         }
         self.assertRaises(mgr_exceptions.CantUpdateFloatingIPReservation,
-                          fip_plugin.update_reservation,
+                          self.fip_plugin.update_reservation,
                           '441c1476-9f8f-4700-9f30-cd9b6fef3509', values)
 
     def test_update_reservation_change_network_id(self):

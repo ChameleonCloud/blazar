@@ -77,7 +77,8 @@ class FloatingIpPlugin(base.BasePlugin):
                 raise manager_ex.InvalidIPFormat(ip=ip)
 
     def _update_allocations(self, dates_before, dates_after, reservation_id,
-                            reservation_status, fip_reservation, values):
+                            reservation_status, fip_reservation, values,
+                            lease, fip_allocations):
         amount = int(values.get('amount', fip_reservation['amount']))
         fip_allocations = db_api.fip_allocation_get_all_by_values(
             reservation_id=reservation_id)
@@ -103,6 +104,17 @@ class FloatingIpPlugin(base.BasePlugin):
 
             if len(fip_ids_to_add) < needed_fips:
                 raise manager_ex.NotEnoughFloatingIPAvailable()
+
+        allocs_to_keep = [
+            a for a in fip_allocations if a not in allocs_to_remove]
+        allocs_to_add = [{'floatingip_id': f} for f in fip_ids_to_add]
+        new_allocations = allocs_to_keep + allocs_to_add
+
+        try:
+            self.usage_enforcer.check_usage_against_allocation_post_update(
+                values, lease, fip_allocations, new_allocations)
+        except manager_ex.RedisConnectionError:
+            pass
 
         for fip_id in fip_ids_to_add:
             LOG.debug('Adding floating IP {} to reservation {}'.format(
@@ -222,9 +234,25 @@ class FloatingIpPlugin(base.BasePlugin):
                 msg="Updating required_floatingips is not supported except "
                     "with an empty list")
 
+        fip_allocations = db_api.fip_allocation_get_all_by_values(
+            reservation_id=reservation_id)
+
+        try:
+            if (values['start_date'] >= lease['start_date'] and
+                    values['end_date'] <= lease['end_date']):
+                # Nothing to update
+                self.usage_enforcer.check_usage_against_allocation_post_update(
+                    values, lease, fip_allocations, fip_allocations)
+
+            # Check if we have enough available SUs for update
+            self.usage_enforcer.check_usage_against_allocation_pre_update(
+                values, lease, fip_allocations)
+        except manager_ex.RedisConnectionError:
+            pass
+
         self._update_allocations(dates_before, dates_after, reservation_id,
                                  reservation['status'], fip_reservation,
-                                 values)
+                                 values, lease, fip_allocations)
         updates = {}
         if 'amount' in values:
             updates['amount'] = values.get('amount')
