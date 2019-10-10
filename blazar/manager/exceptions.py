@@ -232,6 +232,7 @@ class CantUpdateFloatingIPReservation(exceptions.BlazarException):
     msg_fmt = _("Floating IP reservation cannot be updated with requested "
                 "parameters. %(msg)s")
 
+
 # Network plugin related exceptions
 
 class CantDeleteNetwork(exceptions.BlazarException):
