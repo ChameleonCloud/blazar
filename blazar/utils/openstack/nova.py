@@ -535,3 +535,12 @@ class NovaInventory(NovaClientWrapper):
                 #  a list of hosts without 'servers' attribute if no servers
                 #  are running on that host
                 return None
+
+    def hypervisor_exists(self, host):
+        """Return boolean if host associated with hypervisor in Nova.
+
+        :param host: UUID, ID or name of hypervisor
+        :return: Boolean
+        """
+        hypervisor_ids = [x.id for x in self.nova.hypervisors.list()]
+        return host in hypervisor_ids

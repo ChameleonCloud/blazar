@@ -562,34 +562,43 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         if not host:
             raise manager_ex.HostNotFound(host=host_id)
 
-        with trusts.create_ctx_from_trust(host['trust_id']):
-            if db_api.host_allocation_get_all_by_values(
-                    compute_host_id=host_id):
-                raise manager_ex.CantDeleteHost(
-                    host=host_id,
-                    msg='The host is reserved.'
-                )
+        if db_api.host_allocation_get_all_by_values(
+                compute_host_id=host_id):
+            raise manager_ex.CantDeleteHost(
+                host=host_id,
+                msg='The host is reserved.'
+            )
 
-            inventory = nova.NovaInventory()
-            servers = inventory.get_servers_per_host(
-                host['hypervisor_hostname'])
-            if servers:
-                raise manager_ex.HostHavingServers(
-                    host=host['hypervisor_hostname'], servers=servers)
+        inventory = nova.NovaInventory()
 
+        # Address orphaned hosts (i.e. Ironic node or Nova hypervisor
+        # deleted before blazar host removed)
+        if not inventory.hypervisor_exists(host['hypervisor_hostname']):
             try:
-                pool = nova.ReservationPool()
-                pool.remove_computehost(self.freepool_name,
-                                        host['hypervisor_hostname'])
-                self.placement_client.delete_reservation_provider(
-                    host['hypervisor_hostname'])
-                # NOTE(sbauza): Extracapabilities will be destroyed thanks to
-                #  the DB FK.
                 db_api.host_destroy(host_id)
+                return
             except db_ex.BlazarDBException as e:
-                # Nothing so bad, but we need to alert admins
-                # they have to rerun
                 raise manager_ex.CantDeleteHost(host=host_id, msg=str(e))
+
+        servers = inventory.get_servers_per_host(
+            host['hypervisor_hostname'])
+        if servers:
+            raise manager_ex.HostHavingServers(
+                host=host['hypervisor_hostname'], servers=servers)
+
+        try:
+            pool = nova.ReservationPool()
+            pool.remove_computehost(self.freepool_name,
+                                    host['hypervisor_hostname'])
+            self.placement_client.delete_reservation_provider(
+                host['hypervisor_hostname'])
+            # NOTE(sbauza): Extracapabilities will be destroyed thanks to
+            #  the DB FK.
+            db_api.host_destroy(host_id)
+        except db_ex.BlazarDBException as e:
+            # Nothing so bad, but we need to alert admins
+            # they have to rerun
+            raise manager_ex.CantDeleteHost(host=host_id, msg=str(e))
 
     def list_allocations(self, query, detail=False):
         hosts_id_list = [h['id'] for h in db_api.host_list()]

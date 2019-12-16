@@ -176,6 +176,9 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         self.get_servers_per_host = self.patch(
             self.nova.NovaInventory, 'get_servers_per_host')
         self.get_servers_per_host.return_value = None
+        self.hypervisor_exists = self.patch(
+            self.nova.NovaInventory, 'hypervisor_exists')
+        self.hypervisor_exists.return_value = True
         self.get_extra_capabilities = self.patch(
             self.fake_phys_plugin, '_get_extra_capabilities')
         self.get_extra_capabilities.return_value = {
