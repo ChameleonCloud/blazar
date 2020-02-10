@@ -10,12 +10,12 @@ pipeline {
       parallel {
         stage('pep8') {
           steps {
-            sh 'source scl_source enable rh-python35 && tox -e pep8'
+            sh 'source scl_source enable rh-python37 && tox -e pep8'
           }
         }
-        stage('py27') {
+        stage('py37') {
           steps {
-            sh 'tox -e py27'
+            sh 'source scl_source enable rh-python37 && tox -e py37'
           }
         }
       }
