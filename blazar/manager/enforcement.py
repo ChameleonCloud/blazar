@@ -89,6 +89,14 @@ def handle_redis_errors(fn):
                 host=CONF.enforcement.usage_db_host)
     return wrapper
 
+def human_friendly_timescale(seconds):
+    # Prefer rough days/hours/minutes if we're on that time scale
+    convert_seconds_to = {'days': 86400, 'hours': 3600, 'minutes': 60}
+    for scale in ['days', 'hours', 'minutes']:
+        value = seconds // convert_seconds_to[scale]
+        if value > 0:
+            return '%d %s' % (value, scale)
+    return '%d seconds' % seconds
 
 class UsageEnforcer(object):
     def __init__(self):
@@ -196,6 +204,10 @@ class UsageEnforcer(object):
                 prolong_allowed_from = lease['end_date'] - prolong_window
                 if (now >= prolong_allowed_from):
                     lease_duration = end_date - now
+                else:
+                    raise common_ex.NotAuthorized(
+                        'Prolonging a lease is only allowed within its final %s' %
+                        human_friendly_timescale(CONF.enforcement.prolong_seconds_before_lease_end))
 
         lease_duration = lease_duration.total_seconds()
 
@@ -221,8 +233,8 @@ class UsageEnforcer(object):
         elif CONF.enforcement.default_max_lease_duration != -1:
             if (lease_duration) > CONF.enforcement.default_max_lease_duration:
                 raise common_ex.NotAuthorized(
-                    'Lease is longer than maximum allowed of %d seconds' %
-                    CONF.enforcement.default_max_lease_duration)
+                    'Lease is longer than maximum allowed of %s' %
+                    human_friendly_timescale(CONF.enforcement.default_max_lease_duration))
 
         return True
 
