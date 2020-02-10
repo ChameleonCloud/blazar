@@ -89,6 +89,7 @@ def handle_redis_errors(fn):
                 host=CONF.enforcement.usage_db_host)
     return wrapper
 
+
 def human_friendly_timescale(seconds):
     # Prefer rough days/hours/minutes if we're on that time scale
     convert_seconds_to = {'days': 86400, 'hours': 3600, 'minutes': 60}
@@ -97,6 +98,7 @@ def human_friendly_timescale(seconds):
         if value > 0:
             return '%d %s' % (value, scale)
     return '%d seconds' % seconds
+
 
 class UsageEnforcer(object):
     def __init__(self):
@@ -191,6 +193,8 @@ class UsageEnforcer(object):
 
         if lease is not None:
             if lease['start_date'] < now and now < lease['end_date']:
+                prolong_threshold = (
+                    CONF.enforcement.prolong_seconds_before_lease_end)
                 # Note: an updated end date doesn't necessarily mean that the
                 # lease has been prolonged:
                 # 1) the end date can be brought closer to now (reduced lease
@@ -199,17 +203,18 @@ class UsageEnforcer(object):
                 #    (lease is advanced/deferred)
                 # If a lease has already started, the start date cannot be
                 # moved, so 2) is not a problem.
-                prolong_window = datetime.timedelta(
-                    0, CONF.enforcement.prolong_seconds_before_lease_end, 0)
+                prolong_window = datetime.timedelta(0, prolong_threshold, 0)
                 prolong_allowed_from = lease['end_date'] - prolong_window
                 if (now >= prolong_allowed_from):
                     lease_duration = end_date - now
                 else:
                     raise common_ex.NotAuthorized(
-                        'Prolonging a lease is only allowed within its final %s' %
-                        human_friendly_timescale(CONF.enforcement.prolong_seconds_before_lease_end))
+                        'Prolonging a lease is only allowed within '
+                        'its final %s' %
+                        human_friendly_timescale(prolong_threshold))
 
         lease_duration = lease_duration.total_seconds()
+        default_max_duration = CONF.enforcement.default_max_lease_duration
 
         lease_exception = self.get_lease_exception(user_name)
         # A one-time lease exception can be set for the user
@@ -230,11 +235,11 @@ class UsageEnforcer(object):
                         'than maximum allowed of %d seconds for project %s' %
                         (lease_duration, project_max_lease_duration,
                          project_enforcement_id))
-        elif CONF.enforcement.default_max_lease_duration != -1:
-            if (lease_duration) > CONF.enforcement.default_max_lease_duration:
+        elif default_max_duration != -1:
+            if (lease_duration) > default_max_duration:
                 raise common_ex.NotAuthorized(
                     'Lease is longer than maximum allowed of %s' %
-                    human_friendly_timescale(CONF.enforcement.default_max_lease_duration))
+                    human_friendly_timescale(default_max_duration))
 
         return True
 
