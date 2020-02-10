@@ -31,27 +31,27 @@ _api = utils.LazyProxy(service.API)
 # networks operations
 
 @rest.get('')
-def networks_list():
+def networks_list(req):
     """List all existing networks."""
     return api_utils.render(networks=_api.get_networks())
 
 
 @rest.post('')
-def networks_create(data):
+def networks_create(req, data):
     """Create new network."""
     return api_utils.render(network=_api.create_network(data))
 
 
 @rest.get('/<network_id>')
 @validation.check_exists(_api.get_network, network_id='network_id')
-def networks_get(network_id):
+def networks_get(req, network_id):
     """Get network by its ID."""
     return api_utils.render(network=_api.get_network(network_id))
 
 
 @rest.put('/<network_id>')
 @validation.check_exists(_api.get_network, network_id='network_id')
-def networks_update(network_id, data):
+def networks_update(req, network_id, data):
     """Update network. Only name changing may be proceeded."""
     if len(data) == 0:
         return api_utils.internal_error(status_code=400,
@@ -62,7 +62,7 @@ def networks_update(network_id, data):
 
 @rest.delete('/<network_id>')
 @validation.check_exists(_api.get_network, network_id='network_id')
-def networks_delete(network_id):
+def networks_delete(req, network_id):
     """Delete specified network."""
     _api.delete_network(network_id)
     return api_utils.render()
