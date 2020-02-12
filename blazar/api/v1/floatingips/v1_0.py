@@ -55,4 +55,4 @@ def floatingips_get(req, floatingip_id):
 def floatingips_delete(req, floatingip_id):
     """Delete specified floatingip."""
     _api.delete_floatingip(floatingip_id)
-    return api_utils.render()
+    return api_utils.render(status=200)
