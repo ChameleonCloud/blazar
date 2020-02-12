@@ -65,4 +65,4 @@ def networks_update(req, network_id, data):
 def networks_delete(req, network_id):
     """Delete specified network."""
     _api.delete_network(network_id)
-    return api_utils.render()
+    return api_utils.render(status=200)
