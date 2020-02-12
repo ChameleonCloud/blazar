@@ -65,7 +65,7 @@ def computehosts_update(req, host_id, data):
 def computehosts_delete(req, host_id):
     """Delete specified computehost."""
     _api.delete_computehost(host_id)
-    return api_utils.render()
+    return api_utils.render(status=200)
 
 
 @rest.get('/allocations', query=True)
