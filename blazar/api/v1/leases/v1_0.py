@@ -65,7 +65,7 @@ def leases_update(req, lease_id, data):
 def leases_delete(req, lease_id):
     """Delete specified lease."""
     _api.delete_lease(lease_id)
-    return api_utils.render()
+    return api_utils.render(status=200)
 
 
 # Plugins operations

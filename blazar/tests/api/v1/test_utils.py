@@ -55,8 +55,8 @@ class UtilsTestCase(tests.TestCase):
         self.rest._mroute.called_once_with('PUT', 'rule', 200)
 
     def test_delete(self):
-        self.rest.delete('rule', status_code=204)
-        self.rest._mroute.called_once_with('DELETE', 'rule', 204)
+        self.rest.delete('rule', status_code=200)
+        self.rest._mroute.called_once_with('DELETE', 'rule', 200)
 
     def test_route_ok(self):
         pass

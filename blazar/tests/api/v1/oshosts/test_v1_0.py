@@ -205,7 +205,8 @@ class OsHostAPITestCase(tests.TestCase):
             res = c.delete('/v1/{0}'.format(self.host_id),
                            headers=self.headers)
             res_id = res.headers.get(id.HTTP_RESP_HEADER_REQUEST_ID)
-            self.assertEqual(204, res.status_code)
+            # self.assertEqual(204, res.status_code)
+            self.assertEqual(200, res.status_code)
             self.assertIn(id.HTTP_RESP_HEADER_REQUEST_ID, res.headers)
             self.assertThat(res_id, matchers.StartsWith('req-'))
 
