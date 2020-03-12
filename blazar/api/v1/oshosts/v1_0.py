@@ -83,6 +83,6 @@ def allocations_get(req, host_id, query):
 
 @rest.put('/<host_id>/allocation')
 @validation.check_exists(_api.get_computehost, host_id='host_id')
-def reallocate(host_id, data):
+def reallocate(req, host_id, data):
     """Exhange host in a lease."""
     return api_utils.render(allocation=_api.reallocate(host_id, data))
