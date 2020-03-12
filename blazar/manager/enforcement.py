@@ -123,8 +123,9 @@ class UsageEnforcer(object):
         max_durations_config = CONF.enforcement.project_max_lease_durations
         for kv in max_durations_config:
             try:
-                project_name, seconds = kv.split(':')
-                max_durations[project_name] = int(seconds)
+                if len(kv) > 0:
+                    project_name, seconds = kv.split(':')
+                    max_durations[project_name] = int(seconds)
             except ValueError:
                 msg = "%s is not a valid project:max_duration pair" % kv
                 raise exceptions.ConfigurationError(error=msg)
