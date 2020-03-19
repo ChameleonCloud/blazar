@@ -81,7 +81,8 @@ class ManagerService(service_utils.RPCServer):
 
     def start(self):
         super(ManagerService, self).start()
-        self.tg.add_timer(EVENT_INTERVAL, self._process_events)
+        self.tg.add_timer_args(EVENT_INTERVAL, self._process_events,
+                               stop_on_exception=False)
         for m in self.monitors:
             m.start_monitoring()
 
