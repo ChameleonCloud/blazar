@@ -33,6 +33,7 @@ from blazar.plugins import base
 from blazar.plugins import oshosts as plugin
 from blazar import status
 from blazar.utils.openstack import heat
+from blazar.utils.openstack import ironic
 from blazar.utils.openstack import keystone
 from blazar.utils.openstack import nova
 from blazar.utils.openstack import placement
@@ -949,21 +950,64 @@ class PhysicalHostMonitorPlugin(base.BaseMonitorPlugin,
         :return: a list of failed hosts, a list of recovered hosts.
         """
         hosts = db_api.host_get_all_by_filters({})
-        reservable_hosts = [h for h in hosts if h['reservable'] is True]
-        unreservable_hosts = [h for h in hosts if h['reservable'] is False]
 
+        ironic_hosts = []
+        nova_hosts = []
+        for h in hosts:
+            if 'hypervisor_type' in h and h['hypervisor_type'] == 'ironic':
+                ironic_hosts.append(h)
+            else:
+                nova_hosts.append(h)
+
+        failed_hosts = []
+        recovered_hosts = []
         try:
-            hvs = self.nova.hypervisors.list()
+            if ironic_hosts:
+                invalid_power_states = ['error']
+                invalid_provision_states = ['error', 'clean failed',
+                                            'manageable', 'deploy failed']
+                reservable_hosts = [h for h in ironic_hosts
+                                    if h['reservable'] is True]
+                unreservable_hosts = [h for h in ironic_hosts
+                                      if h['reservable'] is False]
 
-            failed_hv_ids = [str(hv.id) for hv in hvs
-                             if hv.state == 'down' or hv.status == 'disabled']
-            failed_hosts = [host for host in reservable_hosts
-                            if host['id'] in failed_hv_ids]
+                ironic_client = ironic.BlazarIronicClient()
+                nodes = ironic_client.ironic.node.list()
+                failed_bm_ids = [n.uuid for n in nodes
+                                 if n.maintenance
+                                 or n.power_state in invalid_power_states
+                                 or n.provision_state
+                                 in invalid_provision_states]
+                failed_hosts.extend([host for host in reservable_hosts
+                                     if host['hypervisor_hostname']
+                                     in failed_bm_ids])
+                active_bm_ids = [n.uuid for n in nodes
+                                 if not n.maintenance
+                                 and n.provision_state in ['available']]
+                recovered_hosts.extend([host for host in unreservable_hosts
+                                        if host['hypervisor_hostname']
+                                        in active_bm_ids])
 
-            active_hv_ids = [str(hv.id) for hv in hvs
-                             if hv.state == 'up' and hv.status == 'enabled']
-            recovered_hosts = [host for host in unreservable_hosts
-                               if host['id'] in active_hv_ids]
+            if nova_hosts:
+                reservable_hosts = [h for h in nova_hosts
+                                    if h['reservable'] is True]
+                unreservable_hosts = [h for h in nova_hosts
+                                      if h['reservable'] is False]
+
+                hvs = self.nova.hypervisors.list()
+
+                failed_hv_ids = [str(hv.id) for hv in hvs
+                                 if hv.state == 'down'
+                                 or hv.status == 'disabled']
+                failed_hosts.extend([host for host in reservable_hosts
+                                     if host['id'] in failed_hv_ids])
+
+                active_hv_ids = [str(hv.id) for hv in hvs
+                                 if hv.state == 'up'
+                                 and hv.status == 'enabled']
+                recovered_hosts.extend([host for host in unreservable_hosts
+                                        if host['id'] in active_hv_ids])
+
         except Exception as e:
             LOG.exception('Skipping health check. %s', str(e))
 
