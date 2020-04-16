@@ -1010,7 +1010,7 @@ class PhysicalHostMonitorPlugin(base.BaseMonitorPlugin,
         ironic_hosts = []
         nova_hosts = []
         for h in hosts:
-            if h['hypervisor_type'] == 'ironic':
+            if 'hypervisor_type' in h and h['hypervisor_type'] == 'ironic':
                 ironic_hosts.append(h)
             else:
                 nova_hosts.append(h)
