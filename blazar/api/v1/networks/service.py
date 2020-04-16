@@ -93,3 +93,14 @@ class API(object):
         :type query: dict
         """
         return self.manager_rpcapi.get_allocations(network_id, query)
+
+    @policy.authorize('networks', 'get_resource_properties')
+    def list_resource_properties(self, query):
+        """List resource properties for networks."""
+        return self.manager_rpcapi.list_resource_properties(query)
+
+    @policy.authorize('networks', 'patch_resource_properties')
+    def update_resource_property(self, property_name, data):
+        """Update a network resource property."""
+        return self.manager_rpcapi.update_resource_property(property_name,
+                                                            data)

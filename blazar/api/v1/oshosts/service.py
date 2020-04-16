@@ -98,3 +98,14 @@ class API(object):
     def reallocate(self, host_id, data):
         """Exchange host from allocations."""
         return self.manager_rpcapi.reallocate(host_id, data)
+
+    @policy.authorize('oshosts', 'get_resource_properties')
+    def list_resource_properties(self, query):
+        """List resource properties for hosts."""
+        return self.manager_rpcapi.list_resource_properties(query)
+
+    @policy.authorize('oshosts', 'patch_resource_properties')
+    def update_resource_property(self, property_name, data):
+        """Update a host resource property."""
+        return self.manager_rpcapi.update_resource_property(
+            property_name, data)
