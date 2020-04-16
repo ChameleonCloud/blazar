@@ -356,9 +356,9 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         extra_capabilities = {}
         raw_extra_capabilities = (
             db_api.host_extra_capability_get_all_per_host(host_id))
-        for capability in raw_extra_capabilities:
-            key = capability['capability_name']
-            extra_capabilities[key] = capability['capability_value']
+        for capability, capability_name in raw_extra_capabilities:
+            key = capability_name
+            extra_capabilities[key] = capability.capability_value
         return extra_capabilities
 
     def get(self, host_id):
@@ -450,7 +450,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                     host=host['id'])
             return self.get_computehost(host['id'])
 
-    def is_updatable_extra_capability(self, capability):
+    def is_updatable_extra_capability(self, capability, capability_name):
         reservations = db_utils.get_reservations_by_host_id(
             capability['computehost_id'], datetime.datetime.utcnow(),
             datetime.date.max)
@@ -467,7 +467,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             # the extra_capability.
             for requirement in requirements_queries:
                 # A requirement is of the form "key op value" as string
-                if requirement.split(" ")[0] == capability['capability_name']:
+                if requirement.split(" ")[0] == capability_name:
                     return False
         return True
 
@@ -482,25 +482,21 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         new_keys = set(values.keys()) - set(previous_capabilities.keys())
 
         for key in updated_keys:
-            raw_capability = next(iter(
+            raw_capability, cap_name = next(iter(
                 db_api.host_extra_capability_get_all_per_name(host_id, key)))
-            capability = {
-                'capability_name': key,
-                'capability_value': values[key],
-            }
-            if self.is_updatable_extra_capability(raw_capability):
+            capability = {'capability_value': values[key]}
+
+            if self.is_updatable_extra_capability(raw_capability, cap_name):
                 try:
                     db_api.host_extra_capability_update(
                         raw_capability['id'], capability)
                 except (db_ex.BlazarDBException, RuntimeError):
-                    cant_update_extra_capability.append(
-                        raw_capability['capability_name'])
+                    cant_update_extra_capability.append(cap_name)
             else:
                 LOG.info("Capability %s can't be updated because "
                          "existing reservations require it.",
-                         raw_capability['capability_name'])
-                cant_update_extra_capability.append(
-                    raw_capability['capability_name'])
+                         cap_name)
+                cant_update_extra_capability.append(cap_name)
 
         for key in new_keys:
             new_capability = {
@@ -511,8 +507,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             try:
                 db_api.host_extra_capability_create(new_capability)
             except (db_ex.BlazarDBException, RuntimeError):
-                cant_update_extra_capability.append(
-                    new_capability['capability_name'])
+                cant_update_extra_capability.append(key)
 
         if cant_update_extra_capability:
             raise manager_ex.CantAddExtraCapability(

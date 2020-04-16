@@ -385,13 +385,11 @@ def host_extra_capability_create(values):
     return IMPL.host_extra_capability_create(values)
 
 
-@to_dict
 def host_extra_capability_get(host_extra_capability_id):
     """Return a specific Host Extracapability."""
     return IMPL.host_extra_capability_get(host_extra_capability_id)
 
 
-@to_dict
 def host_extra_capability_get_all_per_host(host_id):
     """Return all extra_capabilities belonging to a specific Compute host."""
     return IMPL.host_extra_capability_get_all_per_host(host_id)
@@ -629,13 +627,11 @@ def network_extra_capability_create(values):
     return IMPL.network_extra_capability_create(values)
 
 
-@to_dict
 def network_extra_capability_get(network_extra_capability_id):
     """Return a specific network Extracapability."""
     return IMPL.network_extra_capability_get(network_extra_capability_id)
 
 
-@to_dict
 def network_extra_capability_get_all_per_network(network_id):
     """Return all extra_capabilities belonging to a specific network."""
     return IMPL.network_extra_capability_get_all_per_network(network_id)
@@ -662,3 +658,17 @@ def network_extra_capability_get_latest_per_name(network_id,
     return IMPL.network_extra_capability_get_latest_per_name(
         network_id, extra_capability_name
     )
+
+
+# Resource Properties
+
+def resource_properties_list(resource_type):
+    return IMPL.resource_properties_list(resource_type)
+
+
+def resource_property_update(resource_type, property_name, values):
+    return IMPL.resource_property_update(resource_type, property_name, values)
+
+
+def resource_property_create(values):
+    return IMPL.resource_property_create(values)

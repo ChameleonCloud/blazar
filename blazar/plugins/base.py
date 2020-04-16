@@ -14,7 +14,9 @@
 # limitations under the License.
 
 import abc
+import collections
 
+from blazar.db import api as db_api
 from oslo_config import cfg
 from oslo_log import log as logging
 
@@ -97,6 +99,27 @@ class BasePlugin(object, metaclass=abc.ABCMeta):
     def on_start(self, resource_id):
         """Wake up resource."""
         pass
+
+    def list_resource_properties(self, query):
+        detail = False if not query else query.get('detail', False)
+        resource_properties = collections.defaultdict(list)
+
+        for name, private, value in db_api.resource_properties_list(
+                self.resource_type):
+
+            if not private:
+                resource_properties[name].append(value)
+
+        if detail:
+            return [
+                dict(property=k, private=False, values=v)
+                for k, v in resource_properties.items()]
+        else:
+            return [dict(property=k) for k, v in resource_properties.items()]
+
+    def update_resource_property(self, property_name, values):
+        return db_api.resource_property_update(
+            self.resource_type, property_name, values)
 
     def before_end(self, resource_id):
         """Take actions before the end of a lease"""
