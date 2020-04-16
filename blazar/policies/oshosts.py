@@ -91,6 +91,29 @@ oshosts_policies = [
             }
         ]
     ),
+    policy.DocumentedRuleDefault(
+        name=POLICY_ROOT % 'get_resource_propreties',
+        check_str=base.RULE_ADMIN,
+        description='Policy rule for Resource Properties API.',
+        operations=[
+            {
+                'path': '/{api_version}/os-hosts/resource_properties',
+                'method': 'GET'
+            }
+        ]
+    ),
+    policy.DocumentedRuleDefault(
+        name=POLICY_ROOT % 'patch_resource_propreties',
+        check_str=base.RULE_ADMIN,
+        description='Policy rule for Resource Properties API.',
+        operations=[
+            {
+                'path': ('/{api_version}/os-hosts/resource_properties/'
+                         '{property_name}'),
+                'method': 'PATCH'
+            }
+        ]
+    ),
 ]
 
 

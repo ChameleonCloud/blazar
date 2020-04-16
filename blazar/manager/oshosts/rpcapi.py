@@ -70,3 +70,12 @@ class ManagerRPCAPI(service.RPCClient):
         """Exchange host from current allocations."""
         return self.call('physical:host:reallocate_computehost',
                          host_id=host_id, data=data)
+
+    def list_resource_properties(self, query):
+        """List resource properties and possible values for computehosts."""
+        return self.call('physical:host:list_resource_properties', query=query)
+
+    def update_resource_property(self, property_name, values):
+        """Update resource property for computehost."""
+        return self.call('physical:host:update_resource_property',
+                         property_name=property_name, values=values)

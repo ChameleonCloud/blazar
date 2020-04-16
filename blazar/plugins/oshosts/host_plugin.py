@@ -395,9 +395,9 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         extra_capabilities = {}
         raw_extra_capabilities = (
             db_api.host_extra_capability_get_all_per_host(host_id))
-        for capability in raw_extra_capabilities:
-            key = capability['capability_name']
-            extra_capabilities[key] = capability['capability_value']
+        for capability, capability_name in raw_extra_capabilities:
+            key = capability_name
+            extra_capabilities[key] = capability.capability_value
         return extra_capabilities
 
     def get_computehost(self, host_id):
@@ -520,10 +520,8 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         for key in updated_keys:
             raw_capability = next(iter(
                 db_api.host_extra_capability_get_all_per_name(host_id, key)))
-            capability = {
-                'capability_name': key,
-                'capability_value': values[key],
-            }
+            capability = {'capability_value': values[key]}
+
             if self.is_updatable_extra_capability(raw_capability):
                 try:
                     db_api.host_extra_capability_update(
