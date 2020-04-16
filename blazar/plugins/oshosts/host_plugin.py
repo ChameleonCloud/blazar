@@ -1031,9 +1031,11 @@ class PhysicalHostMonitorPlugin(base.BaseMonitorPlugin,
                                  or n.provision_state not in
                                  ['active', 'available']]
                 failed_hosts.extend([host for host in reservable_hosts
-                                     if host['hypervisor_hostname'] in failed_bm_ids])
+                                     if host['hypervisor_hostname']
+                                     in failed_bm_ids])
                 recovered_hosts.extend([host for host in unreservable_hosts
-                                        if host['hypervisor_hostname'] not in failed_bm_ids])
+                                        if host['hypervisor_hostname']
+                                        not in failed_bm_ids])
 
             if nova_hosts:
                 reservable_hosts = [h for h in nova_hosts
@@ -1048,7 +1050,7 @@ class PhysicalHostMonitorPlugin(base.BaseMonitorPlugin,
                                  or hv.status == 'disabled']
                 failed_hosts.extend([host for host in reservable_hosts
                                      if host['id'] in failed_hv_ids])
-                
+
                 active_hv_ids = [str(hv.id) for hv in hvs
                                  if hv.state == 'up'
                                  and hv.status == 'enabled']
