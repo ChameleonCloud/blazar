@@ -29,6 +29,10 @@ from blazar.db import exceptions as db_exc
 from blazar.db.sqlalchemy import facade_wrapper
 from blazar.db.sqlalchemy import models
 
+EXTRA_CAPABILITY_MODELS = {
+    'physical:host': models.ComputeHostExtraCapability,
+    'network': models.NetworkSegmentExtraCapability
+}
 
 LOG = logging.getLogger(__name__)
 
@@ -711,15 +715,16 @@ def host_get_all_by_queries(queries):
             hosts_query = hosts_query.filter(filt)
         else:
             # looking for extra capabilities matches
-            extra_filter = model_query(
-                models.ComputeHostExtraCapability, get_session()
-            ).filter(models.ComputeHostExtraCapability.capability_name == key
-                     ).all()
+            extra_filter = (
+                _host_extra_capability_query(get_session())
+                .filter(models.ExtraCapability.capability_name == key)
+            ).all()
+
             if not extra_filter:
                 raise db_exc.BlazarDBNotFound(
                     id=key, model='ComputeHostExtraCapability')
 
-            for host in extra_filter:
+            for host, capability_name in extra_filter:
                 if op in oper and oper[op][1](host.capability_value, value):
                     hosts.append(host.computehost_id)
                 elif op not in oper:
@@ -729,7 +734,7 @@ def host_get_all_by_queries(queries):
             # We must also avoid selecting any host which doesn't have the
             # extra capability present.
             all_hosts = [h.id for h in hosts_query.all()]
-            extra_filter_hosts = [h.computehost_id for h in extra_filter]
+            extra_filter_hosts = [h.computehost_id for h, _ in extra_filter]
             hosts += [h for h in all_hosts if h not in extra_filter_hosts]
 
     return hosts_query.filter(~models.ComputeHost.id.in_(hosts)).all()
@@ -802,9 +807,19 @@ def host_destroy(host_id):
 
 
 # ComputeHostExtraCapability
+
+def _host_extra_capability_query(session):
+    return (
+        model_query(models.ComputeHostExtraCapability, session)
+        .join(models.ExtraCapability)
+        .add_column(models.ExtraCapability.capability_name))
+
+
 def _host_extra_capability_get(session, host_extra_capability_id):
-    query = model_query(models.ComputeHostExtraCapability, session)
-    return query.filter_by(id=host_extra_capability_id).first()
+    query = _host_extra_capability_query(session).filter(
+        models.ComputeHostExtraCapability.id == host_extra_capability_id)
+
+    return query.first()
 
 
 def host_extra_capability_get(host_extra_capability_id):
@@ -813,8 +828,10 @@ def host_extra_capability_get(host_extra_capability_id):
 
 
 def _host_extra_capability_get_all_per_host(session, host_id):
-    query = model_query(models.ComputeHostExtraCapability, session)
-    return query.filter_by(computehost_id=host_id)
+    query = _host_extra_capability_query(session).filter(
+        models.ComputeHostExtraCapability.computehost_id == host_id)
+
+    return query
 
 
 def host_extra_capability_get_all_per_host(host_id):
@@ -824,10 +841,18 @@ def host_extra_capability_get_all_per_host(host_id):
 
 def host_extra_capability_create(values):
     values = values.copy()
+
+    resource_property = resource_property_get_or_create(
+        'physical:host', values.get('capability_name'))
+
+    del values['capability_name']
+    values['capability_id'] = resource_property.id
+
     host_extra_capability = models.ComputeHostExtraCapability()
     host_extra_capability.update(values)
 
     session = get_session()
+
     with session.begin():
         try:
             host_extra_capability.save(session=session)
@@ -844,7 +869,7 @@ def host_extra_capability_update(host_extra_capability_id, values):
     session = get_session()
 
     with session.begin():
-        host_extra_capability = (
+        host_extra_capability, _ = (
             _host_extra_capability_get(session,
                                        host_extra_capability_id))
         host_extra_capability.update(values)
@@ -856,9 +881,8 @@ def host_extra_capability_update(host_extra_capability_id, values):
 def host_extra_capability_destroy(host_extra_capability_id):
     session = get_session()
     with session.begin():
-        host_extra_capability = (
-            _host_extra_capability_get(session,
-                                       host_extra_capability_id))
+        host_extra_capability = _host_extra_capability_get(
+            session, host_extra_capability_id)
 
         if not host_extra_capability:
             # raise not found error
@@ -866,7 +890,7 @@ def host_extra_capability_destroy(host_extra_capability_id):
                 id=host_extra_capability_id,
                 model='ComputeHostExtraCapability')
 
-        session.delete(host_extra_capability)
+        session.delete(host_extra_capability[0])
 
 
 def host_extra_capability_get_all_per_name(host_id, capability_name):
@@ -874,7 +898,8 @@ def host_extra_capability_get_all_per_name(host_id, capability_name):
 
     with session.begin():
         query = _host_extra_capability_get_all_per_host(session, host_id)
-        return query.filter_by(capability_name=capability_name).all()
+        return query.filter(
+            models.ExtraCapability.capability_name == capability_name).all()
 
 
 # FloatingIP reservation
@@ -1410,7 +1435,7 @@ def network_get_all_by_queries(queries):
                 raise db_exc.BlazarDBNotFound(
                     id=key, model='NetworkSegmentExtraCapability')
 
-            for network in extra_filter:
+            for network, capability_name in extra_filter:
                 if op in oper and oper[op][1](network.capability_value, value):
                     networks.append(network.network_id)
                 elif op not in oper:
@@ -1420,7 +1445,7 @@ def network_get_all_by_queries(queries):
             # We must also avoid selecting any network which doesn't have the
             # extra capability present.
             all_networks = [h.id for h in networks_query.all()]
-            extra_filter_networks = [h.network_id for h in extra_filter]
+            extra_filter_networks = [h.network_id for h, _ in extra_filter]
             networks += [h for h in all_networks if h not in
                          extra_filter_networks]
 
@@ -1452,9 +1477,18 @@ def unreservable_network_get_all_by_queries(queries):
 
 # NetworkSegmentExtraCapability
 
+def _network_extra_capability_query(session):
+    return (
+        model_query(models.NetworkSegmentExtraCapability, session)
+        .join(models.ExtraCapability)
+        .add_column(models.ExtraCapability.capability_name))
+
+
 def _network_extra_capability_get(session, network_extra_capability_id):
-    query = model_query(models.NetworkSegmentExtraCapability, session)
-    return query.filter_by(id=network_extra_capability_id).first()
+    query = _network_extra_capability_query(session).filter(
+        models.NetworkSegmentExtraCapability.id == network_extra_capability_id)
+
+    return query.first()
 
 
 def network_extra_capability_get(network_extra_capability_id):
@@ -1463,8 +1497,10 @@ def network_extra_capability_get(network_extra_capability_id):
 
 
 def _network_extra_capability_get_all_per_network(session, network_id):
-    query = model_query(models.NetworkSegmentExtraCapability, session)
-    return query.filter_by(network_id=network_id)
+    query = _network_extra_capability_query(session).filter(
+        models.NetworkSegmentExtraCapability.network_id == network_id)
+
+    return query
 
 
 def network_extra_capability_get_all_per_network(network_id):
@@ -1474,10 +1510,18 @@ def network_extra_capability_get_all_per_network(network_id):
 
 def network_extra_capability_create(values):
     values = values.copy()
+
+    resource_property = _resource_property_get_or_create(
+        get_session(), 'network', values.get('capability_name'))
+
+    del values['capability_name']
+    values['capability_id'] = resource_property.id
+
     network_extra_capability = models.NetworkSegmentExtraCapability()
     network_extra_capability.update(values)
 
     session = get_session()
+
     with session.begin():
         try:
             network_extra_capability.save(session=session)
@@ -1494,7 +1538,7 @@ def network_extra_capability_update(network_extra_capability_id, values):
     session = get_session()
 
     with session.begin():
-        network_extra_capability = (
+        network_extra_capability, _ = (
             _network_extra_capability_get(session,
                                           network_extra_capability_id))
         network_extra_capability.update(values)
@@ -1506,9 +1550,8 @@ def network_extra_capability_update(network_extra_capability_id, values):
 def network_extra_capability_destroy(network_extra_capability_id):
     session = get_session()
     with session.begin():
-        network_extra_capability = (
-            _network_extra_capability_get(session,
-                                          network_extra_capability_id))
+        network_extra_capability = _network_extra_capability_get(
+            session, network_extra_capability_id)
 
         if not network_extra_capability:
             # raise not found error
@@ -1516,7 +1559,7 @@ def network_extra_capability_destroy(network_extra_capability_id):
                 id=network_extra_capability_id,
                 model='NetworkSegmentExtraCapability')
 
-        session.delete(network_extra_capability)
+        session.delete(network_extra_capability[0])
 
 
 def network_extra_capability_get_all_per_name(network_id, capability_name):
@@ -1532,10 +1575,109 @@ def network_extra_capability_get_latest_per_name(network_id, capability_name):
     session = get_session()
 
     with session.begin():
-        query = _network_extra_capability_get_all_per_network(
-            session, network_id)
+        query = _network_extra_capability_get_all_per_network(session,
+                                                              network_id)
         return (
-            query.filter_by(capability_name=capability_name)
-                 .order_by(
-                     models.NetworkSegmentExtraCapability.created_at.desc())
-                 .first())
+            query
+            .filter(models.ExtraCapability.capability_name == capability_name)
+            .order_by(models.NetworkSegmentExtraCapability.created_at.desc())
+            .first())
+
+
+# Resource Properties
+
+def _resource_property_get(session, resource_type, capability_name):
+    query = (
+        model_query(models.ExtraCapability, session)
+        .filter_by(resource_type=resource_type)
+        .filter_by(capability_name=capability_name))
+
+    return query.first()
+
+
+def resource_property_get(resource_type, capability_name):
+    return _resource_property_get(get_session(), resource_type,
+                                  capability_name)
+
+
+def resource_properties_list(resource_type):
+    if resource_type not in EXTRA_CAPABILITY_MODELS:
+        raise db_exc.BlazarDBExtraCapabilitiesNotEnabled(
+            resource_type=resource_type)
+
+    session = get_session()
+
+    with session.begin():
+
+        resource_model = EXTRA_CAPABILITY_MODELS[resource_type]
+        query = session.query(
+            models.ExtraCapability.capability_name,
+            models.ExtraCapability.private,
+            resource_model.capability_value).join(resource_model).distinct()
+
+        return query.all()
+
+
+def _resource_property_create(session, values):
+    values = values.copy()
+
+    resource_property = models.ExtraCapability()
+    resource_property.update(values)
+
+    with session.begin():
+        try:
+            resource_property.save(session=session)
+        except common_db_exc.DBDuplicateEntry as e:
+            # raise exception about duplicated columns (e.columns)
+            raise db_exc.BlazarDBDuplicateEntry(
+                model=resource_property.__class__.__name__,
+                columns=e.columns)
+
+    return resource_property_get(values.get('resource_type'),
+                                 values.get('capability_name'))
+
+
+def resource_property_create(values):
+    return _resource_property_create(get_session(), values)
+
+
+def resource_property_update(resource_type, property_name, values):
+    if resource_type not in EXTRA_CAPABILITY_MODELS:
+        raise db_exc.BlazarDBExtraCapabilitiesNotEnabled(
+            resource_type=resource_type)
+
+    values = values.copy()
+    session = get_session()
+
+    with session.begin():
+        resource_property = _resource_property_get(
+            session, resource_type, property_name)
+
+        if not resource_property:
+            raise db_exc.BlazarDBInvalidExtraCapability(
+                property_name=property_name,
+                resource_type=resource_type)
+
+        resource_property.update(values)
+        resource_property.save(session=session)
+
+    return resource_property_get(resource_type, property_name)
+
+
+def _resource_property_get_or_create(session, resource_type, capability_name):
+    resource_property = _resource_property_get(
+        session, resource_type, capability_name)
+
+    if resource_property:
+        return resource_property
+    else:
+        rp_values = {
+            'resource_type': resource_type,
+            'capability_name': capability_name}
+
+        return resource_property_create(rp_values)
+
+
+def resource_property_get_or_create(resource_type, capability_name):
+    return _resource_property_get_or_create(
+        get_session(), resource_type, capability_name)
