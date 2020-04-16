@@ -24,5 +24,5 @@ def network_billrate(network_id):
         network_id, BILLRATE_EXTRA_KEY
     )
     if extra:
-        return float(extra.capability_value)
+        return float(extra[0].capability_value)
     return 1.0

@@ -65,3 +65,12 @@ class ManagerRPCAPI(service.RPCClient):
         """List all allocations on a specified network segment."""
         return self.call('network:get_allocations',
                          network_id=network_id, query=query)
+
+    def list_resource_properties(self, query):
+        """List resource properties and possible values for networks."""
+        return self.call('network:list_resource_properties', query=query)
+
+    def update_resource_property(self, property_name, values):
+        """Update resource property for computehost."""
+        return self.call('network:update_resource_property',
+                         property_name=property_name, values=values)

@@ -223,11 +223,10 @@ class NetworkPluginTestCase(tests.TestCase):
         network_values = {'foo': 'baz'}
 
         self.db_network_extra_capability_get_all_per_name.return_value = [
-            {'id': 'extra_id1',
-             'network_id': self.fake_network_id,
-             'capability_name': 'foo',
-             'capability_value': 'bar'
-             },
+            ({'id': 'extra_id1',
+              'network_id': self.fake_network_id,
+              'capability_value': 'bar'},
+             'foo')
         ]
 
         self.get_reservations_by_network = self.patch(
@@ -247,11 +246,10 @@ class NetworkPluginTestCase(tests.TestCase):
             self.db_utils, 'get_reservations_by_network_id')
         self.get_reservations_by_network.return_value = []
         self.db_network_extra_capability_get_all_per_name.return_value = [
-            {'id': 'extra_id1',
-             'network_id': self.fake_network_id,
-             'capability_name': 'foo',
-             'capability_value': 'bar'
-             },
+            ({'id': 'extra_id1',
+              'network_id': self.fake_network_id,
+              'capability_value': 'bar'},
+             'foo')
         ]
         fake = self.db_network_extra_capability_update
         fake.side_effect = fake_db_network_extra_capability_update
@@ -275,11 +273,10 @@ class NetworkPluginTestCase(tests.TestCase):
         network_values = {'foo': 'buzz'}
 
         self.db_network_extra_capability_get_all_per_name.return_value = [
-            {'id': 'extra_id1',
-             'network_id': self.fake_network_id,
-             'capability_name': 'foo',
-             'capability_value': 'bar'
-             },
+            ({'id': 'extra_id1',
+              'network_id': self.fake_network_id,
+              'capability_value': 'bar'},
+             'foo')
         ]
         fake_network_reservation = {
             'resource_type': plugin.RESOURCE_TYPE,
@@ -1031,3 +1028,70 @@ class NetworkPluginTestCase(tests.TestCase):
             u'bfa9aa0b-8042-43eb-a4e6-4555838bf64f')
         delete_network.assert_called_with(
             '69cab064-0e60-4efb-a503-b42dde0fb3f2')
+
+    def test_list_resource_properties(self):
+        self.db_list_resource_properties = self.patch(
+            self.db_api, 'resource_properties_list')
+
+        # Expecting a list of (Reservation, Allocation)
+        self.db_list_resource_properties.return_value = [
+            ('prop1', False, 'aaa'),
+            ('prop1', False, 'bbb'),
+            ('prop2', False, 'aaa'),
+            ('prop2', False, 'aaa'),
+            ('prop3', True, 'aaa')
+        ]
+
+        expected = [
+            {'property': 'prop1'},
+            {'property': 'prop2'}
+        ]
+
+        ret = self.fake_network_plugin.list_resource_properties(query=None)
+
+        # Sort returned value to use assertListEqual
+        ret.sort(key=lambda x: x['property'])
+
+        self.assertListEqual(expected, ret)
+        self.db_list_resource_properties.assert_called_once_with(
+            'network')
+
+    def test_list_resource_properties_with_detail(self):
+        self.db_list_resource_properties = self.patch(
+            self.db_api, 'resource_properties_list')
+
+        # Expecting a list of (Reservation, Allocation)
+        self.db_list_resource_properties.return_value = [
+            ('prop1', False, 'aaa'),
+            ('prop1', False, 'bbb'),
+            ('prop2', False, 'ccc'),
+            ('prop3', True, 'aaa')
+        ]
+
+        expected = [
+            {'property': 'prop1', 'private': False, 'values': ['aaa', 'bbb']},
+            {'property': 'prop2', 'private': False, 'values': ['ccc']}
+        ]
+
+        ret = self.fake_network_plugin.list_resource_properties(
+            query={'detail': True})
+
+        # Sort returned value to use assertListEqual
+        ret.sort(key=lambda x: x['property'])
+
+        self.assertListEqual(expected, ret)
+        self.db_list_resource_properties.assert_called_once_with(
+            'network')
+
+    def test_update_resource_property(self):
+        resource_property_values = {
+            'resource_type': 'network',
+            'private': False}
+
+        db_resource_property_update = self.patch(
+            self.db_api, 'resource_property_update')
+
+        self.fake_network_plugin.update_resource_property(
+            'foo', resource_property_values)
+        db_resource_property_update.assert_called_once_with(
+            'network', 'foo', resource_property_values)

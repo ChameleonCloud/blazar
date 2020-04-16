@@ -86,3 +86,17 @@ def allocations_get(req, host_id, query):
 def reallocate(req, host_id, data):
     """Exhange host in a lease."""
     return api_utils.render(allocation=_api.reallocate(host_id, data))
+
+
+@rest.get('/properties', query=True)
+def resource_properties_list(req, query=None):
+    """List computehost resource properties."""
+    return api_utils.render(
+        resource_properties=_api.list_resource_properties(query))
+
+
+@rest.patch('/properties/<property_name>')
+def resource_property_update(req, property_name, data):
+    """Update a computehost resource property."""
+    return api_utils.render(
+        resource_property=_api.update_resource_property(property_name, data))

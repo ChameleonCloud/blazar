@@ -80,3 +80,17 @@ def allocations_get(req, network_id, query):
     """List all allocations on a specific network segment."""
     return api_utils.render(allocation=_api.get_allocations(network_id,
                                                             query))
+
+
+@rest.get('/properties', query=True)
+def resource_properties_list(req, query=None):
+    """List network resource properties."""
+    return api_utils.render(
+        resource_properties=_api.list_resource_properties(query))
+
+
+@rest.patch('/properties/<property_name>')
+def resource_property_update(req, property_name, data):
+    """Update a network resource property."""
+    return api_utils.render(
+        resource_property=_api.update_resource_property(property_name, data))
