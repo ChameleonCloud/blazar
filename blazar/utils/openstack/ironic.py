@@ -13,10 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ironicclient import client as ironic_client
 from keystoneauth1 import identity
 from keystoneauth1 import session
-from keystoneauth1 import token_endpoint
-from ironicclient import client as ironic_client
 from oslo_config import cfg
 from oslo_log import log as logging
 
@@ -30,6 +29,7 @@ ironic_opts = [
 CONF = cfg.CONF
 CONF.register_opts(ironic_opts, group='ironic')
 LOG = logging.getLogger(__name__)
+
 
 class BlazarIronicClient(object):
 
@@ -50,4 +50,7 @@ class BlazarIronicClient(object):
         sess = session.Session(auth=auth)
 
         self.ironic = ironic_client.Client(
-            CONF.ironic.ironic_api_version, session=sess, region_name=CONF.os_region_name)
+            CONF.ironic.ironic_api_version,
+            session=sess,
+            region_name=CONF.os_region_name
+            )
