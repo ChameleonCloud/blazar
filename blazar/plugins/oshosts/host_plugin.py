@@ -1019,6 +1019,9 @@ class PhysicalHostMonitorPlugin(base.BaseMonitorPlugin,
         recovered_hosts = []
         try:
             if ironic_hosts:
+                invalid_power_states = ['error']
+                invalid_provision_states = ['error', 'clean failed',
+                                            'manageable', 'deploy failed']
                 reservable_hosts = [h for h in ironic_hosts
                                     if h['reservable'] is True]
                 unreservable_hosts = [h for h in ironic_hosts
@@ -1027,15 +1030,18 @@ class PhysicalHostMonitorPlugin(base.BaseMonitorPlugin,
                 ironic_client = ironic.BlazarIronicClient()
                 nodes = ironic_client.ironic.node.list()
                 failed_bm_ids = [n.uuid for n in nodes
-                                 if n.maintenance or n.power_state in ['error']
-                                 or n.provision_state not in
-                                 ['active', 'available']]
+                                 if n.maintenance
+                                 or n.power_state in invalid_power_states
+                                 or n.provision_state in invalid_provision_states]
                 failed_hosts.extend([host for host in reservable_hosts
                                      if host['hypervisor_hostname']
                                      in failed_bm_ids])
+                active_bm_ids = [n.uuid for n in nodes
+                                 if not n.maintenance
+                                 and n.provision_state in ['available']]
                 recovered_hosts.extend([host for host in unreservable_hosts
                                         if host['hypervisor_hostname']
-                                        not in failed_bm_ids])
+                                        in active_bm_ids])
 
             if nova_hosts:
                 reservable_hosts = [h for h in nova_hosts
