@@ -1032,7 +1032,8 @@ class PhysicalHostMonitorPlugin(base.BaseMonitorPlugin,
                 failed_bm_ids = [n.uuid for n in nodes
                                  if n.maintenance
                                  or n.power_state in invalid_power_states
-                                 or n.provision_state in invalid_provision_states]
+                                 or n.provision_state
+                                 in invalid_provision_states]
                 failed_hosts.extend([host for host in reservable_hosts
                                      if host['hypervisor_hostname']
                                      in failed_bm_ids])
