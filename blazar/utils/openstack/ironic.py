@@ -14,43 +14,34 @@
 # limitations under the License.
 
 from ironicclient import client as ironic_client
-from keystoneauth1 import identity
-from keystoneauth1 import session
 from oslo_config import cfg
-from oslo_log import log as logging
+
+from blazar.utils.openstack import base
 
 ironic_opts = [
     cfg.StrOpt(
         'ironic_api_version',
         default='1',
-        help='Ironic API version')
+        help='Ironic API version'),
+    cfg.StrOpt(
+        'ironic_api_microversion',
+        default='1.31',
+        help='Ironic API microversion')
 ]
 
 CONF = cfg.CONF
 CONF.register_opts(ironic_opts, group='ironic')
-LOG = logging.getLogger(__name__)
 
 
 class BlazarIronicClient(object):
+    """Client class for Ironic service."""
 
-    def __init__(self):
-
-        auth_url = "%s://%s:%s/%s" % (CONF.os_auth_protocol,
-                                      CONF.os_auth_host,
-                                      CONF.os_auth_port,
-                                      CONF.os_auth_prefix)
-
-        auth = identity.Password(
-            auth_url=auth_url,
-            username=CONF.os_admin_username,
-            password=CONF.os_admin_password,
-            project_name=CONF.os_admin_project_name,
-            project_domain_name=CONF.os_admin_project_domain_name,
-            user_domain_name=CONF.os_admin_user_domain_name)
-        sess = session.Session(auth=auth)
-
+    def __init__(self, **kwargs):
+        client_kwargs = base.client_kwargs(**kwargs)
+        client_kwargs.setdefault('os_ironic_api_version',
+                                 CONF.ironic.ironic_api_microversion)
         self.ironic = ironic_client.Client(
-            CONF.ironic.ironic_api_version,
-            session=sess,
-            region_name=CONF.os_region_name
-            )
+            CONF.ironic.ironic_api_version, **client_kwargs)
+
+    def __getattr__(self, attr):
+        return getattr(self.ironic, attr)

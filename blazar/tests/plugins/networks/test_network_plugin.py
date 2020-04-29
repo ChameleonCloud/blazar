@@ -16,11 +16,7 @@
 import datetime
 import uuid
 
-from ironicclient import client as ironic_client
-from keystoneauth1 import identity
-from keystoneauth1 import session
 import mock
-from neutronclient.v2_0 import client as neutron_client
 from oslo_config import cfg
 import six
 
@@ -34,6 +30,8 @@ from blazar.plugins import networks as plugin
 from blazar.plugins.networks import network_plugin
 from blazar import tests
 from blazar.utils.openstack import base
+from blazar.utils.openstack import ironic
+from blazar.utils.openstack import neutron
 from blazar.utils.openstack import nova
 from blazar.utils import trusts
 
@@ -48,14 +46,10 @@ class NetworkPluginTestCase(tests.TestCase):
         self.context = context
         self.patch(self.context, 'BlazarContext')
 
-        self.ironic_client = ironic_client
-        self.ironic_client = self.patch(
-            self.ironic_client, 'get_client').return_value
-        self.neutron_client = neutron_client
-        self.neutron_client = self.patch(
-            self.neutron_client, 'Client').return_value
-        self.identity = identity
-        self.session = session
+        self.ironic_client = (
+            self.patch(ironic, 'BlazarIronicClient').return_value)
+        self.neutron_client = (
+            self.patch(neutron, 'BlazarNeutronClient').return_value)
 
         self.service = service
         self.manager = self.service.ManagerService()

@@ -17,11 +17,7 @@
 import datetime
 from random import shuffle
 
-from ironicclient import client as ironic_client
-from keystoneauth1 import identity
-from keystoneauth1 import session
 from neutronclient.common import exceptions as neutron_ex
-from neutronclient.v2_0 import client as neutron_client
 from oslo_config import cfg
 from oslo_log import log as logging
 
@@ -32,6 +28,8 @@ from blazar.manager import exceptions as manager_ex
 from blazar.plugins import base
 from blazar.plugins import networks as plugin
 from blazar import status
+from blazar.utils.openstack import ironic
+from blazar.utils.openstack import neutron
 from blazar.utils import plugins as plugins_utils
 
 plugin_opts = [
@@ -242,46 +240,6 @@ class NetworkPlugin(base.BasePlugin):
             db_api.network_reservation_update(
                 network_reservation['id'], updates)
 
-    def ironic(self):
-        auth_url = "%s://%s:%s/%s" % (CONF.os_auth_protocol,
-                                      CONF.os_auth_host,
-                                      CONF.os_auth_port,
-                                      CONF.os_auth_prefix)
-        auth = identity.Password(
-            auth_url=auth_url,
-            username=CONF.os_admin_username,
-            password=CONF.os_admin_password,
-            project_name=CONF.os_admin_project_name,
-            project_domain_name=CONF.os_admin_project_domain_name,
-            user_domain_name=CONF.os_admin_user_domain_name)
-        sess = session.Session(auth=auth)
-        return ironic_client.get_client(1,
-                                        session=sess,
-                                        os_ironic_api_version='1.31',
-                                        os_region_name=CONF.os_region_name)
-
-    def neutron(self, trust_id=None):
-        auth_url = "%s://%s:%s/%s" % (CONF.os_auth_protocol,
-                                      CONF.os_auth_host,
-                                      CONF.os_auth_port,
-                                      CONF.os_auth_prefix)
-        kwargs = {
-            'auth_url': auth_url,
-            'username': CONF.os_admin_username,
-            'password': CONF.os_admin_password,
-            'project_domain_name': CONF.os_admin_project_domain_name,
-            'user_domain_name': CONF.os_admin_user_domain_name
-        }
-        if trust_id is not None:
-            kwargs['trust_id'] = trust_id
-        else:
-            kwargs['project_name'] = CONF.os_admin_project_name
-        auth = identity.Password(**kwargs)
-        sess = session.Session(auth=auth)
-        neutron = neutron_client.Client(
-            session=sess, region_name=CONF.os_region_name)
-        return neutron
-
     def on_start(self, resource_id):
         """Creates a Neutron network using the allocated segment."""
         network_reservation = db_api.network_reservation_get(resource_id)
@@ -299,7 +257,7 @@ class NetworkPlugin(base.BasePlugin):
             network_type = network_segment['network_type']
             physical_network = network_segment['physical_network']
             segment_id = network_segment['segment_id']
-            neutron = self.neutron()
+            neutron_client = neutron.BlazarNeutronClient()
             network_body = {
                 "network": {
                     "name": network_name,
@@ -317,7 +275,7 @@ class NetworkPlugin(base.BasePlugin):
                 network_body['network']['description'] = network_description
 
             try:
-                network = neutron.create_network(body=network_body)
+                network = neutron_client.create_network(body=network_body)
                 network_dict = network['network']
                 network_id = network_dict['id']
                 db_api.network_reservation_update(network_reservation['id'],
@@ -328,25 +286,25 @@ class NetworkPlugin(base.BasePlugin):
                                                        id=reservation_id,
                                                        msg=str(e))
 
-    def delete_port(self, neutron, ironic, port):
+    def delete_port(self, neutron_client, ironic_client, port):
         if port['binding:vnic_type'] == 'baremetal':
             node = port.get('binding:host_id')
-            node_info = ironic.node.get(node)
+            node_info = ironic_client.node.get(node)
 
             if node and node_info.instance_uuid:
-                ironic.node.vif_detach(node, port['id'])
+                ironic_client.node.vif_detach(node, port['id'])
             else:
                 raise Exception("Expected to find attribute binding:host_id "
                                 "on port %s" % port['id'])
 
-        neutron.delete_port(port['id'])
+        neutron_client.delete_port(port['id'])
 
-    def delete_subnet(self, neutron, subnet_id):
-        neutron.delete_subnet(subnet_id)
+    def delete_subnet(self, neutron_client, subnet_id):
+        neutron_client.delete_subnet(subnet_id)
 
-    def delete_router(self, neutron, router_id):
-        neutron.remove_gateway_router(router_id)
-        neutron.delete_router(router_id)
+    def delete_router(self, neutron_client, router_id):
+        neutron_client.remove_gateway_router(router_id)
+        neutron_client.delete_router(router_id)
 
     def delete_neutron_network(self, network_id, reservation_id,
                                trust_id=None):
@@ -356,29 +314,30 @@ class NetworkPlugin(base.BasePlugin):
                      reservation_id)
             return
 
-        neutron = self.neutron(trust_id=trust_id)
+        neutron_client = neutron.BlazarNeutronClient(trust_id=trust_id)
+        ironic_client = ironic.BlazarIronicClient()
 
         try:
-            neutron.show_network(network_id)
+            neutron_client.show_network(network_id)
         except neutron_ex.NetworkNotFoundClient:
             LOG.info("Not deleting network %s as it could not be found",
                      network_id)
             return
 
         try:
-            ports = neutron.list_ports(network_id=network_id)
-            instance_ports = neutron.list_ports(
+            ports = neutron_client.list_ports(network_id=network_id)
+            instance_ports = neutron_client.list_ports(
                 device_owner='compute:nova', network_id=network_id)
             for instance_port in instance_ports['ports']:
-                self.delete_port(neutron, self.ironic(), instance_port)
+                self.delete_port(neutron_client, ironic_client, instance_port)
 
             router_ids = [port['device_id'] for port in ports['ports'] if
                           port['device_owner'] == 'network:router_interface']
             for router_id in router_ids:
-                router_ports = neutron.list_ports(device_id=router_id)
+                router_ports = neutron_client.list_ports(device_id=router_id)
 
                 # Remove static routes
-                neutron.update_router(
+                neutron_client.update_router(
                     router_id, body={'router': {'routes': []}})
 
                 # Remove subnets
@@ -390,16 +349,17 @@ class NetworkPlugin(base.BasePlugin):
                 for subnet_id in subnets:
                     body = {}
                     body['subnet_id'] = subnet_id
-                    neutron.remove_interface_router(router_id, body=body)
+                    neutron_client.remove_interface_router(router_id,
+                                                           body=body)
 
                 # Delete external gateway and router
-                self.delete_router(neutron, router_id)
+                self.delete_router(neutron_client, router_id)
 
-            subnets = neutron.list_subnets(network_id=network_id)
+            subnets = neutron_client.list_subnets(network_id=network_id)
             for subnet in subnets['subnets']:
-                self.delete_subnet(neutron, subnet['id'])
+                self.delete_subnet(neutron_client, subnet['id'])
 
-            neutron.delete_network(network_id)
+            neutron_client.delete_network(network_id)
         except Exception:
             LOG.exception("Failed to delete network %s", network_id)
             raise manager_ex.NetworkDeletionFailed(

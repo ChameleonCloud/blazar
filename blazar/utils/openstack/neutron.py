@@ -13,20 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keystoneauth1.identity import v3
-from keystoneauth1 import session
 import netaddr
 from neutronclient.common import exceptions as neutron_exceptions
 from neutronclient.v2_0 import client as neutron_client
 
-from oslo_config import cfg
 from oslo_log import log as logging
 
-from blazar import context
 from blazar.utils.openstack import base
 from blazar.utils.openstack import exceptions
 
-CONF = cfg.CONF
 LOG = logging.getLogger(__name__)
 
 
@@ -34,44 +29,11 @@ class BlazarNeutronClient(object):
     """Client class for Neutron service."""
 
     def __init__(self, **kwargs):
-        ctx = kwargs.pop('ctx', None)
-        username = kwargs.pop('username',
-                              CONF.os_admin_username)
-        password = kwargs.pop('password',
-                              CONF.os_admin_password)
-        project_name = kwargs.pop('project_name',
-                                  CONF.os_admin_project_name)
-        user_domain_name = kwargs.pop('user_domain_name',
-                                      CONF.os_admin_user_domain_name)
-        project_domain_name = kwargs.pop('project_domain_name',
-                                         CONF.os_admin_project_domain_name)
-        auth_url = kwargs.pop('auth_url', None)
-        region_name = kwargs.pop('region_name', CONF.os_region_name)
-        if ctx is None:
-            try:
-                ctx = context.current()
-            except RuntimeError:
-                pass
-        if ctx is not None:
-            kwargs.setdefault('global_request_id', ctx.global_request_id)
+        client_kwargs = base.client_kwargs(**kwargs)
+        self.neutron = neutron_client.Client(**client_kwargs)
 
-        if auth_url is None:
-            auth_url = "%s://%s:%s/%s/%s" % (CONF.os_auth_protocol,
-                                             base.get_os_auth_host(CONF),
-                                             CONF.os_auth_port,
-                                             CONF.os_auth_prefix,
-                                             CONF.os_auth_version)
-
-        auth = v3.Password(auth_url=auth_url,
-                           username=username,
-                           password=password,
-                           project_name=project_name,
-                           user_domain_name=user_domain_name,
-                           project_domain_name=project_domain_name)
-        sess = session.Session(auth=auth)
-        kwargs.setdefault('session', sess)
-        kwargs.setdefault('region_name', region_name)
-        self.neutron = neutron_client.Client(**kwargs)
+    def __getattr__(self, attr):
+        return getattr(self.neutron, attr)
 
 
 class FloatingIPPool(BlazarNeutronClient):
