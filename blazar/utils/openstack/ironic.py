@@ -23,7 +23,11 @@ ironic_opts = [
     cfg.StrOpt(
         'ironic_api_version',
         default='1',
-        help='Ironic API version')
+        help='Ironic API version'),
+    cfg.StrOpt(
+        'ironic_api_microversion',
+        default='1.31'
+        help='Ironic API microversion')
 ]
 
 CONF = cfg.CONF
@@ -52,5 +56,6 @@ class BlazarIronicClient(object):
         self.ironic = ironic_client.Client(
             CONF.ironic.ironic_api_version,
             session=sess,
-            region_name=CONF.os_region_name
+            region_name=CONF.os_region_name,
+            os_ironic_api_version=CONF.ironic.ironic_api_microversion
             )
