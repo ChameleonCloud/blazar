@@ -60,13 +60,12 @@ class NetworkPlugin(base.BasePlugin):
     resource_type = plugin.RESOURCE_TYPE
     title = 'Network Plugin'
     description = 'This plugin creates and deletes networks.'
+    query_options = {
+        QUERY_TYPE_ALLOCATION: ['lease_id', 'reservation_id']
+    }
 
     def __init__(self):
         super(NetworkPlugin, self).__init__()
-        self.usage_enforcer = None
-
-    def set_usage_enforcer(self, usage_enforcer):
-        self.usage_enforcer = usage_enforcer
 
     def filter_networks_by_reservation(self, networks, start_date, end_date):
         free = []
@@ -149,29 +148,14 @@ class NetworkPlugin(base.BasePlugin):
 
     def reserve_resource(self, reservation_id, values):
         """Create reservation."""
-        self._check_params(values)
-
+        network_ids = self.allocation_candidates(values)
         lease = db_api.lease_get(values['lease_id'])
-        network_ids = self._matching_networks(
-            values['network_properties'],
-            values['resource_properties'],
-            values['start_date'],
-            values['end_date'],
-        )
+
         if not network_ids:
             raise manager_ex.NotEnoughNetworksAvailable()
 
         values['vfc_resources'] = CONF[self.resource_type].resources_per_vfc
         self.check_vfc_resources(reservation_id, values)
-
-        # NOTE(priteau): Check if we have enough available SUs for this
-        # reservation. This takes into account the su_factor of each allocated
-        # network, if present.
-        try:
-            self.usage_enforcer.check_usage_against_allocation(
-                lease, allocated_network_ids=network_ids)
-        except manager_ex.RedisConnectionError:
-            pass
 
         network_rsrv_values = {
             'reservation_id': reservation_id,
@@ -194,30 +178,14 @@ class NetworkPlugin(base.BasePlugin):
         """Update reservation."""
         reservation = db_api.reservation_get(reservation_id)
         lease = db_api.lease_get(reservation['lease_id'])
-        network_allocations = db_api.network_allocation_get_all_by_values(
-            reservation_id=reservation_id)
 
         if (not [x for x in values.keys() if x in ['network_properties',
                                                    'resource_properties']]
                 and values['start_date'] >= lease['start_date']
                 and values['end_date'] <= lease['end_date']):
             # Nothing to update
-            try:
-                self.usage_enforcer.check_usage_against_allocation_post_update(
-                    values, lease,
-                    network_allocations,
-                    network_allocations)
-            except manager_ex.RedisConnectionError:
-                pass
 
             return
-
-        # Check if we have enough available SUs for update
-        try:
-            self.usage_enforcer.check_usage_against_allocation_pre_update(
-                values, lease, network_allocations)
-        except manager_ex.RedisConnectionError:
-            pass
 
         dates_before = {'start_date': lease['start_date'],
                         'end_date': lease['end_date']}
@@ -392,11 +360,6 @@ class NetworkPlugin(base.BasePlugin):
         reservation = db_api.reservation_get(
             network_reservation['reservation_id'])
         lease = db_api.lease_get(reservation['lease_id'])
-        try:
-            self.usage_enforcer.release_encumbered(
-                lease, reservation, allocations)
-        except manager_ex.RedisConnectionError:
-            pass
 
     def _get_extra_capabilities(self, network_id):
         extra_capabilities = {}
@@ -406,6 +369,9 @@ class NetworkPlugin(base.BasePlugin):
             key = capability_name
             extra_capabilities[key] = capability.capability_value
         return extra_capabilities
+
+    def get(self, network_id):
+        return self.get_network(network_id)
 
     def get_network(self, network_id):
         network = db_api.network_get(network_id)
@@ -610,6 +576,10 @@ class NetworkPlugin(base.BasePlugin):
         allocs = network_allocations.get(network_id, [])
         return {"resource_id": network_id, "reservations": allocs}
 
+    def query_allocations(self, networks, lease_id=None, reservation_id=None):
+        return self.query_network_allocations(networks, lease_id=lease_id,
+                                              reservation_id=reservation_id)
+
     def query_network_allocations(self, networks, lease_id=None,
                                   reservation_id=None, detail=False):
         """Return dict of network and its allocations
@@ -647,6 +617,16 @@ class NetworkPlugin(base.BasePlugin):
                         if k != 'network_ids'})
 
         return network_allocations
+
+    def allocation_candidates(self, values):
+        self._check_params(values)
+
+        return self._matching_networks(
+            values['network_properties'],
+            values['resource_properties'],
+            values['start_date'],
+            values['end_date']
+        )
 
     def _matching_networks(self, network_properties, resource_properties,
                            start_date, end_date):
@@ -737,18 +717,6 @@ class NetworkPlugin(base.BasePlugin):
 
             if len(network_ids_to_add) < min_networks:
                 raise manager_ex.NotEnoughNetworksAvailable()
-
-        allocs_to_keep = [a for a in allocs if a not in allocs_to_remove]
-        allocs_to_add = [{'network_id': n} for n in network_ids_to_add]
-        new_allocations = allocs_to_keep + allocs_to_add
-
-        try:
-            self.usage_enforcer.check_usage_against_allocation_post_update(
-                values, lease,
-                allocs,
-                new_allocations)
-        except manager_ex.RedisConnectionError:
-            pass
 
         for network_id in network_ids_to_add:
             LOG.debug('Adding network {} to reservation {}'.format(

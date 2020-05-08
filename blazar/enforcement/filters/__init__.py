@@ -1,4 +1,4 @@
-# Copyright (c) 2018 StackHPC
+# Copyright (c) 2013 Bull.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,16 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from blazar.db import api as db_api
+from blazar.enforcement.filters.external_service_filter import (
+    ExternalServiceFilter)
+from blazar.enforcement.filters.max_reservation_length_filter import (
+    MaxReservationLengthFilter)
 
-BILLRATE_EXTRA_KEY = 'su_factor'
 
+__all__ = ['MaxReservationLengthFilter', 'ExternalServiceFilter']
 
-def network_billrate(network_id):
-    """Looks up the SU charging rate for the specified network segment."""
-    extra = db_api.network_extra_capability_get_latest_per_name(
-        network_id, BILLRATE_EXTRA_KEY
-    )
-    if extra:
-        return float(extra[0].capability_value)
-    return 1.0
+all_filters = __all__

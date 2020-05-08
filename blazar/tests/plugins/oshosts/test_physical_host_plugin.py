@@ -133,15 +133,6 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         self.db_api = db_api
         self.db_utils = db_utils
 
-        self.usage_enforcer = self.patch(self.fake_phys_plugin,
-                                         'usage_enforcer')
-        self.check_usage_against_allocation = self.patch(
-            self.usage_enforcer, 'check_usage_against_allocation')
-        self.check_usage_against_allocation_pre_update = self.patch(
-            self.usage_enforcer, 'check_usage_against_allocation_pre_update')
-        self.release_encumbered = self.patch(
-            self.usage_enforcer, 'release_encumbered')
-
         self.db_host_get = self.patch(self.db_api, 'host_get')
         self.db_host_get.return_value = self.fake_host
         self.db_host_list = self.patch(self.db_api, 'host_list')
@@ -773,8 +764,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             'on_start': 'default'
         }
         host_reservation_create.assert_called_once_with(host_values)
-        self.check_usage_against_allocation.assert_called_once_with(
-            lease, allocated_host_ids=['host1', 'host2'])
+
         calls = [
             mock.call(
                 {'compute_host_id': 'host1',
@@ -1207,9 +1197,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         self.fake_phys_plugin.update_reservation(
             '706eb3bc-07ed-4383-be93-b32845ece672',
             values)
-        self.check_usage_against_allocation_pre_update.assert_called_once_with(
-            values, lease_get.return_value,
-            host_allocation_get_all.return_value)
+
         host_reservation_get.assert_called_with(
             '91253650-cc34-4c4f-bbe8-c943aa7d0c9b')
         matching_hosts.assert_called_with(
