@@ -46,10 +46,6 @@ class TestBlazarContext(tests.TestCase):
             'user_identity': u'111 222 - - -'}
         self.assertEqual(expected, ctx.to_dict())
 
-    def test_elevated_empty(self):
-        ctx = context.BlazarContext.elevated()
-        self.assertTrue(ctx.is_admin)
-
     def test_service_catalog_default(self):
         ctxt = context.BlazarContext(user_id=uuidsentinel.user_id,
                                      project_id=uuidsentinel.project_id)
@@ -64,15 +60,3 @@ class TestBlazarContext(tests.TestCase):
                                      project_id=uuidsentinel.project_id,
                                      service_catalog=None)
         self.assertEqual([], ctxt.service_catalog)
-
-    def test_blazar_context_elevated(self):
-        user_context = context.BlazarContext(
-            user_id=uuidsentinel.user_id,
-            project_id=uuidsentinel.project_id, is_admin=False)
-        self.assertFalse(user_context.is_admin)
-
-        admin_context = user_context.elevated()
-        self.assertFalse(user_context.is_admin)
-        self.assertTrue(admin_context.is_admin)
-        self.assertNotIn('admin', user_context.roles)
-        self.assertIn('admin', admin_context.roles)

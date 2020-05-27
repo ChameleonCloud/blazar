@@ -26,14 +26,9 @@ CONF = cfg.CONF
 
 def create_trust():
     """Creates trust via Keystone API v3 to use in plugins."""
-    client = keystone.BlazarKeystoneClient()
-
-    trustee_id = keystone.BlazarKeystoneClient(
-        username=CONF.os_admin_username,
-        password=CONF.os_admin_password,
-        tenant_name=CONF.os_admin_project_name).user_id
-
     ctx = context.current()
+    client = keystone.BlazarKeystoneClient()
+    trustee_id = keystone.BlazarKeystoneClient.admin_client().user_id
     trust = client.trusts.create(trustor_user=ctx.user_id,
                                  trustee_user=trustee_id,
                                  impersonation=True,
@@ -52,13 +47,7 @@ def delete_trust(lease):
 def create_ctx_from_trust(trust_id):
     """Return context built from given trust."""
     ctx = context.current()
-
-    ctx = context.BlazarContext(
-        user_name=CONF.os_admin_username,
-        project_name=CONF.os_admin_project_name,
-        request_id=ctx.request_id,
-        global_request_id=ctx.global_request_id
-    )
+    admin_ctx = context.admin()
     auth_url = "%s://%s:%s/%s" % (CONF.os_auth_protocol,
                                   base.get_os_auth_host(CONF),
                                   CONF.os_auth_port,
@@ -67,18 +56,17 @@ def create_ctx_from_trust(trust_id):
         password=CONF.os_admin_password,
         trust_id=trust_id,
         auth_url=auth_url,
-        ctx=ctx,
+        ctx=admin_ctx,
     )
 
     # use 'with ctx' statement in the place you need context from trust
     return context.BlazarContext(
-        user_name=ctx.user_name,
-        project_name=ctx.project_name,
+        user_id=admin_ctx.user_id,
+        project_id=client.project_id,
         auth_token=client.auth_token,
-        service_catalog=client.service_catalog.catalog['catalog'],
-        project_id=client.tenant_id,
         request_id=ctx.request_id,
-        global_request_id=ctx.global_request_id
+        service_catalog=client.service_catalog.catalog['catalog'],
+        global_request_id=ctx.global_request_id,
     )
 
 

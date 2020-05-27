@@ -24,7 +24,7 @@ from blazar.manager import exceptions
 from blazar.plugins.floatingips import billrate as floatingip_billrate
 from blazar.plugins.networks import billrate as network_billrate
 from blazar.plugins.oshosts import billrate
-from blazar.utils.openstack import keystone
+from blazar.utils.openstack.keystone import BlazarKeystoneClient
 
 enforcement_opts = [
     cfg.IntOpt('default_max_lease_duration',
@@ -245,29 +245,17 @@ class UsageEnforcer(object):
 
     def _get_user_name(self, user_id):
         """Get user name from Keystone"""
-        self.keystone_client = keystone.BlazarKeystoneClient(
-            username=CONF.os_admin_username,
-            password=CONF.os_admin_password,
-            tenant_name=CONF.os_admin_project_name)
-        user = self.keystone_client.users.get(user_id)
+        user = BlazarKeystoneClient.admin_client().users.get(user_id)
         return user.name
 
     def _get_project_name(self, project_id):
         """Get project name from Keystone"""
-        self.keystone_client = keystone.BlazarKeystoneClient(
-            username=CONF.os_admin_username,
-            password=CONF.os_admin_password,
-            tenant_name=CONF.os_admin_project_name)
-        project = self.keystone_client.projects.get(project_id)
+        project = BlazarKeystoneClient.admin_client().projects.get(project_id)
         return project.name
 
     def _get_project_enforcement_id(self, project_id):
         """Get project name or charge_code from Keystone"""
-        self.keystone_client = keystone.BlazarKeystoneClient(
-            username=CONF.os_admin_username,
-            password=CONF.os_admin_password,
-            tenant_name=CONF.os_admin_project_name)
-        project = self.keystone_client.projects.get(project_id)
+        project = BlazarKeystoneClient.admin_client().projects.get(project_id)
         try:
             enforcement_attribute = getattr(
                 project, CONF.enforcement.project_enforcement_id)

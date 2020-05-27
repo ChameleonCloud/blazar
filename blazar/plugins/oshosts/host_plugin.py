@@ -247,10 +247,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             lease = db_api.lease_get(reservation['lease_id'])
             project_id = lease['project_id']
             user_id = lease['user_id']
-            keystoneclient = keystone.BlazarKeystoneClient(
-                username=CONF.os_admin_username,
-                password=CONF.os_admin_password,
-                tenant_name=CONF.os_admin_project_name)
+            keystoneclient = keystone.BlazarKeystoneClient.admin_client()
             project = keystoneclient.projects.get(project_id)
             user = keystoneclient.users.get(user_id)
             params_tmp = ('--to "{recipient}" '

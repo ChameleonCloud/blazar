@@ -65,7 +65,7 @@ class TestTrusts(tests.TestCase):
             'global_request_id': self.context.current().global_request_id,
             'is_admin': False,
             'is_admin_project': True,
-            'project': self.client().tenant_id,
+            'project': self.client().project_id,
             'project_domain': None,
             'read_only': False,
             'request_id': ctx.request_id,
@@ -74,7 +74,6 @@ class TestTrusts(tests.TestCase):
             'service_catalog': ctx.service_catalog,
             'show_deleted': False,
             'system_scope': None,
-            'tenant': self.client().tenant_id,
             'user': None,
             'user_domain': None}
         self.assertDictContainsSubset(fake_ctx_dict, ctx.to_dict())

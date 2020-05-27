@@ -15,7 +15,10 @@
 
 import threading
 
+from oslo_config import cfg
 from oslo_context import context
+
+CONF = cfg.CONF
 
 
 class BlazarContext(context.RequestContext):
@@ -31,8 +34,14 @@ class BlazarContext(context.RequestContext):
 
         super(BlazarContext, self).__init__(**kwargs)
 
+        # NOTE(jasonandersonatuchicago): it is unclear why BlazarContext needs
+        # this saved here.
         self.service_catalog = service_catalog or []
 
+        # NOTE(jasonandersonatuchicago): this override is non-standard and
+        # should ideally be removed; it is unclear what use-case it is
+        # addressing. The 'roles' key is deprecated in oslo.policy; when
+        # support for that is dropped, that may be a good opportunity.
         if self.is_admin and 'admin' not in self.roles:
             self.roles.append('admin')
 
@@ -61,18 +70,23 @@ class BlazarContext(context.RequestContext):
         result['service_catalog'] = self.service_catalog
         return result
 
-    @classmethod
-    def elevated(cls):
-        try:
-            ctx = cls.current()
-        except RuntimeError:
-            ctx = None
-        return cls(ctx, is_admin=True)
-
 
 def current():
     return BlazarContext.current()
 
 
-def elevated():
-    return BlazarContext.elevated()
+def admin():
+    try:
+        current_ctx = current()
+        request_id = current_ctx.request_id
+        global_request_id = current_ctx.global_request_id
+    except:
+        request_id = global_request_id = None
+    return BlazarContext(
+        user_name=CONF.os_admin_username,
+        user_domain_name=CONF.os_admin_user_domain_name,
+        project_name=CONF.os_admin_project_name,
+        project_domain_name=CONF.os_admin_project_domain_name,
+        request_id=request_id,
+        global_request_id=global_request_id
+    )

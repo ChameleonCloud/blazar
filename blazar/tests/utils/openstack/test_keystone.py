@@ -33,6 +33,7 @@ class TestCKClient(tests.TestCase):
         self.base = base
 
         self.ctx = self.patch(self.context, 'current')
+
         self.client = self.patch(self.k_client, 'Client')
         self.patch(self.base, 'url_for').return_value = 'http://fake.com/'
 
@@ -40,54 +41,49 @@ class TestCKClient(tests.TestCase):
         self.username = 'fake_user'
         self.token = 'fake_token'
         self.password = 'fake_pass'
-        self.tenant_name = 'fake_project'
+        self.project_name = 'fake_project'
         self.auth_url = 'fake_url'
         self.trust_id = 'fake_trust'
 
     def test_client_from_kwargs(self):
-
         self.ctx.side_effect = RuntimeError
-
         self.keystone.BlazarKeystoneClient(version=self.version,
                                            username=self.username,
+                                           project_name=self.project_name,
                                            password=self.password,
-                                           tenant_name=self.tenant_name,
                                            trust_id=self.trust_id,
                                            auth_url=self.auth_url)
-
         self.client.assert_called_once_with(version=self.version,
                                             trust_id=self.trust_id,
                                             username=self.username,
+                                            project_name=self.project_name,
                                             password=self.password,
                                             auth_url=self.auth_url)
 
     def test_client_from_kwargs_and_ctx(self):
-
         self.keystone.BlazarKeystoneClient(version=self.version,
                                            username=self.username,
                                            password=self.password,
-                                           tenant_name=self.tenant_name,
+                                           project_name=self.project_name,
                                            auth_url=self.auth_url)
-
-        self.client.assert_called_once_with(version=self.version,
-                                            tenant_name=self.tenant_name,
-                                            endpoint='http://fake.com/',
-                                            username=self.username,
-                                            password=self.password,
-                                            auth_url=self.auth_url,
-                                            global_request_id=self.
-                                            context.current().
-                                            global_request_id)
+        self.client.assert_called_once_with(
+            version=self.version,
+            user_id=self.ctx().user_id,
+            username=self.username,
+            project_id=self.ctx().project_id,
+            project_name=self.project_name,
+            endpoint='http://fake.com/',
+            password=self.password,
+            auth_url=self.auth_url,
+            global_request_id=self.context.current().global_request_id)
 
     def test_client_from_ctx(self):
-
         self.keystone.BlazarKeystoneClient()
-
         self.client.assert_called_once_with(
             version='3',
-            username=self.ctx().user_name,
             token=self.ctx().auth_token,
-            tenant_name=self.ctx().project_name,
+            user_id=self.ctx().user_id,
+            project_id=self.ctx().project_id,
             auth_url='http://fake.com/',
             endpoint='http://fake.com/',
             global_request_id=self.context.current().global_request_id)

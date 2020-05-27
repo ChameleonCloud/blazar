@@ -54,43 +54,22 @@ CONF.register_opts(keystone_opts)
 
 class BlazarKeystoneClient(object):
     def __init__(self, **kwargs):
-        """Description
+        """Construct a KeystonClient, optionally from a Blazar context.
 
-        Return Keystone client for defined in 'identity_service' conf.
-        NOTE: We will use tenant_name until we start using keystone V3
-        client for all our needs.
+        Keyword arguments are passed directly to the KeystoneClient class. If
+        a context is provided, some defaults are set from the context.
 
-        :param version: service client version which we will use
-        :type version: str
+        An initial authentication will additionally be performed on init. If
+        the authentication fails, the initialization will raise an exception.
 
-        :param username: username
-        :type username: str
+        :type context: context.BlazarContext
+        :param context: a Blazar context to use to create the client. If
+                        provided, the user_id, project_id, and auth_token from
+                        the context will be passed when constructing the
+                        Keystone client.
 
-        :param password: password
-        :type password: str
-
-        :param tenant_name: tenant_name
-        :type tenant_name: str
-
-        :param auth_url: auth_url
-        :type auth_url: str
-
-        :param ctx: blazar context object
-        :type ctx: dict
-
-        :param auth_url: keystone auth url
-        :type auth_url: string
-
-        :param endpoint: keystone management (endpoint) url
-        :type endpoint: string
-
-        :param trust_id: keystone trust ID
-        :type trust_id: string
-
-        :param token: user token to use for authentication
-        :type token: string
+        :raises Unauthorized: if the given credentials are not valid
         """
-
         ctx = kwargs.pop('ctx', None)
         if ctx is None:
             try:
@@ -100,8 +79,8 @@ class BlazarKeystoneClient(object):
 
         kwargs.setdefault('version', cfg.CONF.keystone_client_version)
         if ctx is not None:
-            kwargs.setdefault('username', ctx.user_name)
-            kwargs.setdefault('tenant_name', ctx.project_name)
+            kwargs.setdefault('user_id', ctx.user_id)
+            kwargs.setdefault('project_id', ctx.project_id)
             kwargs.setdefault('global_request_id', ctx.global_request_id)
             if not kwargs.get('auth_url'):
                 kwargs['auth_url'] = base.url_for(
@@ -118,23 +97,14 @@ class BlazarKeystoneClient(object):
             if not kwargs.get('password'):
                 kwargs.setdefault('token', ctx.auth_token)
 
-        # NOTE(dbelova): we need this checking to support current
-        # keystoneclient: token can only be scoped now to either
-        # a trust or project, not both.
-        if kwargs.get('trust_id') and kwargs.get('tenant_name'):
-            kwargs.pop('tenant_name')
-
-        try:
-            # NOTE(n.s.): we shall remove this try: except: clause when
-            # https://review.openstack.org/#/c/66494/ will be merged
-            self.keystone = keystone_client.Client(**kwargs)
-            self.keystone.session.auth = self.keystone
-            auth_url = self.complement_auth_url(kwargs.get('auth_url', None),
-                                                kwargs.get('version', None))
-            self.keystone.authenticate(auth_url=auth_url)
-        except AttributeError:
-            raise manager_exceptions.WrongClientVersion()
-
+        self.keystone = keystone_client.Client(**kwargs)
+        # NOTE(jasonandersonatuchicago): the keystoneclient prior to X.X.X did
+        # not properly set the auth property if not constructing the client
+        # using a Session object.
+        self.keystone.session.auth = self.keystone
+        auth_url = self.complement_auth_url(kwargs.get('auth_url', None),
+                                            kwargs.get('version', None))
+        self.keystone.authenticate(auth_url=auth_url)
         self.exceptions = keystone_exception
 
     def complement_auth_url(self, auth_url, version):
@@ -172,3 +142,14 @@ class BlazarKeystoneClient(object):
     def __getattr__(self, name):
         func = getattr(self.keystone, name)
         return func
+
+    @classmethod
+    def admin_client(cls):
+        return cls(
+            username=CONF.os_admin_username,
+            user_domain_name=CONF.os_admin_user_domain_name,
+            password=CONF.os_admin_password,
+            project_name=CONF.os_admin_project_name,
+            project_domain_name=CONF.os_admin_project_domain_name,
+            ctx=context.admin()
+        )
