@@ -23,6 +23,8 @@ CONF = cfg.CONF
 
 class BlazarContext(context.RequestContext):
 
+    # service_catalog is not by default read from a dict
+    # when deserializing a context.
     FROM_DICT_EXTRA_KEYS = ['service_catalog']
 
     _context_stack = threading.local()
