@@ -35,10 +35,10 @@ class BlazarPolicyTestCase(tests.TestCase):
                                              roles=['member'])
 
     def test_standardpolicy(self):
-        target_good = {'user_id': self.context.user_id,
-                       'project_id': self.context.project_id}
-        target_wrong = {'user_id': self.context.user_id,
-                        'project_id': 'bad_project'}
+        target_good = {'user': self.context.user_id,
+                       'project': self.context.project_id}
+        target_wrong = {'user': self.context.user_id,
+                        'project': 'bad_project'}
         action = "blazar:leases:get"
         self.assertTrue(policy.enforce(self.context, action,
                                        target_good))
@@ -46,20 +46,11 @@ class BlazarPolicyTestCase(tests.TestCase):
                                         target_wrong, False))
 
     def test_adminpolicy(self):
-        target = {'user_id': self.context.user_id,
-                  'project_id': self.context.project_id}
+        target = {'user': self.context.user_id,
+                  'project': self.context.project_id}
         action = "blazar:oshosts:get"
         self.assertRaises(exceptions.PolicyNotAuthorized, policy.enforce,
                           self.context, action, target)
-
-    def test_elevatedpolicy(self):
-        target = {'user_id': self.context.user_id,
-                  'project_id': self.context.project_id}
-        action = "blazar:oshosts:get"
-        self.assertRaises(exceptions.PolicyNotAuthorized, policy.enforce,
-                          self.context, action, target)
-        elevated_context = self.context.elevated()
-        self.assertTrue(policy.enforce(elevated_context, action, target))
 
     def test_authorize(self):
 

@@ -23,7 +23,7 @@ rules = [
         description="Default rule for most Admin APIs."),
     policy.RuleDefault(
         name="admin_or_owner",
-        check_str="rule:admin or project_id:%(project_id)s",
+        check_str="rule:admin or project:%(project)s",
         description="Default rule for most non-Admin APIs.")
 ]
 
