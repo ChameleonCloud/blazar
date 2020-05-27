@@ -33,8 +33,6 @@ class TestBlazarContext(tests.TestCase):
             'is_admin_project': True,
             'project': 222,
             'project_domain': None,
-            'project_id': 222,
-            'project_name': None,
             'read_only': False,
             'request_id': 'req-679033b7-1755-4929-bf85-eb3bfaef7e0b',
             'resource_uuid': None,
@@ -45,9 +43,7 @@ class TestBlazarContext(tests.TestCase):
             'tenant': 222,
             'user': 111,
             'user_domain': None,
-            'user_id': 111,
-            'user_identity': u'111 222 - - -',
-            'user_name': None}
+            'user_identity': u'111 222 - - -'}
         self.assertEqual(expected, ctx.to_dict())
 
     def test_elevated_empty(self):
