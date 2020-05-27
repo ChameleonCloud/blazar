@@ -92,6 +92,10 @@ def enforce(context, action, target, do_raise=True):
     init()
 
     credentials = context.to_dict()
+    # NOTE(jasonandersonatuchicago): Keep for backwards compabitility with
+    # deployments using the old %(project_id)s policy syntax.
+    credentials['project_id'] = credentials.get('project')
+    credentials['user_id'] = credentials.get('user')
 
     # Add the exceptions arguments if asked to do a raise
     extra = {}
@@ -109,7 +113,12 @@ def authorize(extension, action=None, api='blazar', ctx=None,
         @functools.wraps(func)
         def wrapped(self, *args, **kwargs):
             cur_ctx = ctx or context.current()
-            tgt = target or {'project_id': cur_ctx.project_id,
+            tgt = target or {'project': cur_ctx.project_id,
+                             'user': cur_ctx.user_id,
+                             # NOTE(jasonandersonatuchicago): Keep for
+                             # backwards compabitility with deployments using
+                             # the old %(project_id)s policy syntax.
+                             'project_id': cur_ctx.project_id,
                              'user_id': cur_ctx.user_id}
             if action is None:
                 act = '%s:%s' % (api, extension)
