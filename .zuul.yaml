@@ -1,3 +1,23 @@
+- job:
+    name: blazar-tempest-py3
+    parent: blazar-tempest-plugin-base
+    description: |
+      Local variant of blazar-tempest-plugin-base which forces py3
+      (the default for this branch is py2)
+    vars:
+      devstack_localrc:
+        USE_PYTHON3: True
+
+- job:
+    name: blazar-tempest-ipv6-only-py3
+    parent: blazar-tempest-plugin-ipv6-only
+    description: |
+      Local variant of blazar-tempest-plugin-ipv6-only which forces py3
+      (the default for this branch is py2)
+    vars:
+      devstack_localrc:
+        USE_PYTHON3: True
+
 - project:
     templates:
       - check-requirements
@@ -9,13 +29,13 @@
     check:
       jobs:
         - blazar-tempest-plugin-base
-        - blazar-tempest-plugin-ipv6-only
-        - openstack-tox-lower-constraints:
-            voting: false
+        - blazar-tempest-py3
+        - blazar-tempest-ipv6-only-py3
         - openstack-tox-pylint:
             voting: false
     gate:
       queue: blazar
       jobs:
         - blazar-tempest-plugin-base
-        - blazar-tempest-plugin-ipv6-only
+        - blazar-tempest-py3
+        - blazar-tempest-ipv6-only-py3
