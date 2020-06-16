@@ -316,11 +316,10 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         host_values = {'foo': 'baz'}
 
         self.db_host_extra_capability_get_all_per_name.return_value = [
-            {'id': 'extra_id1',
-             'computehost_id': self.fake_host_id,
-             'capability_name': 'foo',
-             'capability_value': 'bar'
-             },
+            ({'id': 'extra_id1',
+              'computehost_id': self.fake_host_id,
+              'capability_value': 'bar'},
+             'foo'),
         ]
 
         self.get_reservations_by_host = self.patch(
@@ -340,11 +339,10 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             self.db_utils, 'get_reservations_by_host_id')
         self.get_reservations_by_host.return_value = []
         self.db_host_extra_capability_get_all_per_name.return_value = [
-            {'id': 'extra_id1',
-             'computehost_id': self.fake_host_id,
-             'capability_name': 'foo',
-             'capability_value': 'bar'
-             },
+            ({'id': 'extra_id1',
+              'computehost_id': self.fake_host_id,
+              'capability_value': 'bar'},
+             'foo'),
         ]
         fake = self.db_host_extra_capability_update
         fake.side_effect = fake_db_host_extra_capability_update
@@ -368,11 +366,10 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         host_values = {'foo': 'buzz'}
 
         self.db_host_extra_capability_get_all_per_name.return_value = [
-            {'id': 'extra_id1',
-             'computehost_id': self.fake_host_id,
-             'capability_name': 'foo',
-             'capability_value': 'bar'
-             },
+            ({'id': 'extra_id1',
+              'computehost_id': self.fake_host_id,
+              'capability_value': 'bar'},
+             'foo'),
         ]
         fake_phys_reservation = {
             'resource_type': plugin.RESOURCE_TYPE,
