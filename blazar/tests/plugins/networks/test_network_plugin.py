@@ -232,11 +232,10 @@ class NetworkPluginTestCase(tests.TestCase):
         network_values = {'foo': 'baz'}
 
         self.db_network_extra_capability_get_all_per_name.return_value = [
-            {'id': 'extra_id1',
-             'network_id': self.fake_network_id,
-             'capability_name': 'foo',
-             'capability_value': 'bar'
-             },
+            ({'id': 'extra_id1',
+              'network_id': self.fake_network_id,
+              'capability_value': 'bar'},
+             'foo')
         ]
 
         self.get_reservations_by_network = self.patch(
@@ -256,11 +255,10 @@ class NetworkPluginTestCase(tests.TestCase):
             self.db_utils, 'get_reservations_by_network_id')
         self.get_reservations_by_network.return_value = []
         self.db_network_extra_capability_get_all_per_name.return_value = [
-            {'id': 'extra_id1',
-             'network_id': self.fake_network_id,
-             'capability_name': 'foo',
-             'capability_value': 'bar'
-             },
+            ({'id': 'extra_id1',
+              'network_id': self.fake_network_id,
+              'capability_value': 'bar'},
+             'foo')
         ]
         fake = self.db_network_extra_capability_update
         fake.side_effect = fake_db_network_extra_capability_update
@@ -284,11 +282,10 @@ class NetworkPluginTestCase(tests.TestCase):
         network_values = {'foo': 'buzz'}
 
         self.db_network_extra_capability_get_all_per_name.return_value = [
-            {'id': 'extra_id1',
-             'network_id': self.fake_network_id,
-             'capability_name': 'foo',
-             'capability_value': 'bar'
-             },
+            ({'id': 'extra_id1',
+              'network_id': self.fake_network_id,
+              'capability_value': 'bar'},
+             'foo')
         ]
         fake_network_reservation = {
             'resource_type': plugin.RESOURCE_TYPE,
