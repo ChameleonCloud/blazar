@@ -26,7 +26,6 @@ from blazar.db.sqlalchemy import models
 from blazar.manager import exceptions as mgr_exceptions
 from blazar.plugins import instances as instance_plugin
 from blazar.plugins import oshosts as host_plugin
-from blazar import status
 
 get_session = facade_wrapper.get_session
 
@@ -149,8 +148,8 @@ def get_reservations_by_network_id(network_id, start_date, end_date):
 
 def get_reservations_for_allocations(session, start_date, end_date,
                                      lease_id=None, reservation_id=None):
-    border0 = models.Lease.end_date < start_date
-    border1 = models.Lease.start_date > end_date
+    border0 = models.Lease.end_date >= start_date
+    border1 = models.Lease.start_date <= end_date
     fields = ['id', 'status', 'lease_id', 'start_date',
               'end_date', 'lease_name', 'project_id']
 
@@ -164,13 +163,7 @@ def get_reservations_for_allocations(session, start_date, end_date,
         models.Lease.project_id)
         .join(models.Lease)
         .filter(models.Reservation.deleted.is_(None))
-        .filter(sa.or_(
-            models.Lease.status.like(status.lease.ACTIVE),
-            models.Lease.status.like(status.lease.PENDING)))
-        .filter(sa.or_(
-            models.Reservation.status.like(status.reservation.ACTIVE),
-            models.Reservation.status.like(status.reservation.PENDING)))
-        .filter(~sa.or_(border0, border1)))
+        .filter(sa.and_(border0, border1)))
 
     if lease_id:
         reservations_query = reservations_query.filter(
