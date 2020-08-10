@@ -1,0 +1,8 @@
+---
+features:
+  - |
+    Usage enforcement filters are introduced in this release. The enforcement
+    filters allow operators to define constraints lease constrains in
+    blazar.conf. The first two filters introduced in these release are a
+    maximum lease length filter and a filter for calling an external service
+    where usage policies can be defined.

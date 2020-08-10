@@ -45,13 +45,12 @@ class NetworkPlugin(base.BasePlugin):
     resource_type = plugin.RESOURCE_TYPE
     title = 'Network Plugin'
     description = 'This plugin creates and deletes networks.'
+    query_options = {
+        QUERY_TYPE_ALLOCATION: ['lease_id', 'reservation_id']
+    }
 
     def __init__(self):
         super(NetworkPlugin, self).__init__()
-        self.usage_enforcer = None
-
-    def set_usage_enforcer(self, usage_enforcer):
-        self.usage_enforcer = usage_enforcer
 
     def filter_networks_by_reservation(self, networks, start_date, end_date):
         free = []
@@ -72,7 +71,7 @@ class NetworkPlugin(base.BasePlugin):
 
     def reserve_resource(self, reservation_id, values):
         """Create reservation."""
-        self._check_params(values)
+        network_ids = self.allocation_candidates(values)
 
         network_id = next(iter(
             self._matching_networks(
@@ -86,6 +85,7 @@ class NetworkPlugin(base.BasePlugin):
         if not network_id:
             raise manager_ex.NotEnoughNetworksAvailable()
 
+        network_id = network_ids[0]
         network_rsrv_values = {
             'reservation_id': reservation_id,
             'network_properties': values['network_properties'],
@@ -110,6 +110,7 @@ class NetworkPlugin(base.BasePlugin):
                                                    'resource_properties']]
                 and values['start_date'] >= lease['start_date']
                 and values['end_date'] <= lease['end_date']):
+            # Nothing to update
             return
 
         dates_before = {'start_date': lease['start_date'],
@@ -267,13 +268,10 @@ class NetworkPlugin(base.BasePlugin):
         network_reservation = db_api.network_reservation_get(resource_id)
         reservation_id = network_reservation['reservation_id']
 
-        # We need the lease to get to the trust_id
-        reservation = db_api.reservation_get(reservation_id)
-        lease = db_api.lease_get(reservation['lease_id'])
         db_api.network_reservation_update(network_reservation['id'],
                                           {'status': 'completed'})
         allocations = db_api.network_allocation_get_all_by_values(
-            reservation_id=network_reservation['reservation_id'])
+            reservation_id=reservation_id)
         for allocation in allocations:
             db_api.network_allocation_destroy(allocation['id'])
         network_id = network_reservation['network_id']
@@ -281,15 +279,6 @@ class NetworkPlugin(base.BasePlugin):
         # The call to delete must be done without trust_id so the admin role is
         # used
         self.delete_neutron_network(network_id, reservation_id)
-
-        reservation = db_api.reservation_get(
-            network_reservation['reservation_id'])
-        lease = db_api.lease_get(reservation['lease_id'])
-        try:
-            self.usage_enforcer.release_encumbered(
-                lease, reservation, allocations)
-        except manager_ex.RedisConnectionError:
-            pass
 
     def _get_extra_capabilities(self, network_id):
         extra_capabilities = {}
@@ -299,6 +288,9 @@ class NetworkPlugin(base.BasePlugin):
             key = capability_name
             extra_capabilities[key] = capability.capability_value
         return extra_capabilities
+
+    def get(self, network_id):
+        return self.get_network(network_id)
 
     def get_network(self, network_id):
         network = db_api.network_get(network_id)
@@ -503,6 +495,10 @@ class NetworkPlugin(base.BasePlugin):
         allocs = network_allocations.get(network_id, [])
         return {"resource_id": network_id, "reservations": allocs}
 
+    def query_allocations(self, networks, lease_id=None, reservation_id=None):
+        return self.query_network_allocations(networks, lease_id=lease_id,
+                                              reservation_id=reservation_id)
+
     def query_network_allocations(self, networks, lease_id=None,
                                   reservation_id=None, detail=False):
         """Return dict of network and its allocations
@@ -540,9 +536,19 @@ class NetworkPlugin(base.BasePlugin):
 
         return network_allocations
 
+    def allocation_candidates(self, values):
+        self._check_params(values)
+
+        return self._matching_networks(
+            values['network_properties'],
+            values['resource_properties'],
+            values['start_date'],
+            values['end_date']
+        )
+
     def _matching_networks(self, network_properties, resource_properties,
-                          start_date, end_date):
-        """Return a matching network (preferably not allocated)"""
+                           start_date, end_date):
+        """Return the matching networks (preferably not allocated)"""
         allocated_network_ids = []
         not_allocated_network_ids = []
         filter_array = []

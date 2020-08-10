@@ -44,6 +44,7 @@ FLAVOR_EXTRA_SPEC = "aggregate_instance_extra_specs:" + RESERVATION_PREFIX
 INSTANCE_DELETION_TIMEOUT = 10 * 60 * 1000  # 10 minutes
 
 NONE_VALUES = ('None', 'none', None)
+QUERY_TYPE_ALLOCATION = 'allocation'
 
 
 class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
@@ -137,6 +138,43 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
             used_memory += memory
             used_disk += disk
         return hosts_list
+
+    def allocation_candidates(self, reservation):
+        return self.pickup_hosts(None, reservation)['added']
+
+    def list_allocations(self, query):
+        hosts_id_list = [h['id'] for h in db_api.host_list()]
+        options = self.get_query_options(query, QUERY_TYPE_ALLOCATION)
+
+        hosts_allocations = self.query_allocations(hosts_id_list, **options)
+        return [{"resource_id": host, "reservations": allocs}
+                for host, allocs in hosts_allocations.items()]
+
+    def query_allocations(self, hosts, lease_id=None, reservation_id=None):
+        """Return dict of host and its allocations.
+
+        The list element forms
+        {
+          'host-id': [
+                       {
+                         'lease_id': lease_id,
+                         'id': reservation_id
+                       },
+                     ]
+        }.
+        """
+        start = datetime.datetime.utcnow()
+        end = datetime.date.max
+
+        # To reduce overhead, this method only executes one query
+        # to get the allocation information
+        rsv_lease_host = db_utils.get_reservation_allocations_by_host_ids(
+            hosts, start, end, lease_id, reservation_id)
+
+        hosts_allocs = collections.defaultdict(list)
+        for rsv, lease, host in rsv_lease_host:
+            hosts_allocs[host].append({'lease_id': lease, 'id': rsv})
+        return hosts_allocs
 
     def query_available_hosts(self, cpus=None, memory=None, disk=None,
                               resource_properties=None,
@@ -754,3 +792,13 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
                 additional=True)
         LOG.warn('Resource changed for reservation %s (lease: %s).',
                  reservation['id'], lease['name'])
+
+    def get(self, host_id):
+        host = db_api.host_get(host_id)
+        extra_capabilities = self._get_extra_capabilities(host_id)
+        if host is not None and extra_capabilities:
+            res = host.copy()
+            res.update(extra_capabilities)
+            return res
+        else:
+            return host

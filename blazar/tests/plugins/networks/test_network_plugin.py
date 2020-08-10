@@ -485,6 +485,7 @@ class NetworkPluginTestCase(tests.TestCase):
             'start_date': datetime.datetime(2013, 12, 19, 20, 00),
             'end_date': datetime.datetime(2013, 12, 19, 21, 00)
         }
+
         network_reservation_get = self.patch(
             self.db_api, 'network_reservation_get')
         self.patch(self.db_api, 'network_allocation_get_all_by_values')
