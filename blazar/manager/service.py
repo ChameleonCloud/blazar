@@ -785,7 +785,8 @@ class ManagerService(service_utils.RPCServer):
 
             resource_ids = [
                 x['resource_id'] for x in plugin.list_allocations(
-                    dict(reservation_id=reservation['id']))]
+                    dict(reservation_id=reservation['id']))
+                if x['reservations']]
 
             allocations[resource_type] = [
                 plugin.get(rid) for rid in resource_ids]
