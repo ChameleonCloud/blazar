@@ -645,7 +645,7 @@ class ManagerService(service_utils.RPCServer):
                                 {'status': status.event.IN_PROGRESS})
 
         with trusts.create_ctx_from_trust(lease['trust_id']) as ctx:
-            reservations = lease['reservations']
+            reservations = self._reservations_execution_ordered(lease)
 
             if lease_not_started or lease_not_ended:
                 # Only run the on_end enforcement if we're explicitly
@@ -659,7 +659,7 @@ class ManagerService(service_utils.RPCServer):
                 except Exception as e:
                     LOG.error(e)
 
-            for reservation in reservations:
+            for reservation in self._reservations_execution_ordered(lease):
                 if reservation['status'] != status.reservation.DELETED:
                     plugin = self.plugins[reservation['resource_type']]
                     try:

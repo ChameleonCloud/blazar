@@ -29,7 +29,6 @@ from blazar import context
 from blazar.db import api as db_api
 from blazar.db import exceptions as db_ex
 from blazar import enforcement
-from blazar.enforcement import exceptions as enforcement_ex
 from blazar import exceptions
 from blazar.manager import exceptions as manager_ex
 from blazar.manager import service
@@ -144,7 +143,7 @@ class ServiceTestCase(tests.TestCase):
 
         cfg.CONF.set_override('plugins', ['dummy.vm.plugin'], group='manager')
         cfg.CONF.set_override(
-            'enabled_filters', ['MaxLeaseDurationFilter'],
+            'enabled_filters', ['MaxReservationLengthFilter'],
             group='enforcement')
 
         with mock.patch('blazar.status.lease.lease_status',
@@ -772,9 +771,10 @@ class ServiceTestCase(tests.TestCase):
     def test_create_lease_with_filter_exception(self):
         lease_values = self.lease_values.copy()
 
+        _filter = enforcement.filters.max_reservation_length_filter
         self.enforcement.check_create.side_effect = (
-            enforcement_ex.MaxLeaseDurationException(lease_duration=200,
-                                                     max_duration=100))
+            _filter.MaxReservationLengthException(lease_length=200,
+                                                  max_length=100))
 
         self.assertRaises(exceptions.NotAuthorized,
                           self.manager.create_lease,
@@ -1392,10 +1392,10 @@ class ServiceTestCase(tests.TestCase):
             {'time': datetime.datetime(2013, 12, 20, 13, 0)})
 
     def test_update_lease_with_filter_exception(self):
+        _filter = enforcement.filters.max_reservation_length_filter
         self.enforcement.check_update.side_effect = (
-            enforcement_ex.MaxLeaseDurationException(lease_duration=200,
-                                                     max_duration=100))
-
+            _filter.MaxReservationLengthException(lease_length=200,
+                                                  max_length=100))
         def fake_event_get(sort_key, sort_dir, filters):
             if filters['event_type'] == 'start_lease':
                 return {'id': '2eeb784a-2d84-4a89-a201-9d42d61eecb1'}
@@ -1505,8 +1505,10 @@ class ServiceTestCase(tests.TestCase):
 
         self.manager.delete_lease(self.lease_id)
 
-        self.event_update.assert_called_once_with('fake',
-                                                  {'status': 'IN_PROGRESS'})
+        self.event_update.assert_has_calls([
+            mock.call('fake', {'status': 'IN_PROGRESS'}),
+            mock.call('fake', {'status': 'DONE'}),
+        ])
         self.fake_plugin.on_end.assert_called_with('111')
         self.lease_destroy.assert_called_once_with(self.lease_id)
         enforcement_on_end.assert_called_once()
@@ -1528,9 +1530,10 @@ class ServiceTestCase(tests.TestCase):
 
         self.manager.delete_lease(self.lease_id)
 
-        self.event_update.assert_called_once_with('fake',
-                                                  {'status': 'IN_PROGRESS'})
-
+        self.event_update.assert_has_calls([
+            mock.call('fake', {'status': 'IN_PROGRESS'}),
+            mock.call('fake', {'status': 'DONE'}),
+        ])
         self.fake_plugin.on_end.assert_called_with('111')
         self.lease_destroy.assert_called_once_with(self.lease_id)
         enforcement_on_end.assert_called_once()
@@ -1555,8 +1558,10 @@ class ServiceTestCase(tests.TestCase):
 
         self.manager.delete_lease(self.lease_id)
 
-        self.event_update.assert_called_once_with('fake',
-                                                  {'status': 'IN_PROGRESS'})
+        self.event_update.assert_has_calls([
+            mock.call('fake', {'status': 'IN_PROGRESS'}),
+            mock.call('fake', {'status': 'DONE'}),
+        ])
         self.fake_plugin.on_end.assert_called_with('111')
         self.lease_destroy.assert_called_once_with(self.lease_id)
         enforcement_on_end.assert_called_once()
