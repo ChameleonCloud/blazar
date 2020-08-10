@@ -149,7 +149,6 @@ class NetworkPlugin(base.BasePlugin):
     def reserve_resource(self, reservation_id, values):
         """Create reservation."""
         network_ids = self.allocation_candidates(values)
-        lease = db_api.lease_get(values['lease_id'])
 
         if not network_ids:
             raise manager_ex.NotEnoughNetworksAvailable()
@@ -342,13 +341,10 @@ class NetworkPlugin(base.BasePlugin):
         network_reservation = db_api.network_reservation_get(resource_id)
         reservation_id = network_reservation['reservation_id']
 
-        # We need the lease to get to the trust_id
-        reservation = db_api.reservation_get(reservation_id)
-        lease = db_api.lease_get(reservation['lease_id'])
         db_api.network_reservation_update(network_reservation['id'],
                                           {'status': 'completed'})
         allocations = db_api.network_allocation_get_all_by_values(
-            reservation_id=network_reservation['reservation_id'])
+            reservation_id=reservation_id)
         for allocation in allocations:
             db_api.network_allocation_destroy(allocation['id'])
         network_id = network_reservation['network_id']
@@ -356,10 +352,6 @@ class NetworkPlugin(base.BasePlugin):
         # The call to delete must be done without trust_id so the admin role is
         # used
         self.delete_neutron_network(network_id, reservation_id)
-
-        reservation = db_api.reservation_get(
-            network_reservation['reservation_id'])
-        lease = db_api.lease_get(reservation['lease_id'])
 
     def _get_extra_capabilities(self, network_id):
         extra_capabilities = {}

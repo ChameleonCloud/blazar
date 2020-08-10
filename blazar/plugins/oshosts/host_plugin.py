@@ -269,10 +269,6 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         except manager_ex.AggregateNotFound:
             pass
 
-        reservation = db_api.reservation_get(
-            host_reservation['reservation_id'])
-        lease = db_api.lease_get(reservation['lease_id'])
-
     def heal_reservations(self, failed_resources, interval_begin,
                           interval_end):
         """Heal reservations which suffer from resource failures.
