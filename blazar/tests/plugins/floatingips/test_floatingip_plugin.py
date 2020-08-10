@@ -46,11 +46,6 @@ class FloatingIpPluginTest(tests.TestCase):
         self.fip_pool = self.patch(neutron, 'FloatingIPPool')
 
         self.fip_plugin = floatingip_plugin.FloatingIpPlugin()
-        self.usage_enforcer = self.patch(self.fip_plugin, 'usage_enforcer')
-        self.check_usage_against_allocation = self.patch(
-            self.usage_enforcer, 'check_usage_against_allocation')
-        self.release_encumbered = self.patch(
-            self.usage_enforcer, 'release_encumbered')
 
     def test_create_floatingip(self):
         m = mock.MagicMock()

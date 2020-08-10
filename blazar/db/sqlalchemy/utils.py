@@ -206,6 +206,28 @@ def get_reservation_allocations_by_host_ids(host_ids, start_date, end_date,
     return reservations
 
 
+def get_reservation_allocations_by_fip_ids(fip_ids, start_date, end_date,
+                                           lease_id=None, reservation_id=None):
+    session = get_session()
+    border0 = start_date <= models.Lease.end_date
+    border1 = models.Lease.start_date <= end_date
+    query = (session.query(models.Reservation.id,
+                           models.Reservation.lease_id,
+                           models.FloatingIPAllocation.floatingip_id)
+             .join(models.Lease,
+                   models.Lease.id == models.Reservation.lease_id)
+             .join(models.FloatingIPAllocation,
+                   models.FloatingIPAllocation.reservation_id ==
+                   models.Reservation.id)
+             .filter(models.FloatingIPAllocation.floatingip_id.in_(fip_ids))
+             .filter(sa.and_(border0, border1)))
+    if lease_id:
+        query = query.filter(models.Reservation.lease_id == lease_id)
+    if reservation_id:
+        query = query.filter(models.Reservation.id == reservation_id)
+    return query.all()
+
+
 def get_reservation_allocations_by_network_ids(network_ids, start_date,
                                                end_date, lease_id=None,
                                                reservation_id=None):

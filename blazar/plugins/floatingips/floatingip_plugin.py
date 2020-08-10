@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import collections
 import datetime
 
 from oslo_config import cfg
@@ -42,6 +43,8 @@ CONF = cfg.CONF
 CONF.register_opts(plugin_opts, group=plugin.RESOURCE_TYPE)
 LOG = logging.getLogger(__name__)
 
+QUERY_TYPE_ALLOCATION = 'allocation'
+
 
 class FloatingIpPlugin(base.BasePlugin):
     """Plugin for floating IP resource."""
@@ -49,13 +52,12 @@ class FloatingIpPlugin(base.BasePlugin):
     resource_type = plugin.RESOURCE_TYPE
     title = 'Floating IP Plugin'
     description = 'This plugin creates and assigns floating IPs.'
+    query_options = {
+        QUERY_TYPE_ALLOCATION: ['lease_id', 'reservation_id']
+    }
 
     def __init__(self):
         super(FloatingIpPlugin, self).__init__()
-        self.usage_enforcer = None
-
-    def set_usage_enforcer(self, usage_enforcer):
-        self.usage_enforcer = usage_enforcer
 
     def check_params(self, values):
         if 'network_id' not in values:
@@ -191,16 +193,6 @@ class FloatingIpPlugin(base.BasePlugin):
                                              values['start_date'],
                                              values['end_date'])
 
-        # NOTE(priteau): Check if we have enough available SUs for this
-        # reservation. This takes into account the su_factor of each allocated
-        # network, if present.
-        lease = db_api.lease_get(values['lease_id'])
-        try:
-            self.usage_enforcer.check_usage_against_allocation(
-                lease, allocated_floatingip_ids=floatingip_ids)
-        except manager_ex.RedisConnectionError:
-            pass
-
         floatingip_rsrv_values = {
             'reservation_id': reservation_id,
             'network_id': values['network_id'],
@@ -287,14 +279,18 @@ class FloatingIpPlugin(base.BasePlugin):
             fip_pool.delete_reserved_floatingip(fip['floating_ip_address'])
             db_api.fip_allocation_destroy(alloc['id'])
 
-        reservation = db_api.reservation_get(
-            fip_reservation['reservation_id'])
-        lease = db_api.lease_get(reservation['lease_id'])
-        try:
-            self.usage_enforcer.release_encumbered(
-                lease, reservation, allocations)
-        except manager_ex.RedisConnectionError:
-            pass
+    def allocation_candidates(self, values):
+        self.check_params(values)
+
+        required_fips = values.get('required_floatingips', [])
+        amount = int(values['amount'])
+
+        if len(required_fips) > amount:
+            raise manager_ex.TooLongFloatingIPs()
+
+        return self._matching_fips(values['network_id'], required_fips,
+                                   amount, values['start_date'],
+                                   values['end_date'])
 
     def _matching_fips(self, network_id, fip_addresses, amount,
                        start_date, end_date):
@@ -378,6 +374,9 @@ class FloatingIpPlugin(base.BasePlugin):
 
         return floatingip
 
+    def get(self, fip_id):
+        return self.get_floatingip(fip_id)
+
     def get_floatingip(self, fip_id):
         fip = db_api.floatingip_get(fip_id)
         if fip is None:
@@ -404,3 +403,41 @@ class FloatingIpPlugin(base.BasePlugin):
         except db_ex.BlazarDBException as e:
             raise manager_ex.CantDeleteFloatingIP(floatingip=fip_id,
                                                   msg=str(e))
+
+    def list_allocations(self, query, detail=False):
+        fip_id_list = [f['id'] for f in db_api.floatingip_list()]
+        options = self.get_query_options(query, QUERY_TYPE_ALLOCATION)
+
+        fip_allocations = self.query_allocations(fip_id_list, **options)
+
+        return [{"resource_id": fip, "reservations": allocs}
+                for fip, allocs in fip_allocations.items()]
+
+    def query_allocations(self, resource_id_list, lease_id=None,
+                          reservation_id=None):
+        return self.query_fip_allocations(resource_id_list, lease_id=lease_id,
+                                          reservation_id=reservation_id)
+
+    def query_fip_allocations(self, fips, lease_id=None, reservation_id=None):
+        """Return dict of host and its allocations.
+
+        The list element forms
+        {
+          '-id': [
+                       {
+                         'lease_id': lease_id,
+                         'id': reservation_id
+                       },
+                     ]
+        }.
+        """
+        start = datetime.datetime.utcnow()
+        end = datetime.date.max
+
+        rsv_lease_fip = db_utils.get_reservation_allocations_by_fip_ids(
+            fips, start, end, lease_id, reservation_id)
+
+        fip_allocs = collections.defaultdict(list)
+        for rsv, lease, fip in rsv_lease_fip:
+            fip_allocs[fip].append({'lease_id': lease, 'id': rsv})
+        return fip_allocs

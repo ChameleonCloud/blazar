@@ -69,15 +69,6 @@ class NetworkPluginTestCase(tests.TestCase):
         self.db_api = db_api
         self.db_utils = db_utils
 
-        self.usage_enforcer = self.patch(self.fake_network_plugin,
-                                         'usage_enforcer')
-        self.check_usage_against_allocation = self.patch(
-            self.usage_enforcer, 'check_usage_against_allocation')
-        self.check_usage_against_allocation_pre_update = self.patch(
-            self.usage_enforcer, 'check_usage_against_allocation_pre_update')
-        self.release_encumbered = self.patch(
-            self.usage_enforcer, 'release_encumbered')
-
         self.db_network_get = self.patch(self.db_api, 'network_get')
         self.db_network_get.return_value = self.fake_network
         self.db_network_list = self.patch(self.db_api, 'network_list')
@@ -565,8 +556,7 @@ class NetworkPluginTestCase(tests.TestCase):
             'vfc_resources': CONF[plugin.RESOURCE_TYPE].resources_per_vfc
         }
         network_reservation_create.assert_called_once_with(network_values)
-        # self.check_usage_against_allocation.assert_called_once_with(
-        #     lease, allocated_network_ids=['network1', 'network2'])
+
         calls = [
             mock.call(
                 {'network_id': 'network1',
@@ -623,6 +613,7 @@ class NetworkPluginTestCase(tests.TestCase):
             'start_date': datetime.datetime(2013, 12, 19, 20, 00),
             'end_date': datetime.datetime(2013, 12, 19, 21, 00)
         }
+
         network_reservation_get = self.patch(
             self.db_api, 'network_reservation_get')
         self.patch(self.db_api, 'network_allocation_get_all_by_values')
