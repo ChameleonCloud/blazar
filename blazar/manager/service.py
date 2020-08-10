@@ -22,8 +22,10 @@ from oslo_log import log as logging
 from oslo_utils.excutils import save_and_reraise_exception
 from stevedore import enabled
 
+from blazar import context
 from blazar.db import api as db_api
 from blazar.db import exceptions as db_ex
+from blazar import enforcement
 from blazar import exceptions as common_ex
 from blazar import manager
 from blazar.manager import exceptions
@@ -73,6 +75,7 @@ class ManagerService(service_utils.RPCServer):
         self.plugins = self._get_plugins()
         self.resource_actions = self._setup_actions()
         self.monitors = monitor.load_monitors(self.plugins)
+        self.enforcement = enforcement.UsageEnforcement()
 
     def start(self):
         super(ManagerService, self).start()
@@ -283,6 +286,44 @@ class ManagerService(service_utils.RPCServer):
                                          date_format=date_format)
         return date
 
+    def _parse_lease_dates(self, start_date, end_date):
+        now = datetime.datetime.utcnow()
+        now = datetime.datetime(now.year,
+                                now.month,
+                                now.day,
+                                now.hour,
+                                now.minute)
+        if start_date == 'now':
+            start_date = now
+        else:
+            start_date = self._date_from_string(start_date)
+        if end_date == 'now':
+            end_date = now
+        else:
+            end_date = self._date_from_string(end_date)
+
+        return start_date, end_date, now
+
+    def _check_for_invalid_date_inputs(self, lease, values, now):
+        if (lease['start_date'] < now and
+                values['start_date'] != lease['start_date']):
+            raise common_ex.InvalidInput(
+                'Cannot modify the start date of already started leases')
+
+        if (lease['start_date'] > now and
+                values['start_date'] < now):
+            raise common_ex.InvalidInput(
+                'Start date must be later than current date')
+
+        if lease['end_date'] < now:
+            raise common_ex.InvalidInput(
+                'Terminated leases can only be renamed')
+
+        if (values['end_date'] < now or
+           values['end_date'] < values['start_date']):
+            raise common_ex.InvalidInput(
+                'End date must be later than current and start date')
+
     def validate_params(self, values, required_params):
         if isinstance(required_params, list):
             required_params = set(required_params)
@@ -317,20 +358,8 @@ class ManagerService(service_utils.RPCServer):
             self.validate_params(res, ['resource_type'])
 
         # Create the lease without the reservations
-        start_date = lease_values['start_date']
-        end_date = lease_values['end_date']
-
-        now = datetime.datetime.utcnow()
-        now = datetime.datetime(now.year,
-                                now.month,
-                                now.day,
-                                now.hour,
-                                now.minute)
-        if start_date == 'now':
-            start_date = now
-        else:
-            start_date = self._date_from_string(start_date)
-        end_date = self._date_from_string(end_date)
+        start_date, end_date, now = self._parse_lease_dates(
+            lease_values['start_date'], lease_values['end_date'])
 
         if start_date < now:
             raise common_ex.InvalidInput(
@@ -347,6 +376,15 @@ class ManagerService(service_utils.RPCServer):
             lease_values['project_id'] = ctx.project_id
             lease_values['start_date'] = start_date
             lease_values['end_date'] = end_date
+
+            allocations = self._allocation_candidates(
+                lease_values, reservations)
+            try:
+                self.enforcement.check_create(
+                    context.current(), lease_values, reservations, allocations)
+            except common_ex.NotAuthorized as e:
+                LOG.error("Enforcement checks failed. %s", str(e))
+                raise common_ex.NotAuthorized(e)
 
             events.append({'event_type': 'start_lease',
                            'time': start_date,
@@ -443,42 +481,13 @@ class ManagerService(service_utils.RPCServer):
             datetime.datetime.strftime(lease['end_date'], LEASE_DATE_FORMAT))
         before_end_date = values.get('before_end_date', None)
 
-        now = datetime.datetime.utcnow()
-        now = datetime.datetime(now.year,
-                                now.month,
-                                now.day,
-                                now.hour,
-                                now.minute)
-        if start_date == 'now':
-            start_date = now
-        else:
-            start_date = self._date_from_string(start_date)
-        if end_date == 'now':
-            end_date = now
-        else:
-            end_date = self._date_from_string(end_date)
+        start_date, end_date, now = self._parse_lease_dates(start_date,
+                                                            end_date)
 
         values['start_date'] = start_date
         values['end_date'] = end_date
 
-        if (lease['start_date'] < now and
-                values['start_date'] != lease['start_date']):
-            raise common_ex.InvalidInput(
-                'Cannot modify the start date of already started leases')
-
-        if (lease['start_date'] > now and
-                values['start_date'] < now):
-            raise common_ex.InvalidInput(
-                'Start date must be later than current date')
-
-        if lease['end_date'] < now:
-            raise common_ex.InvalidInput(
-                'Terminated leases can only be renamed')
-
-        if (values['end_date'] < now or
-           values['end_date'] < values['start_date']):
-            raise common_ex.InvalidInput(
-                'End date must be later than current and start date')
+        self._check_for_invalid_date_inputs(lease, values, now)
 
         with trusts.create_ctx_from_trust(lease['trust_id']):
             if before_end_date:
@@ -490,12 +499,13 @@ class ManagerService(service_utils.RPCServer):
                     LOG.error("Invalid before_end_date param. %s", str(e))
                     raise e
 
-            # TODO(frossigneux) rollback if an exception is raised
             reservations = values.get('reservations', [])
-            reservations_db = db_api.reservation_get_all_by_lease_id(lease_id)
+            existing_reservations = (
+                db_api.reservation_get_all_by_lease_id(lease_id))
+
             try:
                 invalid_ids = set([r['id'] for r in reservations]).difference(
-                    [r['id'] for r in reservations_db])
+                    [r['id'] for r in existing_reservations])
             except KeyError:
                 raise exceptions.MissingParameter(param='reservation ID')
 
@@ -504,7 +514,36 @@ class ManagerService(service_utils.RPCServer):
                     'Please enter valid reservation IDs. Invalid reservation '
                     'IDs are: %s' % ','.join([str(id) for id in invalid_ids]))
 
-            for reservation in (reservations_db):
+            try:
+                [
+                    self.plugins[r['resource_type']] for r
+                    in (reservations + existing_reservations)]
+            except KeyError:
+                raise exceptions.CantUpdateParameter(param='resource_type')
+
+            existing_allocs = self._existing_allocations(existing_reservations)
+
+            if reservations:
+                new_reservations = reservations
+                new_allocs = self._allocation_candidates(values,
+                                                         existing_reservations)
+            else:
+                # User is not updating reservation parameters, e.g., is only
+                # adjusting lease start/end dates.
+                new_reservations = existing_reservations
+                new_allocs = existing_allocs
+
+            try:
+                self.enforcement.check_update(context.current(), lease, values,
+                                              existing_allocs, new_allocs,
+                                              existing_reservations,
+                                              new_reservations)
+            except common_ex.NotAuthorized as e:
+                LOG.error("Enforcement checks failed. %s", str(e))
+                raise common_ex.NotAuthorized(e)
+
+            # TODO(frossigneux) rollback if an exception is raised
+            for reservation in (existing_reservations):
                 v = {}
                 v['start_date'] = values['start_date']
                 v['end_date'] = values['end_date']
@@ -515,6 +554,7 @@ class ManagerService(service_utils.RPCServer):
                     pass
                 resource_type = v.get('resource_type',
                                       reservation['resource_type'])
+
                 if resource_type != reservation['resource_type']:
                     raise exceptions.CantUpdateParameter(
                         param='resource_type')
@@ -570,6 +610,7 @@ class ManagerService(service_utils.RPCServer):
                                result_in=(status.lease.ERROR,))
     def delete_lease(self, lease_id):
         lease = self.get_lease(lease_id)
+
         if (datetime.datetime.utcnow() >= lease['start_date'] and
                 datetime.datetime.utcnow() <= lease['end_date']):
             start_event = db_api.event_get_first_sorted_by_filters(
@@ -599,6 +640,19 @@ class ManagerService(service_utils.RPCServer):
                                 {'status': status.event.IN_PROGRESS})
 
         with trusts.create_ctx_from_trust(lease['trust_id']) as ctx:
+            # We don't want call on_end if end_lease has already called it
+            # because the lease has passed its expiration.
+            reservations_deleted = [
+                (r['status'] == status.reservation.DELETED)
+                for r in lease['reservations']]
+            if not any(reservations_deleted):
+                allocations = self._existing_allocations(
+                    lease['reservations'])
+                try:
+                    self.enforcement.on_end(ctx, lease, allocations)
+                except Exception as e:
+                    LOG.error(e)
+
             for reservation in self._reservations_execution_ordered(lease):
                 if reservation['status'] != status.reservation.DELETED:
                     plugin = self.plugins[reservation['resource_type']]
@@ -625,7 +679,21 @@ class ManagerService(service_utils.RPCServer):
         result_in=(status.lease.TERMINATED, status.lease.ERROR))
     def end_lease(self, lease_id, event_id):
         lease = self.get_lease(lease_id)
+
         with trusts.create_ctx_from_trust(lease['trust_id']):
+            reservations_deleted = [
+                (r['status'] == status.reservation.DELETED)
+                for r in lease['reservations']]
+
+            if not any(reservations_deleted):
+                allocations = self._existing_allocations(
+                    lease['reservations'])
+                try:
+                    self.enforcement.on_end(context.current(),
+                                            lease, allocations)
+                except Exception as e:
+                    LOG.error(e)
+
             self._basic_action(lease_id, event_id, 'on_end',
                                status.reservation.DELETED)
 
@@ -703,6 +771,59 @@ class ManagerService(service_utils.RPCServer):
         )
         db_api.reservation_update(reservation['id'],
                                   {'resource_id': resource_id})
+
+    def _allocation_candidates(self, lease, reservations):
+        """Returns dict by resource type of reservation candidates."""
+        allocations = {}
+
+        for reservation in reservations:
+            res = reservation.copy()
+            resource_type = reservation['resource_type']
+            res['start_date'] = lease['start_date']
+            res['end_date'] = lease['end_date']
+
+            if resource_type not in self.plugins:
+                raise exceptions.UnsupportedResourceType(
+                    resource_type=resource_type)
+
+            plugin = self.plugins.get(resource_type)
+
+            if not plugin:
+                raise common_ex.BlazarException(
+                    'Invalid plugin names are specified: %s' % resource_type)
+
+            candidate_ids = plugin.allocation_candidates(res)
+
+            allocations[resource_type] = [
+                plugin.get(cid) for cid in candidate_ids]
+
+        return allocations
+
+    def _existing_allocations(self, reservations):
+        allocations = {}
+
+        for reservation in reservations:
+            resource_type = reservation['resource_type']
+
+            if resource_type not in self.plugins:
+                raise exceptions.UnsupportedResourceType(
+                    resource_type=resource_type)
+
+            plugin = self.plugins.get(resource_type)
+
+            if not plugin:
+                raise common_ex.BlazarException(
+                    'Invalid plugin names are specified: %s' % resource_type)
+
+            resource_ids = [
+                x['resource_id'] for x in plugin.list_allocations(
+                    dict(reservation_id=reservation['id']))
+                if x['reservations']]
+
+            allocations[resource_type] = [
+                plugin.get(rid) for rid in resource_ids]
+
+        return allocations
 
     def _send_notification(self, lease, ctx, events=[]):
         payload = notification_api.format_lease_payload(lease)
