@@ -486,13 +486,13 @@ class ManagerService(service_utils.RPCServer):
                     LOG.error("Invalid before_end_date param. %s", str(e))
                     raise e
 
-            # TODO(frossigneux) rollback if an exception is raised
             reservations = values.get('reservations', [])
-            reservations_db = db_api.reservation_get_all_by_lease_id(lease_id)
+            existing_reservations = (
+                db_api.reservation_get_all_by_lease_id(lease_id))
 
             try:
                 invalid_ids = set([r['id'] for r in reservations]).difference(
-                    [r['id'] for r in reservations_db])
+                    [r['id'] for r in existing_reservations])
             except KeyError:
                 raise exceptions.MissingParameter(param='reservation ID')
 
@@ -504,24 +504,29 @@ class ManagerService(service_utils.RPCServer):
             try:
                 [
                     self.plugins[r['resource_type']] for r
-                    in (reservations + reservations_db)]
+                    in (reservations + existing_reservations)]
             except KeyError:
                 raise exceptions.CantUpdateParameter(param='resource_type')
 
-            old_allocs = self._existing_allocations(reservations_db)
+            existing_allocs = self._existing_allocations(existing_reservations)
 
-            if not reservations:
-                self.enforcement.check_update(context.current(), lease, values,
-                                              old_allocs, old_allocs,
-                                              reservations_db, reservations_db)
-            else:
+            if reservations:
+                new_reservations = reservations
                 new_allocs = self._allocation_candidates(values,
-                                                         reservations_db)
-                self.enforcement.check_update(context.current(), lease, values,
-                                              old_allocs, new_allocs,
-                                              reservations_db, reservations)
+                                                         existing_reservations)
+            else:
+                # User is not updating reservation parameters, e.g., is only
+                # adjusting lease start/end dates.
+                new_reservations = existing_reservations
+                new_allocs = existing_allocs
 
-            for reservation in (reservations_db):
+            self.enforcement.check_update(context.current(), lease, values,
+                                          existing_allocs, new_allocs,
+                                          existing_reservations,
+                                          new_reservations)
+
+            # TODO(frossigneux) rollback if an exception is raised
+            for reservation in (existing_reservations):
                 v = {}
                 v['start_date'] = values['start_date']
                 v['end_date'] = values['end_date']
