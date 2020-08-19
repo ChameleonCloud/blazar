@@ -23,6 +23,8 @@ CONF = cfg.CONF
 
 class BlazarContext(context.RequestContext):
 
+    FROM_DICT_EXTRA_KEYS = ['service_catalog']
+
     _context_stack = threading.local()
 
     def __init__(self, service_catalog=None, **kwargs):
