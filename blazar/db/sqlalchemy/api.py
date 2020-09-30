@@ -1524,7 +1524,7 @@ def network_extra_capability_create(values):
     values = values.copy()
 
     resource_property = _resource_property_get_or_create(
-        'network', values.get('capability_name'))
+        get_session(), 'network', values.get('capability_name'))
 
     del values['capability_name']
     values['capability_id'] = resource_property.id
