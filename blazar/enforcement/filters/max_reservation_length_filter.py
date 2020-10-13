@@ -31,13 +31,13 @@ DEFAULT_RESERVATION_EXTENTSION_WINDOW = -1
 LOG = logging.getLogger(__name__)
 
 
-class MaxReservationLengthException(exceptions.BlazarException):
+class MaxReservationLengthException(exceptions.NotAuthorized):
     code = 400
     msg_fmt = _('Lease length of %(lease_length)s seconds be less than or '
                 'equal the maximum lease length of %(max_length)s seconds.')
 
 
-class MaxReservationUpdateWindowException(exceptions.BlazarException):
+class MaxReservationUpdateWindowException(exceptions.NotAuthorized):
     code = 400
     msg_fmt = _('Lease can only be extended within %(extension_window)s '
                 'seconds of the leases current end time.')

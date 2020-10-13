@@ -369,8 +369,12 @@ class ManagerService(service_utils.RPCServer):
 
             allocations = self._allocation_candidates(
                 lease_values, reservations)
-            self.enforcement.check_create(
-                context.current(), lease_values, reservations, allocations)
+            try:
+                self.enforcement.check_create(
+                    context.current(), lease_values, reservations, allocations)
+            except common_ex.NotAuthorized as e:
+                LOG.error("Enforcement checks failed. %s", str(e))
+                raise common_ex.NotAuthorized(e)
 
             events.append({'event_type': 'start_lease',
                            'time': start_date,
@@ -520,10 +524,14 @@ class ManagerService(service_utils.RPCServer):
                 new_reservations = existing_reservations
                 new_allocs = existing_allocs
 
-            self.enforcement.check_update(context.current(), lease, values,
-                                          existing_allocs, new_allocs,
-                                          existing_reservations,
-                                          new_reservations)
+            try:
+                self.enforcement.check_update(context.current(), lease, values,
+                                              existing_allocs, new_allocs,
+                                              existing_reservations,
+                                              new_reservations)
+            except common_ex.NotAuthorized as e:
+                LOG.error("Enforcement checks failed. %s", str(e))
+                raise common_ex.NotAuthorized(e)
 
             # TODO(frossigneux) rollback if an exception is raised
             for reservation in (existing_reservations):

@@ -44,7 +44,7 @@ class ExternalServiceUnsupportedHTTPResponse(exceptions.BlazarException):
                 'Only 204 and 403 responses are supported.')
 
 
-class ExternalServiceFilterException(exceptions.BlazarException):
+class ExternalServiceFilterException(exceptions.NotAuthorized):
     code = 400
     msg_fmt = _('%(message)s')
 
