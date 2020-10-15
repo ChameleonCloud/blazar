@@ -761,9 +761,9 @@ class ServiceTestCase(tests.TestCase):
 
         _filter = enforcement.filters.max_reservation_length_filter
         self.enforcement.check_create.side_effect = (
-            _filter.MaxReservationLengthException)
+            _filter.MaxReservationLengthException(lease_length=200, max_length=100))
 
-        self.assertRaises(_filter.MaxReservationLengthException,
+        self.assertRaises(exceptions.NotAuthorized,
                           self.manager.create_lease,
                           lease_values=lease_values)
         self.lease_create.assert_not_called()
@@ -1381,7 +1381,7 @@ class ServiceTestCase(tests.TestCase):
     def test_update_lease_with_filter_exception(self):
         _filter = enforcement.filters.max_reservation_length_filter
         self.enforcement.check_update.side_effect = (
-            _filter.MaxReservationLengthException)
+            _filter.MaxReservationLengthException(lease_length=200, max_length=100))
 
         def fake_event_get(sort_key, sort_dir, filters):
             if filters['event_type'] == 'start_lease':
@@ -1420,7 +1420,7 @@ class ServiceTestCase(tests.TestCase):
                                mock.Mock(wraps=datetime.datetime)) as patched:
             patched.utcnow.return_value = target
 
-            self.assertRaises(_filter.MaxReservationLengthException,
+            self.assertRaises(exceptions.NotAuthorized,
                               self.manager.update_lease,
                               lease_id=self.lease_id, values=lease_values)
 
