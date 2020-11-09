@@ -11,7 +11,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from functools import wraps
+
 from oslo_log import log as logging
+from oslo_utils.excutils import save_and_reraise_exception
 
 from blazar.db import api as db_api
 from blazar import exceptions
@@ -191,6 +194,7 @@ class LeaseStatus(BaseStatus):
                           executing the decorated function.
         """
         def decorator(func):
+            @wraps(func)
             def wrapper(*args, **kwargs):
                 # Update a lease status
                 lease_id = kwargs['lease_id']
@@ -214,19 +218,20 @@ class LeaseStatus(BaseStatus):
                 try:
                     result = func(*args, **kwargs)
                 except Exception as e:
-                    restore_lease_status = getattr(
-                        e, 'restore_lease_status', False)
-                    if restore_lease_status:
-                        LOG.debug('Non-fatal exception occured during status '
-                                  'transition, reverting status of lease %s '
-                                  'to %s.', lease_id, original_status)
-                        db_api.lease_update(lease_id,
-                                            {'status': original_status})
-                    else:
-                        LOG.exception('Lease %s went into ERROR status. %s',
-                                      lease_id, str(e))
-                        db_api.lease_update(lease_id, {'status': cls.ERROR})
-                    raise e
+                    with save_and_reraise_exception():
+                        restore_lease_status = getattr(
+                            e, 'restore_lease_status', False)
+                        if restore_lease_status:
+                            LOG.debug('Non-fatal exception occured during '
+                                      'status transition, reverting status of '
+                                      'lease %s to %s.', lease_id,
+                                      original_status)
+                            db_api.lease_update(lease_id,
+                                                {'status': original_status})
+                        else:
+                            LOG.exception('Lease %s went into ERROR status.',
+                                          lease_id)
+                            db_api.lease_update(lease_id, {'status': cls.ERROR})
                 else:
                     # Update a lease status if it exists
                     if db_api.lease_get(lease_id):
