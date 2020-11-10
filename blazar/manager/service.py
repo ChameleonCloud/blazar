@@ -659,15 +659,21 @@ class ManagerService(service_utils.RPCServer):
                 except Exception as e:
                     LOG.error(e)
 
+            unclean_end = False
             for reservation in self._reservations_execution_ordered(lease):
                 if reservation['status'] != status.reservation.DELETED:
                     plugin = self.plugins[reservation['resource_type']]
                     try:
                         plugin.on_end(reservation['resource_id'])
                     except (db_ex.BlazarDBException, RuntimeError):
-                        with save_and_reraise_exception():
-                            LOG.exception("Failed to delete a reservation "
-                                          "for a lease.")
+                        LOG.exception("Failed to delete reservation %s",
+                                      reservation['id'])
+                        unclean_end = True
+            if unclean_end:
+                raise exceptions.EventError(
+                    error="Failed to cleanly end lease %(lease_id)s",
+                    lease_id=lease['id'])
+
             db_api.lease_destroy(lease_id)
             self._send_notification(lease, ctx, events=['delete'])
 
@@ -717,7 +723,12 @@ class ManagerService(service_utils.RPCServer):
                 self.resource_actions[resource_type][action_time](
                     reservation['resource_id']
                 )
-            except common_ex.BlazarException:
+            except Exception as exc:
+                if not isinstance(exc, common_ex.BlazarException):
+                    LOG.warning((
+                        "An unexpected exception type was generated. This "
+                        "indicates that some exception is not being wrapped "
+                        "properly in a BlazarException."))
                 LOG.exception("Failed to execute action %(action)s "
                               "for lease %(lease)s",
                               {'action': action_time,
