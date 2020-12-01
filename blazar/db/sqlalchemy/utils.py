@@ -121,8 +121,6 @@ def get_reservations_by_network_id(network_id, start_date, end_date):
 
 def get_reservations_for_allocations(session, start_date, end_date,
                                      lease_id=None, reservation_id=None):
-    border0 = models.Lease.end_date >= start_date
-    border1 = models.Lease.start_date <= end_date
     fields = ['id', 'status', 'lease_id', 'start_date',
               'end_date', 'lease_name', 'project_id']
 
@@ -135,8 +133,7 @@ def get_reservations_for_allocations(session, start_date, end_date,
         models.Lease.name,
         models.Lease.project_id)
         .join(models.Lease)
-        .filter(models.Reservation.deleted.is_(None))
-        .filter(sa.and_(border0, border1)))
+        .filter(models.Reservation.deleted.is_(None)))
 
     if lease_id:
         reservations_query = reservations_query.filter(
@@ -144,6 +141,14 @@ def get_reservations_for_allocations(session, start_date, end_date,
     if reservation_id:
         reservations_query = reservations_query.filter(
             models.Reservation.id == reservation_id)
+
+    # Only enforce time restrictions if we're not targeting a specific
+    # lease or reservation.
+    if not (lease_id or reservation_id):
+        border0 = models.Lease.end_date >= start_date
+        border1 = models.Lease.start_date <= end_date
+        reservations_query = reservations_query.filter(
+            sa.and_(border0, border1))
 
     return [dict(zip(fields, r)) for r in reservations_query.all()]
 
