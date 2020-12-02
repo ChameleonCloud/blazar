@@ -700,6 +700,7 @@ class ManagerService(service_utils.RPCServer):
 
             self._basic_action(lease_id, event_id, 'on_end',
                                status.reservation.DELETED)
+            db_api.lease_destroy(lease_id)
 
     def before_end_lease(self, lease_id, event_id):
         lease = self.get_lease(lease_id)
