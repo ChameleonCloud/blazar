@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    It was not previously possible to remove host extra capabilities.
+    Now, when updating a host's capabilities, specifying a value of
+    ``None`` will remove the capability (``null`` in JSON.)

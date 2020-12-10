@@ -152,6 +152,9 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         self.db_host_extra_capability_update = self.patch(
             self.db_api, 'host_extra_capability_update')
 
+        self.db_host_extra_capability_destroy = self.patch(
+            self.db_api, 'host_extra_capability_destroy')
+
         self.nova = nova
         self.rp_create = self.patch(self.nova.ReservationPool, 'create')
         self.patch(self.nova.ReservationPool, 'get_aggregate_from_name_or_id')
@@ -352,6 +355,25 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             'capability_name': 'qux',
             'capability_value': 'word'
         })
+
+    def test_update_host_with_removed_capability(self):
+        host_values = {'foo': None}
+
+        self.db_host_extra_capability_get_all_per_name.return_value = [
+            ({'id': 'extra_id1',
+              'computehost_id': self.fake_host_id,
+              'capability_value': 'bar'},
+             'foo'),
+        ]
+
+        self.get_reservations_by_host = self.patch(
+            self.db_utils, 'get_reservations_by_host_id')
+        self.get_reservations_by_host.return_value = []
+
+        self.fake_phys_plugin.update_computehost(self.fake_host_id,
+                                                 host_values)
+        self.db_host_extra_capability_destroy.assert_called_once_with(
+            'extra_id1')
 
     def test_update_host_with_used_capability(self):
         host_values = {'foo': 'buzz'}
