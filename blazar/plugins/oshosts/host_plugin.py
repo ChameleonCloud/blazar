@@ -488,8 +488,13 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
 
             if self.is_updatable_extra_capability(raw_capability, cap_name):
                 try:
-                    db_api.host_extra_capability_update(
-                        raw_capability['id'], capability)
+                    if values[key] is not None:
+                        capability = {'capability_value': values[key]}
+                        db_api.host_extra_capability_update(
+                            raw_capability['id'], capability)
+                    else:
+                        db_api.host_extra_capability_destroy(
+                            raw_capability['id'])
                 except (db_ex.BlazarDBException, RuntimeError):
                     cant_update_extra_capability.append(cap_name)
             else:
