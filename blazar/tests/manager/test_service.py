@@ -1434,33 +1434,45 @@ class ServiceTestCase(tests.TestCase):
 
         self.lease_update.assert_not_called()
 
-    def test_delete_lease_before_starting_date(self):
+    def test_delete_lease_before_start(self):
+        def fake_event_get(sort_key, sort_dir, filters):
+            if filters['event_type'] == 'start_lease':
+                return {'id': 'fake', 'status': 'UNDONE'}
+            elif filters['event_type'] == 'end_lease':
+                return {'id': 'fake', 'status': 'UNDONE'}
+            else:
+                return None
+
         fake_get_lease = self.patch(self.manager, 'get_lease')
         fake_get_lease.return_value = self.lease
+        event_get = self.patch(db_api, 'event_get_first_sorted_by_filters')
+        event_get.side_effect = fake_event_get
+        enforcement_on_end = self.patch(self.enforcement, 'on_end')
 
-        target = datetime.datetime(2013, 12, 20, 12, 00)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
-            self.manager.delete_lease(self.lease_id)
+        self.manager.delete_lease(self.lease_id)
 
         self.trust_ctx.assert_called_once_with(self.lease['trust_id'])
         self.lease_destroy.assert_called_once_with(self.lease_id)
         self.fake_plugin.on_end.assert_called_with('111')
+        enforcement_on_end.assert_called_once()
 
-    def test_delete_lease_after_ending_date(self):
+    def test_delete_lease_after_ending(self):
+        def fake_event_get(sort_key, sort_dir, filters):
+            if filters['event_type'] == 'start_lease':
+                return {'id': 'fake', 'status': 'DONE'}
+            elif filters['event_type'] == 'end_lease':
+                return {'id': 'fake', 'status': 'DONE'}
+            else:
+                return None
+
         self.lease['reservations'][0]['status'] = 'deleted'
         fake_get_lease = self.patch(self.manager, 'get_lease')
         fake_get_lease.return_value = self.lease
+        event_get = self.patch(db_api, 'event_get_first_sorted_by_filters')
+        event_get.side_effect = fake_event_get
         enforcement_on_end = self.patch(self.enforcement, 'on_end')
 
-        target = datetime.datetime(2013, 12, 20, 16, 00)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
-            self.manager.delete_lease(self.lease_id)
+        self.manager.delete_lease(self.lease_id)
 
         expected_context = self.trust_ctx.return_value
         self.lease_destroy.assert_called_once_with(self.lease_id)
@@ -1469,10 +1481,9 @@ class ServiceTestCase(tests.TestCase):
             self.notifier_api.format_lease_payload(self.lease),
             'lease.delete')
         self.fake_plugin.on_end.assert_not_called()
-
         enforcement_on_end.assert_not_called()
 
-    def test_delete_lease_after_starting_date(self):
+    def test_delete_lease_after_start(self):
         def fake_event_get(sort_key, sort_dir, filters):
             if filters['event_type'] == 'start_lease':
                 return {'id': 'fake', 'status': 'DONE'}
@@ -1481,26 +1492,23 @@ class ServiceTestCase(tests.TestCase):
             else:
                 return None
 
-        enforcement_on_end = self.patch(self.enforcement, 'on_end')
         event_get = self.patch(db_api, 'event_get_first_sorted_by_filters')
         event_get.side_effect = fake_event_get
         fake_get_lease = self.patch(self.manager, 'get_lease')
         fake_get_lease.return_value = self.lease
-        target = datetime.datetime(2013, 12, 20, 13, 30)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
-            self.manager.delete_lease(self.lease_id)
+        enforcement_on_end = self.patch(self.enforcement, 'on_end')
 
-        self.event_update.assert_called_once_with('fake',
-                                                  {'status': 'IN_PROGRESS'})
+        self.manager.delete_lease(self.lease_id)
+
+        self.event_update.assert_has_calls([
+            mock.call('fake', {'status': 'IN_PROGRESS'}),
+            mock.call('fake', {'status': 'DONE'}),
+        ])
         self.fake_plugin.on_end.assert_called_with('111')
         self.lease_destroy.assert_called_once_with(self.lease_id)
-
         enforcement_on_end.assert_called_once()
 
-    def test_delete_lease_after_starting_date_with_error_status(self):
+    def test_delete_lease_after_start_with_error_status(self):
         def fake_event_get(sort_key, sort_dir, filters):
             if filters['event_type'] == 'start_lease':
                 return {'id': 'fake', 'status': 'ERROR'}
@@ -1508,21 +1516,22 @@ class ServiceTestCase(tests.TestCase):
                 return {'id': 'fake', 'status': 'UNDONE'}
             else:
                 return None
+
         event_get = self.patch(db_api, 'event_get_first_sorted_by_filters')
         event_get.side_effect = fake_event_get
         fake_get_lease = self.patch(self.manager, 'get_lease')
         fake_get_lease.return_value = self.lease
-        target = datetime.datetime(2013, 12, 20, 13, 30)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
-            self.manager.delete_lease(self.lease_id)
+        enforcement_on_end = self.patch(self.enforcement, 'on_end')
 
-        self.event_update.assert_called_once_with('fake',
-                                                  {'status': 'IN_PROGRESS'})
+        self.manager.delete_lease(self.lease_id)
+
+        self.event_update.assert_has_calls([
+            mock.call('fake', {'status': 'IN_PROGRESS'}),
+            mock.call('fake', {'status': 'DONE'}),
+        ])
         self.fake_plugin.on_end.assert_called_with('111')
         self.lease_destroy.assert_called_once_with(self.lease_id)
+        enforcement_on_end.assert_called_once()
 
     def test_delete_lease_with_filter_exception(self):
         self.enforcement.on_end.side_effect = (
@@ -1535,21 +1544,22 @@ class ServiceTestCase(tests.TestCase):
                 return {'id': 'fake', 'status': 'UNDONE'}
             else:
                 return None
+
         event_get = self.patch(db_api, 'event_get_first_sorted_by_filters')
         event_get.side_effect = fake_event_get
         fake_get_lease = self.patch(self.manager, 'get_lease')
         fake_get_lease.return_value = self.lease
-        target = datetime.datetime(2013, 12, 20, 13, 30)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
-            self.manager.delete_lease(self.lease_id)
+        enforcement_on_end = self.patch(self.enforcement, 'on_end')
 
-        self.event_update.assert_called_once_with('fake',
-                                                  {'status': 'IN_PROGRESS'})
+        self.manager.delete_lease(self.lease_id)
+
+        self.event_update.assert_has_calls([
+            mock.call('fake', {'status': 'IN_PROGRESS'}),
+            mock.call('fake', {'status': 'DONE'}),
+        ])
         self.fake_plugin.on_end.assert_called_with('111')
         self.lease_destroy.assert_called_once_with(self.lease_id)
+        enforcement_on_end.assert_called_once()
 
     def test_start_lease(self):
         basic_action = self.patch(self.manager, '_basic_action')

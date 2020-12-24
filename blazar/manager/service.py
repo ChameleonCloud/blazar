@@ -608,50 +608,58 @@ class ManagerService(service_utils.RPCServer):
     def delete_lease(self, lease_id):
         lease = self.get_lease(lease_id)
 
-        if (datetime.datetime.utcnow() >= lease['start_date'] and
-                datetime.datetime.utcnow() <= lease['end_date']):
-            start_event = db_api.event_get_first_sorted_by_filters(
-                'lease_id',
-                'asc',
-                {
-                    'lease_id': lease_id,
-                    'event_type': 'start_lease'
-                }
-            )
-            if not start_event:
-                raise common_ex.BlazarException(
-                    'start_lease event for lease %s not found' % lease_id)
-            end_event = db_api.event_get_first_sorted_by_filters(
-                'lease_id',
-                'asc',
-                {
-                    'lease_id': lease_id,
-                    'event_type': 'end_lease',
-                    'status': status.event.UNDONE
-                }
-            )
-            if not end_event:
-                raise common_ex.BlazarException(
-                    'end_lease event for lease %s not found' % lease_id)
+        start_event = db_api.event_get_first_sorted_by_filters(
+            'lease_id',
+            'asc',
+            {
+                'lease_id': lease_id,
+                'event_type': 'start_lease',
+            }
+        )
+        if not start_event:
+            raise common_ex.BlazarException(
+                'start_lease event for lease %s not found' % lease_id)
+
+        end_event = db_api.event_get_first_sorted_by_filters(
+            'lease_id',
+            'asc',
+            {
+                'lease_id': lease_id,
+                'event_type': 'end_lease',
+            }
+        )
+        if not end_event:
+            raise common_ex.BlazarException(
+                'end_lease event for lease %s not found' % lease_id)
+
+        lease_already_started = start_event['status'] != status.event.UNDONE
+        lease_not_started = not lease_already_started
+        lease_already_ended = end_event['status'] != status.event.UNDONE
+        lease_not_ended = not lease_already_ended
+
+        end_lease = lease_already_started and lease_not_ended
+
+        if end_lease:
             db_api.event_update(end_event['id'],
                                 {'status': status.event.IN_PROGRESS})
 
         with trusts.create_ctx_from_trust(lease['trust_id']) as ctx:
-            # We don't want call on_end if end_lease has already called it
-            # because the lease has passed its expiration.
-            reservations_deleted = [
-                (r['status'] == status.reservation.DELETED)
-                for r in lease['reservations']]
-            if not any(reservations_deleted):
-                allocations = self._existing_allocations(
-                    lease['reservations'])
+            reservations = self._reservations_execution_ordered(lease)
+
+            if lease_not_started or lease_not_ended:
+                # Only run the on_end enforcement if we're explicitly
+                # ending the lease for the first time OR if we're terminating
+                # it before the lease ever started. It's important to run
+                # on_end in the second case to inform enforcement that the
+                # lease is no longer in play.
+                allocations = self._existing_allocations(reservations)
                 try:
                     self.enforcement.on_end(ctx, lease, allocations)
                 except Exception as e:
                     LOG.error(e)
 
             unclean_end = False
-            for reservation in self._reservations_execution_ordered(lease):
+            for reservation in reservations:
                 if reservation['status'] != status.reservation.DELETED:
                     plugin = self.plugins[reservation['resource_type']]
                     try:
@@ -665,8 +673,11 @@ class ManagerService(service_utils.RPCServer):
                     error="Failed to cleanly end lease %(lease_id)s",
                     lease_id=lease['id'])
 
-            db_api.lease_destroy(lease_id)
-            self._send_notification(lease, ctx, events=['delete'])
+        db_api.lease_destroy(lease_id)
+        if end_lease:
+            db_api.event_update(end_event['id'],
+                                {'status': status.event.DONE})
+        self._send_notification(lease, ctx, events=['delete'])
 
     @status.lease.lease_status(
         transition=status.lease.STARTING,
@@ -683,19 +694,12 @@ class ManagerService(service_utils.RPCServer):
     def end_lease(self, lease_id, event_id):
         lease = self.get_lease(lease_id)
 
-        with trusts.create_ctx_from_trust(lease['trust_id']):
-            reservations_deleted = [
-                (r['status'] == status.reservation.DELETED)
-                for r in lease['reservations']]
-
-            if not any(reservations_deleted):
-                allocations = self._existing_allocations(
-                    lease['reservations'])
-                try:
-                    self.enforcement.on_end(context.current(),
-                                            lease, allocations)
-                except Exception as e:
-                    LOG.error(e)
+        with trusts.create_ctx_from_trust(lease['trust_id']) as ctx:
+            allocations = self._existing_allocations(lease['reservations'])
+            try:
+                self.enforcement.on_end(ctx, lease, allocations)
+            except Exception as e:
+                LOG.error(e)
 
             self._basic_action(lease_id, event_id, 'on_end',
                                status.reservation.DELETED)
