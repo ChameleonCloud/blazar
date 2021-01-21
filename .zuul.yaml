@@ -21,9 +21,14 @@
 - project:
     templates:
       - check-requirements
+<<<<<<< HEAD
       - openstack-cover-jobs
       - openstack-lower-constraints-jobs
       - openstack-python3-yoga-jobs
+=======
+      - openstack-python-jobs
+      - openstack-python3-train-jobs
+>>>>>>> 09167ec (Remove lower-constraints job on stable branches)
       - publish-openstack-docs-pti
       - release-notes-jobs-python3
     check:
