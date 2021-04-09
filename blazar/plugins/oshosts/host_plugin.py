@@ -734,8 +734,8 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             return value in on_start_options
 
     def _validate_min_max_range(self, values, min_hosts, max_hosts):
-        self._convert_int_param(min_hosts, 'min')
-        self._convert_int_param(max_hosts, 'max')
+        min_hosts = self._convert_int_param(min_hosts, 'min')
+        max_hosts = self._convert_int_param(max_hosts, 'max')
         if min_hosts <= 0 or max_hosts <= 0:
             raise manager_ex.MalformedParameter(
                 param='min and max (must be greater than or equal to 1)')
