@@ -50,9 +50,7 @@ def _read_deleted_filter(query, db_model, deleted):
         return query
 
     default_deleted_value = None
-    if deleted:
-        query = query.filter(db_model.deleted != default_deleted_value)
-    else:
+    if not deleted:
         query = query.filter(db_model.deleted == default_deleted_value)
     return query
 
@@ -333,8 +331,8 @@ def lease_destroy(lease_id):
 
 
 # Event
-def _event_get(session, event_id):
-    query = model_query(models.Event, session)
+def _event_get(session, event_id, deleted=False):
+    query = model_query(models.Event, session, deleted=deleted)
     return query.filter_by(id=event_id).first()
 
 
@@ -424,7 +422,8 @@ def event_update(event_id, values):
     session = get_session()
 
     with session.begin():
-        event = _event_get(session, event_id)
+        # NOTE(jason): Allow updating soft-deleted events
+        event = _event_get(session, event_id, deleted=True)
         event.update(values)
         event.save(session=session)
 

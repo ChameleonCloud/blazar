@@ -674,12 +674,11 @@ class ManagerService(service_utils.RPCServer):
                     error="Failed to cleanly end lease %(lease_id)s",
                     lease_id=lease['id'])
 
-            db_api.lease_destroy(lease_id)
-            self._send_notification(lease, ctx, events=['delete'])
-
             if end_lease:
                 db_api.event_update(end_event['id'],
                                     {'status': status.event.DONE})
+            db_api.lease_destroy(lease_id)
+            self._send_notification(lease, ctx, events=['delete'])
 
     @status.lease.lease_status(
         transition=status.lease.STARTING,
