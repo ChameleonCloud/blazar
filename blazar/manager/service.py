@@ -253,6 +253,7 @@ class ManagerService(service_utils.RPCServer):
                 error='Event type %s is not supported'
                       % event['event_type'])
         try:
+            lease_before_event = db_api.lease_get(event['lease_id'])
             event_fn(lease_id=event['lease_id'], event_id=event['id'])
         except common_ex.InvalidStatus:
             now = datetime.datetime.utcnow()
@@ -273,7 +274,7 @@ class ManagerService(service_utils.RPCServer):
             LOG.exception('Error occurred while handling %s event for '
                           'lease %s.', event['event_type'], event['lease_id'])
         else:
-            lease = db_api.lease_get(event['lease_id'])
+            lease = db_api.lease_get(event['lease_id']) or lease_before_event
             self._send_notification(
                 lease, events=['event.%s' % event['event_type']])
 
