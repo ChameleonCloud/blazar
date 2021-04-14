@@ -143,6 +143,9 @@ def url_for(service_catalog, service_type, admin=False,
         else:
             endpoint_interface = 'public'
 
+    if not isinstance(service_catalog, list):
+        service_catalog = service_catalog.normalize_catalog()
+
     service = None
     for srv in service_catalog:
         if srv['type'] == service_type:

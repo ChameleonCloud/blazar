@@ -58,9 +58,7 @@ def create_ctx_from_trust(trust_id):
         project_id=session.get_project_id(),
         service_catalog=(
             ctx.service_catalog or
-            session.auth.get_auth_ref(
-                session=session
-            ).service_catalog.normalize_catalog()),
+            session.auth.get_auth_ref(session).service_catalog),
         request_id=ctx.request_id,
         global_request_id=ctx.global_request_id
     )
