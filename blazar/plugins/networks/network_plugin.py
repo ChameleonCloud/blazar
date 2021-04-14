@@ -539,12 +539,17 @@ class NetworkPlugin(base.BasePlugin):
     def allocation_candidates(self, values):
         self._check_params(values)
 
-        return self._matching_networks(
+        network_ids = self._matching_networks(
             values['network_properties'],
             values['resource_properties'],
             values['start_date'],
             values['end_date']
         )
+
+        if len(network_ids) < 1:
+            raise manager_ex.NotEnoughNetworksAvailable()
+
+        return network_ids[:1]
 
     def _matching_networks(self, network_properties, resource_properties,
                            start_date, end_date):
