@@ -17,11 +17,9 @@ import datetime
 import json
 import requests
 
-from blazar import context
 from blazar.enforcement.filters import base_filter
 from blazar import exceptions
 from blazar.i18n import _
-from blazar.utils.openstack import base
 from blazar.utils.openstack.keystone import BlazarKeystoneClient
 
 from oslo_config import cfg
@@ -72,16 +70,8 @@ class ExternalServiceFilter(base_filter.BaseFilter):
         if self.external_service_token:
             headers['X-Auth-Token'] = (self.external_service_token)
         else:
-            auth_url = "%s://%s:%s/%s" % (self.conf.os_auth_protocol,
-                                          base.get_os_auth_host(self.conf),
-                                          self.conf.os_auth_port,
-                                          self.conf.os_auth_prefix)
-            client = BlazarKeystoneClient(
-                password=self.conf.os_admin_password,
-                auth_url=auth_url,
-                ctx=context.admin())
-
-            headers['X-Auth-Token'] = client.auth_token
+            client = BlazarKeystoneClient()
+            headers['X-Auth-Token'] = client.session.get_token()
 
         return headers
 
