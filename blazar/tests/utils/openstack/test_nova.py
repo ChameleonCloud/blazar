@@ -201,7 +201,7 @@ class ReservationPoolTestCase(tests.TestCase):
 
         az_name = self.blazar_az_prefix + self.pool_name
 
-        agg = self.pool.create(az=az_name)
+        agg = self.pool.create(az=az_name, project_id=self.project_id)
 
         self.assertEqual(agg, self.fake_aggregate)
 
@@ -216,7 +216,7 @@ class ReservationPoolTestCase(tests.TestCase):
         self.patch(self.nova.aggregates, 'create').return_value = (
             self.fake_aggregate)
 
-        self.pool.create()
+        self.pool.create(project_id=self.project_id)
 
         self.nova.aggregates.create.assert_called_once_with(self.pool_name,
                                                             None)

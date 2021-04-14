@@ -1767,6 +1767,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         host_reservation_get = self.patch(self.db_api, 'host_reservation_get')
         host_reservation_get.return_value = {'before_end': ''}
         reservationpool = self.patch(self.nova, 'ReservationPool')
+        fake_lease = {'project_id': 'fake-project'}
         self.fake_phys_plugin.before_end(
             '04de74e8-193a-49d2-9ab8-cba7b49e45e8')
         reservationpool.assert_not_called()
@@ -1783,6 +1784,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         list_servers = self.patch(self.ServerManager, 'list')
         list_servers.return_value = ['server1', 'server2']
         create_image = self.patch(self.ServerManager, 'create_image')
+        fake_lease = {'project_id': 'fake-project'}
         self.fake_phys_plugin.before_end(
             '04de74e8-193a-49d2-9ab8-cba7b49e45e8')
         create_image.assert_any_call(server='server1')

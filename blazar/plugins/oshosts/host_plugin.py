@@ -25,6 +25,7 @@ from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import strutils
 
+from blazar import context
 from blazar.db import api as db_api
 from blazar.db import exceptions as db_ex
 from blazar.db import utils as db_utils
@@ -108,6 +109,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
 
     def reserve_resource(self, reservation_id, values):
         """Create reservation."""
+        ctx = context.current()
         host_ids = self.allocation_candidates(values)
 
         if not host_ids:
@@ -117,7 +119,8 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         pool_name = reservation_id
         az_name = "%s%s" % (CONF[self.resource_type].blazar_az_prefix,
                             pool_name)
-        pool_instance = pool.create(name=pool_name, az=az_name)
+        pool_instance = pool.create(
+            name=pool_name, project_id=ctx.project_id, az=az_name)
         host_rsrv_values = {
             'reservation_id': reservation_id,
             'aggregate_id': pool_instance.id,
@@ -200,16 +203,23 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
     def before_end(self, resource_id, lease=None):
         """Take an action before the end of a lease."""
         host_reservation = db_api.host_reservation_get(resource_id)
+
         action = host_reservation['before_end']
         if action == 'default':
             action = CONF[plugin.RESOURCE_TYPE].before_end
+
         if action == 'snapshot':
             pool = nova.ReservationPool()
             client = nova.BlazarNovaClient()
             for host in pool.get_computehosts(
                     host_reservation['aggregate_id']):
                 for server in client.servers.list(
-                        search_opts={"node": host, "all_tenants": 1}):
+                    search_opts={"node": host, "all_tenants": 1,
+                                 "project_id": lease['project_id']}):
+                    # TODO(jason): Unclear if this even works! What happens
+                    # when you try to createImage on a server not owned by the
+                    # authentication context (admin context in this case.) Is
+                    # the snapshot owned by the admin, or the original
                     client.servers.create_image(server=server)
         elif action == 'email':
             project_id = lease['project_id']

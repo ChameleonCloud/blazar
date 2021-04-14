@@ -484,7 +484,6 @@ class ManagerService(service_utils.RPCServer):
 
         start_date, end_date, now = self._parse_lease_dates(start_date,
                                                             end_date)
-
         values['start_date'] = start_date
         values['end_date'] = end_date
 

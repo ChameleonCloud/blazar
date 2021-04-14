@@ -334,10 +334,9 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
 
         return reserved_flavor
 
-    def _create_resources(self, inst_reservation):
+    def _create_resources(self, ctx, inst_reservation):
         reservation_id = inst_reservation['reservation_id']
 
-        ctx = context.current()
         user_client = nova.NovaClientWrapper()
 
         reserved_group = user_client.nova.server_groups.create(
@@ -357,7 +356,8 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
             'filter_tenant_id': ctx.project_id,
             'affinity_id': reserved_group.id
             }
-        agg = pool.create(name=reservation_id, metadata=pool_metadata)
+        agg = pool.create(name=reservation_id, project_id=ctx.project_id,
+                          metadata=pool_metadata)
 
         self.placement_client.create_reservation_class(reservation_id)
 
@@ -448,6 +448,7 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
                     param='affinity (must be a bool value or None)')
 
     def reserve_resource(self, reservation_id, values):
+        ctx = context.current()
         self._check_missing_reservation_params(values)
         self._validate_reservation_params(values)
 
@@ -470,7 +471,8 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
                                           'reservation_id': reservation_id})
 
         try:
-            flavor, group, pool = self._create_resources(instance_reservation)
+            flavor, group, pool = self._create_resources(
+                ctx, instance_reservation)
         except nova_exceptions.ClientException:
             LOG.exception("Failed to create Nova resources "
                           "for reservation %s", reservation_id)
