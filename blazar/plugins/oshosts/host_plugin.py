@@ -639,12 +639,19 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
     def allocation_candidates(self, values):
         self._check_params(values)
 
-        return self._matching_hosts(
+        host_ids = self._matching_hosts(
             values['hypervisor_properties'],
             values['resource_properties'],
             values['count_range'],
             values['start_date'],
             values['end_date'])
+
+        min_hosts, _ = [int(n) for n in values['count_range'].split('-')]
+
+        if len(host_ids) < min_hosts:
+            raise manager_ex.NotEnoughHostsAvailable()
+
+        return host_ids
 
     def _matching_hosts(self, hypervisor_properties, resource_properties,
                         count_range, start_date, end_date):
