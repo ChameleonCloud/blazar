@@ -88,6 +88,35 @@ def client_kwargs(**_kwargs):
     return kwargs
 
 
+def client_user_kwargs(**_kwargs):
+    kwargs = _kwargs.copy()
+
+    auth_url = kwargs.pop('auth_url', None)
+    region_name = kwargs.pop('region_name', CONF.os_region_name)
+
+    if auth_url is None:
+        auth_url = "%s://%s:%s/%s/%s" % (CONF.os_auth_protocol,
+                                         get_os_auth_host(CONF),
+                                         CONF.os_auth_port,
+                                         CONF.os_auth_prefix,
+                                         CONF.os_auth_version)
+
+    ctx = context.current()
+    auth_kwargs = {
+        'auth_url': auth_url,
+        'token': ctx.auth_token,
+        'project_name': ctx.project_name,
+        'project_domain_name': ctx.project_domain_name,
+    }
+
+    auth = v3.Token(**auth_kwargs)
+    sess = session.Session(auth=auth)
+
+    kwargs.setdefault('session', sess)
+    kwargs.setdefault('region_name', region_name)
+    return kwargs
+
+
 def url_for(service_catalog, service_type, admin=False,
             endpoint_interface=None,
             os_region_name=None):
