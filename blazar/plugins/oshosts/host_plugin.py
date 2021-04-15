@@ -174,7 +174,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         if updates:
             db_api.host_reservation_update(host_reservation['id'], updates)
 
-    def on_start(self, resource_id):
+    def on_start(self, resource_id, lease=None):
         """Add the hosts in the pool."""
         host_reservation = db_api.host_reservation_get(resource_id)
         pool = nova.ReservationPool()
@@ -197,7 +197,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                 parameters=dict(
                     reservation_id=host_reservation['reservation_id']))
 
-    def before_end(self, resource_id):
+    def before_end(self, resource_id, lease=None):
         """Take an action before the end of a lease."""
         host_reservation = db_api.host_reservation_get(resource_id)
         action = host_reservation['before_end']
@@ -212,15 +212,9 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                         search_opts={"node": host, "all_tenants": 1}):
                     client.servers.create_image(server=server)
         elif action == 'email':
-            reservation_id = host_reservation['reservation_id']
-            reservation = db_api.reservation_get(reservation_id)
-            lease = db_api.lease_get(reservation['lease_id'])
             project_id = lease['project_id']
             user_id = lease['user_id']
-            keystoneclient = keystone.BlazarKeystoneClient(
-                username=CONF.os_admin_username,
-                password=CONF.os_admin_password,
-                tenant_name=CONF.os_admin_project_name)
+            keystoneclient = keystone.BlazarKeystoneClient()
             project = keystoneclient.projects.get(project_id)
             user = keystoneclient.users.get(user_id)
             params_tmp = ('--to "{recipient}" '
@@ -244,7 +238,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             except Exception as e:
                 LOG.exception(str(e))
 
-    def on_end(self, resource_id):
+    def on_end(self, resource_id, lease=None):
         """Remove the hosts from the pool."""
         host_reservation = db_api.host_reservation_get(resource_id)
         db_api.host_reservation_update(host_reservation['id'],

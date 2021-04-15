@@ -91,12 +91,12 @@ class BasePlugin(object, metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def on_end(self, resource_id):
+    def on_end(self, resource_id, lease=None):
         """Delete resource."""
         pass
 
     @abc.abstractmethod
-    def on_start(self, resource_id):
+    def on_start(self, resource_id, lease=None):
         """Wake up resource."""
         pass
 
@@ -121,7 +121,7 @@ class BasePlugin(object, metaclass=abc.ABCMeta):
         return db_api.resource_property_update(
             self.resource_type, property_name, values)
 
-    def before_end(self, resource_id):
+    def before_end(self, resource_id, lease=None):
         """Take actions before the end of a lease"""
         pass
 

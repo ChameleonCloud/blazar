@@ -72,10 +72,10 @@ class FakePlugin(base.BasePlugin):
     def update_reservation(self, reservation_id, values):
         return None
 
-    def on_start(self, resource_id):
+    def on_start(self, resource_id, lease=None):
         return 'Resource %s should be started this moment.' % resource_id
 
-    def on_end(self, resource_id):
+    def on_end(self, resource_id, lease=None):
         return 'Resource %s should be deleted this moment.' % resource_id
 
 
@@ -93,10 +93,10 @@ class FakePluginRaisesException(base.BasePlugin):
     def update_reservation(self, reservation_id, values):
         return None
 
-    def on_start(self, resource_id):
+    def on_start(self, resource_id, lease=None):
         return 'Resource %s should be started this moment.' % resource_id
 
-    def on_end(self, resource_id):
+    def on_end(self, resource_id, lease=None):
         return 'Resource %s should be deleted this moment.' % resource_id
 
 
