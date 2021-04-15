@@ -562,7 +562,7 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
                                      reservation_id)
         self.update_resources(reservation_id)
 
-    def on_start(self, resource_id):
+    def on_start(self, resource_id, lease=None):
         ctx = context.current()
         instance_reservation = db_api.instance_reservation_get(resource_id)
         reservation_id = instance_reservation['reservation_id']
@@ -594,7 +594,7 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
             self.placement_client.update_reservation_inventory(
                 host['hypervisor_hostname'], reservation_id, num)
 
-    def on_end(self, resource_id):
+    def on_end(self, resource_id, lease=None):
         instance_reservation = db_api.instance_reservation_get(resource_id)
         reservation_id = instance_reservation['reservation_id']
         ctx = context.current()

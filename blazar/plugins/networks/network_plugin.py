@@ -134,7 +134,7 @@ class NetworkPlugin(base.BasePlugin):
             db_api.network_reservation_update(
                 network_reservation['id'], updates)
 
-    def on_start(self, resource_id):
+    def on_start(self, resource_id, lease=None):
         """Creates a Neutron network using the allocated segment."""
         network_reservation = db_api.network_reservation_get(resource_id)
         network_name = network_reservation['network_name']
@@ -259,7 +259,7 @@ class NetworkPlugin(base.BasePlugin):
             raise manager_ex.NetworkDeletionFailed(
                 network_id=network_id, reservation_id=reservation_id)
 
-    def on_end(self, resource_id):
+    def on_end(self, resource_id, lease=None):
         """Delete the Neutron network created when the lease started.
 
         We first need to delete associated Neutron resources.

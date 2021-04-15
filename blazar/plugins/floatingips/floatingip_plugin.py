@@ -20,7 +20,6 @@ from oslo_utils.excutils import save_and_reraise_exception
 from oslo_utils import netutils
 from oslo_utils import strutils
 
-from blazar import context
 from blazar.db import api as db_api
 from blazar.db import exceptions as db_ex
 from blazar.db import utils as db_utils
@@ -69,7 +68,8 @@ class FloatingIpPlugin(base.BasePlugin):
                 raise manager_ex.InvalidIPFormat(ip=ip)
 
     def _update_allocations(self, dates_before, dates_after, reservation_id,
-                            reservation_status, fip_reservation, values):
+                            reservation_status, fip_reservation, lease,
+                            values):
         amount = int(values.get('amount', fip_reservation['amount']))
         fip_allocations = db_api.fip_allocation_get_all_by_values(
             reservation_id=reservation_id)
@@ -99,7 +99,6 @@ class FloatingIpPlugin(base.BasePlugin):
         # Create new floating IPs if reservation is active
         created_fips = []
         if reservation_status == status.reservation.ACTIVE:
-            ctx = context.current()
             fip_pool = neutron.FloatingIPPool(fip_reservation['network_id'])
             for fip_id in fip_ids_to_add:
                 try:
@@ -109,7 +108,7 @@ class FloatingIpPlugin(base.BasePlugin):
                             fip['floating_ip_address'], reservation_id))
                     fip_pool.create_reserved_floatingip(
                         fip['subnet_id'], fip['floating_ip_address'],
-                        ctx.project_id, reservation_id)
+                        lease['project_id'], reservation_id)
                     created_fips.append(fip['floating_ip_address'])
                 except Exception as e:
                     for fip_address in created_fips:
@@ -226,7 +225,7 @@ class FloatingIpPlugin(base.BasePlugin):
                     "with an empty list")
 
         self._update_allocations(dates_before, dates_after, reservation_id,
-                                 reservation['status'], fip_reservation,
+                                 reservation['status'], fip_reservation, lease,
                                  values)
         updates = {}
         if 'amount' in values:
@@ -245,20 +244,19 @@ class FloatingIpPlugin(base.BasePlugin):
                 }
                 db_api.required_fip_create(fip_address_values)
 
-    def on_start(self, resource_id):
+    def on_start(self, resource_id, lease=None):
         fip_reservation = db_api.fip_reservation_get(resource_id)
         allocations = db_api.fip_allocation_get_all_by_values(
             reservation_id=fip_reservation['reservation_id'])
 
-        ctx = context.current()
         fip_pool = neutron.FloatingIPPool(fip_reservation['network_id'])
         for alloc in allocations:
             fip = db_api.floatingip_get(alloc['floatingip_id'])
             fip_pool.create_reserved_floatingip(
                 fip['subnet_id'], fip['floating_ip_address'],
-                ctx.project_id, fip_reservation['reservation_id'])
+                lease['project_id'], fip_reservation['reservation_id'])
 
-    def on_end(self, resource_id):
+    def on_end(self, resource_id, lease=None):
         fip_reservation = db_api.fip_reservation_get(resource_id)
         allocations = db_api.fip_allocation_get_all_by_values(
             reservation_id=fip_reservation['reservation_id'])

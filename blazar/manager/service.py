@@ -723,9 +723,8 @@ class ManagerService(service_utils.RPCServer):
                     if not status.reservation.is_valid_transition(
                             reservation['status'], reservation_status):
                         raise common_ex.InvalidStatus
-                self.resource_actions[resource_type][action_time](
-                    reservation['resource_id']
-                )
+                action_fn = self.resource_actions[resource_type][action_time]
+                action_fn(reservation['resource_id'], lease=lease)
             except Exception as exc:
                 if not isinstance(exc, common_ex.BlazarException):
                     LOG.warning((
