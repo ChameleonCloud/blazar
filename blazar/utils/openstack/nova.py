@@ -292,6 +292,20 @@ class ReservationPool(NovaClientWrapper):
                 except nova_exception.Conflict as e:
                     raise manager_exceptions.AggregateAlreadyHasHost(
                         pool=pool, host=host, nova_exception=str(e))
+
+                # remove preemptible instances
+                for server in self.nova.servers.list(
+                        search_opts={"node": host, "all_tenants": 1}):
+                    try:
+                        LOG.info('Terminating preemptible instance %s (%s)',
+                                 server.name, server.id)
+                        self.nova.servers.delete(server=server)
+                    except nova_exception.NotFound:
+                        LOG.info('Could not find server %s, may have been deleted '
+                                 'concurrently.', server)
+                    except Exception as e:
+                        LOG.exception('Failed to delete %s: %s.', server, str(e))
+
         except Exception as e:
             if added_hosts:
                 LOG.warn('Removing hosts added to aggregate %s: %s',

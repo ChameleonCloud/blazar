@@ -199,19 +199,6 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                 parameters=dict(
                     reservation_id=host_reservation['reservation_id']))
 
-        for host in hosts:
-            for server in self.nova.servers.list(
-                    search_opts={"node": host, "all_tenants": 1}):
-                try:
-                    LOG.info('Terminating preemptible instance %s (%s)',
-                             server.name, server.id)
-                    self.nova.servers.delete(server=server)
-                except nova_exceptions.NotFound:
-                    LOG.info('Could not find server %s, may have been deleted '
-                             'concurrently.', server)
-                except Exception as e:
-                    LOG.exception('Failed to delete %s: %s.', server, str(e))
-
     def before_end(self, resource_id, lease=None):
         """Take an action before the end of a lease."""
         host_reservation = db_api.host_reservation_get(resource_id)
