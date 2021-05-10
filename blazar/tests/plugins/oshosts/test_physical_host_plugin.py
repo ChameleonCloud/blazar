@@ -72,15 +72,6 @@ class PhysicalHostPluginSetupOnlyTestCase(tests.TestCase):
         self.db_host_extra_capability_get_all_per_host = (
             self.patch(self.db_api, 'host_extra_capability_get_all_per_host'))
 
-    def test_configuration(self):
-        self.assertEqual("fake-user", self.fake_phys_plugin.username)
-        self.assertEqual("fake-passwd", self.fake_phys_plugin.password)
-        self.assertEqual("fake-user-domain",
-                         self.fake_phys_plugin.user_domain_name)
-        self.assertEqual("fake-pj-name", self.fake_phys_plugin.project_name)
-        self.assertEqual("fake-pj-domain",
-                         self.fake_phys_plugin.project_domain_name)
-
     def test__get_extra_capabilities_with_values(self):
         ComputeHostExtraCapability = collections.namedtuple(
             'ComputeHostExtraCapability',
@@ -2367,24 +2358,6 @@ class PhysicalHostMonitorPluginTestCase(tests.TestCase):
         super(PhysicalHostMonitorPluginTestCase, self).setUp()
         self.patch(nova_client, 'Client')
         self.host_monitor_plugin = host_plugin.PhysicalHostMonitorPlugin()
-
-    def test_configuration(self):
-        # reset the singleton at first
-        host_plugin.PhysicalHostMonitorPlugin._instance = None
-        self.cfg = self.useFixture(conf_fixture.Config(CONF))
-        self.cfg.config(os_admin_username='fake-user')
-        self.cfg.config(os_admin_password='fake-passwd')
-        self.cfg.config(os_admin_user_domain_name='fake-user-domain')
-        self.cfg.config(os_admin_project_name='fake-pj-name')
-        self.cfg.config(os_admin_project_domain_name='fake-pj-domain')
-        self.host_monitor_plugin = host_plugin.PhysicalHostMonitorPlugin()
-        self.assertEqual('fake-user', self.host_monitor_plugin.username)
-        self.assertEqual("fake-passwd", self.host_monitor_plugin.password)
-        self.assertEqual("fake-user-domain",
-                         self.host_monitor_plugin.user_domain_name)
-        self.assertEqual("fake-pj-name", self.host_monitor_plugin.project_name)
-        self.assertEqual("fake-pj-domain",
-                         self.host_monitor_plugin.project_domain_name)
 
     def test_notification_callback_disabled_true(self):
         failed_host = {'hypervisor_hostname': 'hypvsr1'}

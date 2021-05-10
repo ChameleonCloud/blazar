@@ -152,13 +152,6 @@ class ReservationPoolTestCase(tests.TestCase):
         self.p_name = self.patch(self.pool, '_generate_aggregate_name')
         self.p_name.return_value = self.pool_name
 
-    def test_configuration(self):
-        self.assertEqual("fake-user", self.pool.username)
-        self.assertEqual("fake-passwd", self.pool.password)
-        self.assertEqual("fake-user-domain", self.pool.user_domain_name)
-        self.assertEqual("fake-pj-name", self.pool.project_name)
-        self.assertEqual("fake-pj-domain", self.pool.project_domain_name)
-
     def _patch_get_aggregate_from_name_or_id(self):
         def get_fake_aggregate(*args):
             if self.freepool_name in args or self.fake_freepool.id in args:

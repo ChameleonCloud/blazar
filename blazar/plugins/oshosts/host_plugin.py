@@ -96,12 +96,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
     }
 
     def __init__(self):
-        super(PhysicalHostPlugin, self).__init__(
-            username=CONF.os_admin_username,
-            password=CONF.os_admin_password,
-            user_domain_name=CONF.os_admin_user_domain_name,
-            project_name=CONF.os_admin_project_name,
-            project_domain_name=CONF.os_admin_project_domain_name)
+        super(PhysicalHostPlugin, self).__init__()
         self.monitor = PhysicalHostMonitorPlugin()
         self.monitor.register_healing_handler(self.heal_reservations)
         self.placement_client = placement.BlazarPlacementClient()
@@ -872,12 +867,7 @@ class PhysicalHostMonitorPlugin(base.BaseMonitorPlugin,
         if not cls._instance:
             cls._instance = super(PhysicalHostMonitorPlugin, cls).__new__(cls)
             cls._instance.healing_handlers = []
-            super(PhysicalHostMonitorPlugin, cls._instance).__init__(
-                username=CONF.os_admin_username,
-                password=CONF.os_admin_password,
-                user_domain_name=CONF.os_admin_user_domain_name,
-                project_name=CONF.os_admin_project_name,
-                project_domain_name=CONF.os_admin_project_domain_name)
+            super(PhysicalHostMonitorPlugin, cls._instance).__init__()
         return cls._instance
 
     def __init__(self):

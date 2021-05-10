@@ -56,13 +56,7 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
     }
 
     def __init__(self):
-        super(VirtualInstancePlugin, self).__init__(
-            username=CONF.os_admin_username,
-            password=CONF.os_admin_password,
-            user_domain_name=CONF.os_admin_user_domain_name,
-            project_name=CONF.os_admin_project_name,
-            project_domain_name=CONF.os_admin_project_domain_name)
-
+        super(VirtualInstancePlugin, self).__init__()
         self.freepool_name = CONF.nova.aggregate_freepool_name
         self.monitor = oshosts.host_plugin.PhysicalHostMonitorPlugin()
         self.monitor.register_healing_handler(self.heal_reservations)

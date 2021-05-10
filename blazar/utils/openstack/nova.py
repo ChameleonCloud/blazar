@@ -89,34 +89,15 @@ class ServerManager(servers.ServerManager):
 
 
 class NovaClientWrapper(object):
-    def __init__(self, username=None, password=None, user_domain_name=None,
-                 project_name=None, project_domain_name=None):
-        self.username = username
-        self.password = password
-        self.user_domain_name = user_domain_name
-        self.project_name = project_name
-        self.project_domain_name = project_domain_name
-
     @property
     def nova(self):
-        nova = BlazarNovaClient(username=self.username,
-                                password=self.password,
-                                user_domain_name=self.user_domain_name,
-                                project_name=self.project_name,
-                                project_domain_name=self.project_domain_name,
-                                endpoint_override=CONF.nova.endpoint_override)
+        nova = BlazarNovaClient(endpoint_override=CONF.nova.endpoint_override)
         return nova
 
 
 class ReservationPool(NovaClientWrapper):
     def __init__(self):
-        super(ReservationPool, self).__init__(
-            username=CONF.os_admin_username,
-            password=CONF.os_admin_password,
-            user_domain_name=CONF.os_admin_user_domain_name,
-            project_name=CONF.os_admin_project_name,
-            project_domain_name=CONF.os_admin_project_domain_name)
-
+        super(ReservationPool, self).__init__()
         self.config = CONF.nova
         self.freepool_name = self.config.aggregate_freepool_name
 
