@@ -30,7 +30,6 @@ from blazar.plugins import oshosts
 from blazar import tests
 from blazar.utils.openstack import nova
 from oslo_config import cfg
-from oslo_config import fixture as conf_fixture
 
 CONF = cfg.CONF
 

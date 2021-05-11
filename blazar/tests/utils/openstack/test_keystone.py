@@ -16,8 +16,10 @@
 from blazar import tests
 
 
-class TestCKClient(tests.TestCase):
-    """TODO: this test originally tested functionality implemented in the
+class TestKeystoneClient(tests.TestCase):
+    """Test the Keystone Client wrapper.
+
+    TODO: this test originally tested functionality implemented in the
     third-party keystoneclient library, which is redundant. It should test
     primarily the branching b/w user and non-user authentication params, as
     that is the main function this wrapper serves.

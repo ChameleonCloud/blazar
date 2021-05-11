@@ -274,10 +274,11 @@ class ReservationPool(NovaClientWrapper):
                                  server.name, server.id)
                         self.nova.servers.delete(server=server)
                     except nova_exception.NotFound:
-                        LOG.info('Could not find server %s, may have been deleted '
-                                 'concurrently.', server)
+                        LOG.info('Could not find server %s, may have been '
+                                 'deleted concurrently.', server)
                     except Exception as e:
-                        LOG.exception('Failed to delete %s: %s.', server, str(e))
+                        LOG.exception(
+                            'Failed to delete %s: %s.', server, str(e))
 
         except Exception as e:
             if added_hosts:
