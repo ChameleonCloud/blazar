@@ -62,7 +62,7 @@ class MaxReservationLengthFilter(base_filter.BaseFilter):
         cfg.ListOpt(
             'max_reservation_length_exempt_project_ids',
             default=[],
-            help='White list of project ids exempt from filter constraints.'),
+            help='List of project IDs exempt from max length constraint.'),
     ]
 
     def __init__(self, conf=None):

@@ -25,6 +25,10 @@ enforcement_opts = [
     cfg.ListOpt('enabled_filters',
                 default=[],
                 help='List of enabled usage enforcement filters.'),
+    cfg.ListOpt('exempt_projects',
+                default=[],
+                help=('Allow list of project IDs exempt from enforcement '
+                      'constraints.')),
 ]
 
 CONF.register_opts(enforcement_opts, group='enforcement')
@@ -73,6 +77,9 @@ class UsageEnforcement:
 
     def check_create(self, context, lease_values, reservations, allocations):
         context = self.format_context(context, lease_values)
+        if context['project_id'] in CONF.enforcement.exempt_projects:
+            return
+
         lease = self.format_lease(lease_values, reservations, allocations)
 
         for _filter in self.enabled_filters:
@@ -82,6 +89,9 @@ class UsageEnforcement:
                      current_allocations, new_allocations,
                      current_reservations, new_reservations):
         context = self.format_context(context, current_lease)
+        if context['project_id'] in CONF.enforcement.exempt_projects:
+            return
+
         current_lease = self.format_lease(current_lease, current_reservations,
                                           current_allocations)
         new_lease = self.format_lease(new_lease, new_reservations,
@@ -92,6 +102,9 @@ class UsageEnforcement:
 
     def on_end(self, context, lease, allocations):
         context = self.format_context(context, lease)
+        if context['project_id'] in CONF.enforcement.exempt_projects:
+            return
+
         lease_values = self.format_lease(lease, lease['reservations'],
                                          allocations)
 
