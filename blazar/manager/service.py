@@ -13,27 +13,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections import defaultdict
 import datetime
+import re
 
-import eventlet
 from oslo_config import cfg
-from oslo_log import log as logging
 from oslo_utils.excutils import save_and_reraise_exception
 from stevedore import enabled
 
 from blazar import context
-from blazar.db import api as db_api
-from blazar.db import exceptions as db_ex
 from blazar import enforcement
 from blazar import exceptions as common_ex
 from blazar import manager
-from blazar.manager import exceptions
 from blazar import monitor
-from blazar.notification import api as notification_api
 from blazar import status
+from blazar.db import api as db_api
+from blazar.db import exceptions as db_ex
+from blazar.manager import exceptions
+from blazar.notification import api as notification_api
 from blazar.utils import service as service_utils
 from blazar.utils import trusts
+from blazar.utils.openstack import placement
+from collections import defaultdict
+import eventlet
+from oslo_log import log as logging
+
 
 manager_opts = [
     cfg.ListOpt('plugins',
@@ -76,6 +79,7 @@ class ManagerService(service_utils.RPCServer):
         self.resource_actions = self._setup_actions()
         self.monitors = monitor.load_monitors(self.plugins)
         self.enforcement = enforcement.UsageEnforcement()
+        self.placement_client = placement.BlazarPlacementClient()
 
     def start(self):
         super(ManagerService, self).start()
@@ -86,6 +90,25 @@ class ManagerService(service_utils.RPCServer):
                                stop_on_exception=False)
         for m in self.monitors:
             m.start_monitoring()
+
+        # check if there is a reservation provider for all resource providers
+        # in placement
+        parent_resource_providers = []
+        reservation_resource_providers = {}
+        for rp in self.placement_client.list_resource_providers():
+            if re.match('^blazar_(.*)$', rp['name']):
+                reservation_resource_providers[rp['parent_provider_uuid']] = rp
+            else:
+                parent_resource_providers.append(rp)
+
+        for rp in parent_resource_providers:
+            if rp['uuid'] not in reservation_resource_providers:
+                LOG.warning("Resource provider {} has no reservation "
+                            "provider. Auto-creating one.".format(rp['name']))
+                rrp = self.placement_client.create_reservation_provider(
+                    rp['name'])
+                LOG.info(
+                    "Reservation provider {} created.".format(rrp['name']))
 
     def _get_plugins(self):
         """Return dict of resource-plugin class pairs."""
@@ -319,7 +342,7 @@ class ManagerService(service_utils.RPCServer):
                 'Terminated leases can only be renamed')
 
         if (values['end_date'] < now or
-           values['end_date'] < values['start_date']):
+                values['end_date'] < values['start_date']):
             raise common_ex.InvalidInput(
                 'End date must be later than current and start date')
 
@@ -658,7 +681,7 @@ class ManagerService(service_utils.RPCServer):
             if reservation['status'] != status.reservation.DELETED:
                 plugin = self.plugins[reservation['resource_type']]
                 try:
-                    plugin.on_end(reservation['resource_id'])
+                    plugin.on_end(reservation['resource_id'], lease=lease)
                 except (db_ex.BlazarDBException, RuntimeError):
                     LOG.exception("Failed to delete reservation %s",
                                   reservation['id'])

@@ -659,8 +659,151 @@ def network_extra_capability_get_latest_per_name(network_id,
         network_id, extra_capability_name
     )
 
+# Devices
+
+
+@to_dict
+def device_create(values):
+    """Create a device from the values."""
+    return IMPL.device_create(values)
+
+
+@to_dict
+def device_get(device_id):
+    """Return a specific device."""
+    return IMPL.device_get(device_id)
+
+
+@to_dict
+def device_list():
+    """Return a list of devices."""
+    return IMPL.device_list()
+
+
+@to_dict
+def device_get_all_by_filters(filters):
+    """Returns Compute devices filtered by name of the field."""
+    return IMPL.device_get_all_by_filters(filters)
+
+
+@to_dict
+def device_get_all_by_queries(queries):
+    """Returns devices filtered by an array of queries."""
+    return IMPL.device_get_all_by_queries(queries)
+
+
+@to_dict
+def reservable_device_get_all_by_queries(queries):
+    """Returns reservable devices filtered by an array of queries."""
+    return IMPL.reservable_device_get_all_by_queries(queries)
+
+
+@to_dict
+def unreservable_device_get_all_by_queries(queries):
+    """Returns unreservable devices filtered by an array of queries."""
+    return IMPL.unreservable_device_get_all_by_queries(queries)
+
+
+def device_destroy(device_id):
+    """Delete specific device."""
+    IMPL.device_destroy(device_id)
+
+
+def device_update(device_id, values):
+    """Update device."""
+    IMPL.device_update(device_id, values)
+
+
+# Device allocations
+@to_dict
+def device_allocation_create(allocation_values):
+    """Create an allocation from the values."""
+    return IMPL.device_allocation_create(allocation_values)
+
+
+@to_dict
+def device_allocation_get_all_by_values(**kwargs):
+    """Returns all entries filtered by col=value."""
+    return IMPL.device_allocation_get_all_by_values(**kwargs)
+
+
+def device_allocation_destroy(allocation_id):
+    """Delete specific allocation."""
+    IMPL.device_allocation_destroy(allocation_id)
+
+
+def device_allocation_update(allocation_id, allocation_values):
+    """Update allocation."""
+    IMPL.device_allocation_update(allocation_id, allocation_values)
+
+
+# device reservation
+@to_dict
+def device_reservation_create(device_reservation_values):
+    """Create a device reservation from the values."""
+    return IMPL.device_reservation_create(device_reservation_values)
+
+
+@to_dict
+def device_reservation_get(device_reservation_id):
+    """Return specific device reservation."""
+    return IMPL.device_reservation_get(device_reservation_id)
+
+
+def device_reservation_update(device_reservation_id,
+                              device_reservation_values):
+    """Update device reservation."""
+    IMPL.device_reservation_update(device_reservation_id,
+                                   device_reservation_values)
+
+
+def device_reservation_destroy(device_reservation_id):
+    """Delete specific device reservation."""
+    IMPL.device_reservation_destroy(device_reservation_id)
+
+
+# DeviceExtraCapabilities
+
+def device_extra_capability_create(values):
+    """Create a device ExtraCapability from the values."""
+    return IMPL.device_extra_capability_create(values)
+
+
+@to_dict
+def device_extra_capability_get(device_extra_capability_id):
+    """Return a specific device Extracapability."""
+    return IMPL.device_extra_capability_get(device_extra_capability_id)
+
+
+def device_extra_capability_get_all_per_device(device_id):
+    """Return all extra_capabilities belonging to a specific device."""
+    return IMPL.device_extra_capability_get_all_per_device(device_id)
+
+
+def device_extra_capability_destroy(device_extra_capability_id):
+    """Delete specific device ExtraCapability."""
+    IMPL.device_extra_capability_destroy(device_extra_capability_id)
+
+
+def device_extra_capability_update(device_extra_capability_id, values):
+    """Update specific device ExtraCapability."""
+    IMPL.device_extra_capability_update(device_extra_capability_id, values)
+
+
+def device_extra_capability_get_all_per_name(device_id,
+                                             extra_capability_name):
+    return IMPL.device_extra_capability_get_all_per_name(
+        device_id, extra_capability_name)
+
+
+def device_extra_capability_get_latest_per_name(device_id,
+                                                extra_capability_name):
+    return IMPL.device_extra_capability_get_latest_per_name(
+        device_id, extra_capability_name
+    )
 
 # Resource Properties
+
 
 def resource_properties_list(resource_type):
     return IMPL.resource_properties_list(resource_type)

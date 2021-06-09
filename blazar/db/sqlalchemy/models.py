@@ -16,15 +16,14 @@
 
 from oslo_utils import uuidutils
 import six
+
+from blazar.db.sqlalchemy import model_base as mb
 import sqlalchemy as sa
 from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from sqlalchemy.orm import relationship
 
-from blazar.db.sqlalchemy import model_base as mb
 
 # Helpers
-
-
 def _generate_unicode_uuid():
     return six.text_type(uuidutils.generate_uuid())
 
@@ -119,6 +118,16 @@ class Reservation(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
                                        cascade="all,delete",
                                        backref='reservation',
                                        lazy='joined')
+    device_reservation = relationship('DeviceReservation',
+                                      uselist=False,
+                                      cascade="all,delete",
+                                      backref='reservation',
+                                      lazy='joined')
+    device_allocations = relationship('DeviceAllocation',
+                                      uselist=True,
+                                      cascade="all,delete",
+                                      backref='reservation',
+                                      lazy='joined')
 
     def to_dict(self):
         d = super(Reservation, self).to_dict()
@@ -148,6 +157,19 @@ class Reservation(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
         if self.floatingip_reservation:
             fip_keys = ['network_id', 'amount']
             d.update(self.floatingip_reservation.to_dict(include=fip_keys))
+
+        if self.device_reservation:
+            dr_keys = ['before_end', 'resource_properties']
+            d.update(self.device_reservation.to_dict(include=dr_keys))
+
+            res = self.device_reservation.to_dict()
+            if res['count_range']:
+                try:
+                    minMax = res['count_range'].split('-', 1)
+                    (d['min'], d['max']) = map(int, minMax)
+                except ValueError:
+                    e = "Invalid count range: {0}".format(res['count_range'])
+                    raise RuntimeError(e)
 
         return d
 
@@ -433,3 +455,88 @@ class NetworkSegmentExtraCapability(mb.BlazarBase):
 
     def to_dict(self):
         return super(NetworkSegmentExtraCapability, self).to_dict()
+
+
+class Device(mb.BlazarBase):
+    """Description
+
+    Specifies resources asked by reservation from Device Reservation API.
+    """
+
+    __tablename__ = 'devices'
+
+    id = _id_column()
+    name = sa.Column(sa.String(255), nullable=False)
+    device_type = sa.Column(sa.Enum('container', 'vm', 'shell',
+                                    name='allowed_device_types'),
+                            nullable=False)
+    device_driver = sa.Column(sa.Enum('zun', name='allowed_device_drivers'),
+                              nullable=False)
+    reservable = sa.Column(sa.Boolean, nullable=False,
+                           server_default=sa.true())
+
+    @property
+    def _interfaces(self):
+        return [i for i in self.interfaces.split(';')]
+
+    @_interfaces.setter
+    def _interfaces(self, interface):
+        self._interfaces += ";%s" % interface
+
+    def to_dict(self):
+        return super(Device, self).to_dict()
+
+
+class DeviceReservation(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
+    """Description
+
+    Specifies resources asked by reservation from
+    Device Reservation API.
+    """
+
+    __tablename__ = 'device_reservations'
+
+    id = _id_column()
+    reservation_id = sa.Column(sa.String(36), sa.ForeignKey('reservations.id'))
+    count_range = sa.Column(sa.String(36))
+    resource_properties = sa.Column(MediumText())
+    before_end = sa.Column(sa.String(36))
+
+    def to_dict(self, include=None):
+        return super(DeviceReservation, self).to_dict(include=include)
+
+
+class DeviceAllocation(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
+    """Mapping between Device, DeviceReservation and Reservation."""
+
+    __tablename__ = 'device_allocations'
+
+    id = _id_column()
+    device_id = sa.Column(sa.String(36),
+                          sa.ForeignKey('devices.id'))
+    reservation_id = sa.Column(sa.String(36),
+                               sa.ForeignKey('reservations.id'))
+
+    def to_dict(self):
+        return super(DeviceAllocation, self).to_dict()
+
+
+class DeviceExtraCapability(mb.BlazarBase):
+    """Description
+
+    Allows to define extra capabilities per administrator request for each
+    Device added.
+    """
+
+    __tablename__ = 'device_extra_capabilities'
+
+    id = _id_column()
+    device_id = sa.Column(sa.String(36), sa.ForeignKey('devices.id'),
+                          nullable=False)
+    capability_id = sa.Column(sa.String(255),
+                              sa.ForeignKey('extra_capabilities.id'),
+                              nullable=False)
+    capability_value = sa.Column(MediumText(), nullable=False)
+
+    def to_dict(self):
+        return super(DeviceExtraCapability, self).to_dict()

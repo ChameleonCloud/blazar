@@ -13,11 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 from oslo_serialization import jsonutils
 import six
 
 from blazar.manager import exceptions as manager_ex
+from blazar.utils.openstack import keystone
+import copy
+import logging
+import shlex
+import subprocess
+
+
+LOG = logging.getLogger(__name__)
 
 
 def convert_requirements(requirements):
@@ -101,3 +108,35 @@ def list_difference(list1, list2):
     result1 = list_subtract(list1, list2)
     result2 = list_subtract(list2, list1)
     return result1, result2
+
+
+def send_lease_extension_reminder(lease, region_name):
+    project_id = lease['project_id']
+    user_id = lease['user_id']
+    keystoneclient = keystone.BlazarKeystoneClient()
+    project = keystoneclient.projects.get(project_id)
+    user = keystoneclient.users.get(user_id)
+    params_tmp = ('--to "{recipient}" '
+                  '--username "{username}" '
+                  '--project-name "{project_name}" '
+                  '--lease-name "{lease_name}" '
+                  '--lease-id "{lease_id}" '
+                  '--end-datetime "{end_datetime}" '
+                  '--site "{site}"')
+    if not user.email:
+        LOG.error('Email address not found for user {username}'.format(
+            username=user.name))
+        return
+    params = params_tmp.format(recipient=user.email,
+                               username=user.name,
+                               project_name=project.name,
+                               lease_name=lease['name'],
+                               lease_id=lease['id'],
+                               end_datetime=lease['end_date'],
+                               site=region_name)
+    try:
+        subprocess.check_call(shlex.split(
+            '/usr/local/bin/blazar_before_end_action_email {params}'.
+            format(params=params)))
+    except Exception as e:
+        LOG.exception(str(e))

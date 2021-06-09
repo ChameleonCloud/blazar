@@ -262,3 +262,28 @@ class NetworkCreationFailed(exceptions.BlazarException):
 class NetworkDeletionFailed(exceptions.BlazarException):
     msg_fmt = _("Failed to delete network %(network_id)s for reservation "
                 "%(reservation_id)s")
+
+
+# Device plugin related exceptions
+
+class CantDeleteDevice(exceptions.BlazarException):
+    code = 409
+    msg_fmt = _("Can't delete device %(device)s. %(msg)s")
+
+
+class DeviceNotFound(exceptions.NotFound):
+    msg_fmt = _("Device '%(device)s' not found!")
+
+
+class NotEnoughDevicesAvailable(exceptions.BlazarException):
+    restore_lease_status = True
+    msg_fmt = _("Not enough devices available")
+
+
+class InvalidDevice(exceptions.NotAuthorized):
+    msg_fmt = _("Invalid values for device %(device)s")
+
+
+class HostHavingContainers(exceptions.BlazarException):
+    code = 409
+    msg_fmt = _("Containers found for host %(host)s")

@@ -13,6 +13,7 @@
 import itertools
 
 from blazar.policies import base
+from blazar.policies import devices
 from blazar.policies import floatingips
 from blazar.policies import leases
 from blazar.policies import networks
@@ -25,5 +26,6 @@ def list_rules():
         leases.list_rules(),
         oshosts.list_rules(),
         floatingips.list_rules(),
-        networks.list_rules()
+        networks.list_rules(),
+        devices.list_rules()
     )

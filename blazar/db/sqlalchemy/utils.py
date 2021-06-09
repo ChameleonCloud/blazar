@@ -76,7 +76,18 @@ def _get_leases_from_fip_id(fip_id, start_date, end_date):
              .filter(~sa.or_(border0, border1)))
     for lease in query:
         yield lease
-
+        
+def _get_leases_from_device_id(device_id, start_date, end_date):
+    session = get_session()
+    border0 = start_date <= models.Lease.end_date
+    border1 = models.Lease.start_date <= end_date
+    query = (session.query(models.Lease).join(models.Reservation)
+             .join(models.DeviceAllocation)
+             .filter(models.DeviceAllocation.deleted.is_(None))
+             .filter(models.DeviceAllocation.device_id == device_id)
+             .filter(sa.and_(border0, border1)))
+    for lease in query:
+        yield lease
 
 def get_reservations_by_host_id(host_id, start_date, end_date):
     session = get_session()
@@ -115,6 +126,18 @@ def get_reservations_by_network_id(network_id, start_date, end_date):
              .filter(models.NetworkAllocation.deleted.is_(None))
              .filter(models.NetworkAllocation.network_id == network_id)
              .filter(~sa.or_(border0, border1)))
+    return query.all()
+
+
+def get_reservations_by_device_id(device_id, start_date, end_date):
+    session = get_session()
+    border0 = start_date <= models.Lease.end_date
+    border1 = models.Lease.start_date <= end_date
+    query = (session.query(models.Reservation).join(models.Lease)
+             .join(models.DeviceAllocation)
+             .filter(models.DeviceAllocation.deleted.is_(None))
+             .filter(models.DeviceAllocation.device_id == device_id)
+             .filter(sa.and_(border0, border1)))
     return query.all()
 
 
@@ -229,6 +252,32 @@ def get_reservation_allocations_by_network_ids(network_ids, start_date,
     return reservations
 
 
+def get_reservation_allocations_by_device_ids(device_ids, start_date, end_date,
+                                              lease_id=None,
+                                              reservation_id=None):
+    session = get_session()
+    reservations = get_reservations_for_allocations(
+        session, start_date, end_date, lease_id, reservation_id)
+
+    allocations_query = (session.query(
+        models.DeviceAllocation.reservation_id,
+        models.DeviceAllocation.device_id)
+        .filter(models.DeviceAllocation.deleted.is_(None))
+        .filter(models.DeviceAllocation.device_id.in_(device_ids))
+        .filter(models.DeviceAllocation.reservation_id.in_(
+            list(set([x['id'] for x in reservations])))))
+
+    allocations = defaultdict(list)
+
+    for row in allocations_query.all():
+        allocations[row[0]].append(row[1])
+
+    for r in reservations:
+        r['device_ids'] = allocations[r['id']]
+
+    return reservations
+
+
 def get_plugin_reservation(resource_type, resource_id):
     if resource_type == host_plugin.RESOURCE_TYPE:
         return api.host_reservation_get(resource_id)
@@ -272,6 +321,8 @@ def _get_events(resource_id, start_date, end_date, resource_type):
         leases = _get_leases_from_fip_id(resource_id, start_date, end_date)
     elif resource_type == 'network':
         leases = _get_leases_from_network_id(resource_id, start_date, end_date)
+    elif resource_type == 'device':
+        leases = _get_leases_from_device_id(resource_id, start_date, end_date)
     else:
         mgr_exceptions.UnsupportedResourceType(resource_type)
 

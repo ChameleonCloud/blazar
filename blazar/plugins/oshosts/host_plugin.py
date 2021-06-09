@@ -216,31 +216,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                     # the snapshot owned by the admin, or the original
                     client.servers.create_image(server=server)
         elif action == 'email':
-            project_id = lease['project_id']
-            user_id = lease['user_id']
-            keystoneclient = keystone.BlazarKeystoneClient()
-            project = keystoneclient.projects.get(project_id)
-            user = keystoneclient.users.get(user_id)
-            params_tmp = ('--to "{recipient}" '
-                          '--username "{username}" '
-                          '--project-name "{project_name}" '
-                          '--lease-name "{lease_name}" '
-                          '--lease-id "{lease_id}" '
-                          '--end-datetime "{end_datetime}" '
-                          '--site "{site}"')
-            params = params_tmp.format(recipient=user.email,
-                                       username=user.name,
-                                       project_name=project.name,
-                                       lease_name=lease['name'],
-                                       lease_id=lease['id'],
-                                       end_datetime=lease['end_date'],
-                                       site=CONF.os_region_name)
-            try:
-                subprocess.check_call(shlex.split(
-                    '/usr/local/bin/blazar_before_end_action_email {params}'.
-                    format(params=params)))
-            except Exception as e:
-                LOG.exception(str(e))
+            plugins_utils.send_lease_extension_reminder(lease, CONF.os_region_name)
 
     def on_end(self, resource_id, lease=None):
         """Remove the hosts from the pool."""
