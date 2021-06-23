@@ -86,5 +86,5 @@ class ZunInventory(BlazarZunClient):
 
         return {'id': host.uuid,
                 'name': host.hostname,
-                'containers': self.zun.containers.list(host=host.name)
+                'containers': self.zun.containers.list(host=host.hostname)
                 }
