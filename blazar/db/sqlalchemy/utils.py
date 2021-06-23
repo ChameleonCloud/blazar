@@ -76,7 +76,8 @@ def _get_leases_from_fip_id(fip_id, start_date, end_date):
              .filter(~sa.or_(border0, border1)))
     for lease in query:
         yield lease
-        
+
+
 def _get_leases_from_device_id(device_id, start_date, end_date):
     session = get_session()
     border0 = start_date <= models.Lease.end_date
@@ -88,6 +89,7 @@ def _get_leases_from_device_id(device_id, start_date, end_date):
              .filter(sa.and_(border0, border1)))
     for lease in query:
         yield lease
+
 
 def get_reservations_by_host_id(host_id, start_date, end_date):
     session = get_session()

@@ -22,7 +22,6 @@ from blazar.manager import exceptions as manager_ex
 from blazar.utils.openstack import placement
 from blazar.utils.openstack import zun
 from oslo_log import log as logging
-from random import shuffle
 from zunclient import exceptions as zun_ex
 
 
@@ -69,7 +68,7 @@ class ZunPlugin(zun.ZunClientWrapper):
         cantaddextracapability = []
         try:
             device = db_api.device_create(device_properties)
-        except db_ex.BlazarDBException as e:
+        except db_ex.BlazarDBException:
             placement_client.delete_reservation_provider(
                 host_name=zun_compute_node['name'])
             raise

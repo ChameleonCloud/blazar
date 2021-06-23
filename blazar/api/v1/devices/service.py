@@ -67,13 +67,11 @@ class API(object):
         :type device_id: str
         """
         self.manager_rpcapi.delete_device(device_id)
-        
-    
+
     @policy.authorize('devices', 'reallocate')
     def reallocate(self, device_id, data):
         """Exchange device from allocations."""
         return self.manager_rpcapi.reallocate(device_id, data)
-
 
     @policy.authorize('devices', 'get_allocations')
     def list_allocations(self, query):

@@ -21,18 +21,18 @@ from oslo_utils.excutils import save_and_reraise_exception
 from stevedore import enabled
 
 from blazar import context
+from blazar.db import api as db_api
+from blazar.db import exceptions as db_ex
 from blazar import enforcement
 from blazar import exceptions as common_ex
 from blazar import manager
-from blazar import monitor
-from blazar import status
-from blazar.db import api as db_api
-from blazar.db import exceptions as db_ex
 from blazar.manager import exceptions
+from blazar import monitor
 from blazar.notification import api as notification_api
+from blazar import status
+from blazar.utils.openstack import placement
 from blazar.utils import service as service_utils
 from blazar.utils import trusts
-from blazar.utils.openstack import placement
 from collections import defaultdict
 import eventlet
 from oslo_log import log as logging

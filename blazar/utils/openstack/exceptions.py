@@ -66,15 +66,21 @@ class FloatingIPSubnetNotFound(exceptions.NotFound):
 class NeutronUsesFloatingIP(exceptions.InvalidInput):
     msg_fmt = _("The floating IP %(floatingip)s is used in allocation_pools "
                 "or gateway_ip in subnet %(subnet)s .")
-    
+
+
 class TraitCreationFailed(exceptions.BlazarException):
     msg_fmt = _("Failed to create trait '%(trait)s'")
+
 
 class TraitDeletionFailed(exceptions.BlazarException):
     msg_fmt = _("Failed to delete trait '%(trait)s'")
 
+
 class TraitAssociationFailed(exceptions.BlazarException):
-    msg_fmt = _("Failed to associate traits '%(traits)s' with resource provider %(uuid)s")
+    msg_fmt = _("Failed to associate traits '%(traits)s' with resource "
+                "provider %(uuid)s")
+
 
 class TraitDissociationFailed(exceptions.BlazarException):
-    msg_fmt = _("Failed to dissociate traits '%(traits)s' with resource provider %(uuid)s")
+    msg_fmt = _("Failed to dissociate traits '%(traits)s' with resource "
+                "provider %(uuid)s")

@@ -15,24 +15,21 @@
 # under the License.
 
 import datetime
+from random import shuffle
 
-from oslo_config import cfg
-from oslo_utils import strutils
-from stevedore import named
-
-from blazar import status
 from blazar.db import api as db_api
 from blazar.db import exceptions as db_ex
 from blazar.db import utils as db_utils
 from blazar.manager import exceptions as manager_ex
 from blazar.plugins import base
 from blazar.plugins import devices as plugin
-from blazar.utils import plugins as plugins_utils
+from blazar import status
 from blazar.utils.openstack import placement
-from neutronclient.common import exceptions as neutron_ex
+from blazar.utils import plugins as plugins_utils
+from oslo_config import cfg
 from oslo_log import log as logging
-from random import shuffle
-
+from oslo_utils import strutils
+from stevedore import named
 
 plugin_opts = [
     cfg.StrOpt('before_end',

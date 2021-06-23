@@ -16,8 +16,6 @@
 
 import datetime
 from random import shuffle
-import shlex
-import subprocess
 from uuid import UUID
 
 from novaclient import exceptions as nova_exceptions
@@ -35,7 +33,6 @@ from blazar.plugins import oshosts as plugin
 from blazar import status
 from blazar.utils.openstack import heat
 from blazar.utils.openstack import ironic
-from blazar.utils.openstack import keystone
 from blazar.utils.openstack import nova
 from blazar.utils.openstack import placement
 from blazar.utils import plugins as plugins_utils
@@ -216,7 +213,8 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                     # the snapshot owned by the admin, or the original
                     client.servers.create_image(server=server)
         elif action == 'email':
-            plugins_utils.send_lease_extension_reminder(lease, CONF.os_region_name)
+            plugins_utils.send_lease_extension_reminder(
+                lease, CONF.os_region_name)
 
     def on_end(self, resource_id, lease=None):
         """Remove the hosts from the pool."""

@@ -1784,13 +1784,6 @@ def device_get_all_by_filters(filters):
     return devices_query.all()
 
 
-def _device_extra_capability_query(session):
-    return (
-        model_query(models.DeviceExtraCapability, session)
-        .join(models.ExtraCapability)
-        .add_column(models.ExtraCapability.capability_name))
-
-
 def device_get_all_by_queries(queries):
     """Return devices filtered by an array of queries.
 

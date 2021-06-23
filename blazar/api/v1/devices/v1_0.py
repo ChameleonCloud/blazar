@@ -74,6 +74,7 @@ def reallocate(req, device_id, data):
     """Exhange device in a lease."""
     return api_utils.render(allocation=_api.reallocate(device_id, data))
 
+
 @rest.get('/allocations', query=True)
 def allocations_list(req, query, detail=False):
     """List all allocations on all device segments."""
