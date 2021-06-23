@@ -93,22 +93,22 @@ class ManagerService(service_utils.RPCServer):
 
         # check if there is a reservation provider for all resource providers
         # in placement
-        parent_resource_providers = []
-        reservation_resource_providers = {}
-        for rp in self.placement_client.list_resource_providers():
-            if re.match('^blazar_(.*)$', rp['name']):
-                reservation_resource_providers[rp['parent_provider_uuid']] = rp
-            else:
-                parent_resource_providers.append(rp)
+        # parent_resource_providers = []
+        # reservation_resource_providers = {}
+        # for rp in self.placement_client.list_resource_providers():
+        #     if re.match('^blazar_(.*)$', rp['name']):
+        #         reservation_resource_providers[rp['parent_provider_uuid']] = rp
+        #     else:
+        #         parent_resource_providers.append(rp)
 
-        for rp in parent_resource_providers:
-            if rp['uuid'] not in reservation_resource_providers:
-                LOG.warning("Resource provider {} has no reservation "
-                            "provider. Auto-creating one.".format(rp['name']))
-                rrp = self.placement_client.create_reservation_provider(
-                    rp['name'])
-                LOG.info(
-                    "Reservation provider {} created.".format(rrp['name']))
+        # for rp in parent_resource_providers:
+        #     if rp['uuid'] not in reservation_resource_providers:
+        #         LOG.warning("Resource provider {} has no reservation "
+        #                     "provider. Auto-creating one.".format(rp['name']))
+        #         rrp = self.placement_client.create_reservation_provider(
+        #             rp['name'])
+        #         LOG.info(
+        #             "Reservation provider {} created.".format(rrp['name']))
 
     def _get_plugins(self):
         """Return dict of resource-plugin class pairs."""
