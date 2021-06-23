@@ -11,18 +11,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import retrying
-
 from keystoneauth1 import adapter
-from keystoneauth1.identity import v3
 from keystoneauth1 import session
-
+from keystoneauth1.identity import v3
 from oslo_config import cfg
-from oslo_log import log as logging
 
 from blazar import context
 from blazar.utils.openstack import base
 from blazar.utils.openstack import exceptions
+from oslo_log import log as logging
+import retrying
+
 
 CONF = cfg.CONF
 LOG = logging.getLogger(__name__)
@@ -104,6 +103,15 @@ class BlazarPlacementClient(object):
         return client.delete(url, raise_exc=False,
                              microversion=microversion)
 
+    def _get_reservation_provider_name(self, host_name):
+        """Get the name of a reservation provider
+        from the host name
+
+        :param host_name: Name of the host
+        :return: The name of the reservation provider
+        """
+        return 'blazar_' + host_name
+
     def get_resource_provider(self, rp_name):
         """Calls the placement API for a resource provider record.
 
@@ -130,6 +138,18 @@ class BlazarPlacementClient(object):
         }
         LOG.error(msg, args)
         raise exceptions.ResourceProviderRetrievalFailed(name=rp_name)
+
+    def get_reservation_provider(self, host_name):
+        """Calls the placement API for a reservation provider record.
+
+        param host_name: Name of the host
+        :return: A dict of resource provider information
+                 or None if the resource provider doesn't exist.
+        :raise: ResourceProviderRetrievalFailed on error.
+        """
+        return self.get_resource_provider(
+            self._get_reservation_provider_name(host_name)
+        )
 
     def create_resource_provider(self, rp_name, rp_uuid=None,
                                  parent_uuid=None):
@@ -210,7 +230,7 @@ class BlazarPlacementClient(object):
             raise exceptions.ResourceProviderNotFound(
                 resource_provider=host_name)
         host_uuid = host_rp['uuid']
-        rp_name = "blazar_" + host_name
+        rp_name = self._get_reservation_provider_name(host_name)
 
         reservation_rp = self.create_resource_provider(
             rp_name, parent_uuid=host_uuid)
@@ -218,7 +238,7 @@ class BlazarPlacementClient(object):
 
     def delete_reservation_provider(self, host_name):
         """Delete the reservation provider, the child of the given host"""
-        rp_name = "blazar_" + host_name
+        rp_name = self._get_reservation_provider_name(host_name)
         rp = self.get_resource_provider(rp_name)
         if rp is None:
             # If the reservation provider doesn't exist,
@@ -389,7 +409,7 @@ class BlazarPlacementClient(object):
         :return: The updated inventory record
         """
         # Get reservation provider uuid
-        rp_name = "blazar_" + host_name
+        rp_name = self._get_reservation_provider_name(host_name)
         rp = self.get_resource_provider(rp_name)
         if rp is None:
             # If the reservation provider is not created yet,
@@ -412,7 +432,7 @@ class BlazarPlacementClient(object):
                  provider is not found
         """
         # Get reservation provider uuid
-        rp_name = "blazar_" + host_name
+        rp_name = self._get_reservation_provider_name(host_name)
         rp = self.get_resource_provider(rp_name)
         if rp is None:
             raise exceptions.ResourceProviderNotFound(
@@ -429,3 +449,215 @@ class BlazarPlacementClient(object):
             LOG.info("Resource class %s doesn't exist or there is no "
                      "inventory for that resource class on resource provider "
                      "%s. Skipped the deletion", rc_name, rp_name)
+
+    def _get_custom_reservation_trait_name(self, reserv_uuid, project_id):
+        # A valid trait must be no longer than 255 characters,
+        # start with the prefix "CUSTOM_"
+        # and use following characters: "A"-"Z", "0"-"9" and "_"
+        reserv_uuid = reserv_uuid.upper().replace("-", "_")
+        project_id = project_id.upper().replace("-", "_")
+        return "CUSTOM_RESERVATION_" + reserv_uuid + "_PROJECT_" + project_id
+
+    def create_trait(self, trait_name):
+        """Calls the placement API to create a trait.
+
+        :param trait_name: The name of the trait
+        :raises: TraitCreationFailed error.
+        """
+        url = '/traits/%s' % trait_name
+        resp = self.put(url, {})
+        if resp:
+            LOG.info("Created trait %s", trait_name)
+            return
+        msg = ("Failed to create trait with placement API for "
+               "%(trait_name)s. Got %(status_code)d: %(err_text)s.")
+        args = {
+            'trait_name': trait_name,
+            'status_code': resp.status_code,
+            'err_text': resp.text,
+        }
+        LOG.error(msg, args)
+        raise exceptions.TraitCreationFailed(trait=trait_name)
+
+    def delete_trait(self, trait_name):
+        """Calls the placement API to delete a trait.
+
+        :param trait_name: The name of the trait
+        :raises: TraitDeletionFailed error.
+        """
+        url = '/traits/%s' % trait_name
+        resp = self.delete(url)
+        if resp:
+            LOG.info("Deleted trait %s", trait_name)
+            return
+        msg = ("Failed to delete trait with placement API for "
+               "%(trait_name)s. Got %(status_code)d: %(err_text)s.")
+        args = {
+            'trait_name': trait_name,
+            'status_code': resp.status_code,
+            'err_text': resp.text,
+        }
+        LOG.error(msg, args)
+        raise exceptions.TraitDeletionFailed(trait=trait_name)
+
+    def create_reservation_trait(self, reserv_uuid, project_id):
+        """Create the reservation trait.
+
+        :param reservation_uuid: The reservation uuid
+        :raises: TraitCreationFailed error.
+        """
+        self.create_trait(self._get_custom_reservation_trait_name(
+            reserv_uuid, project_id))
+
+    def delete_reservation_trait(self, reserv_uuid, project_id):
+        """Delete the reservation trait.
+
+        :param reservation_uuid: The reservation uuid
+        :raises: TraitDeletionFailed error.
+        """
+        self.delete_trait(self._get_custom_reservation_trait_name(
+            reserv_uuid, project_id))
+
+    def associate_traits_with_resource_provider(self, rp_uuid, traits):
+        """Associate traits with the resource provider.
+
+        :param rp_uuid: The uuid of the resource provider
+        :param traits: The list of traits
+        :raises: TraitAssociationFailed error.
+        """
+        url = '/resource_providers/%s/traits' % rp_uuid
+        resp = self.get(url)
+        current_traits = []
+        resource_provider_generation = 0
+        if resp:
+            json_resp = resp.json()
+            if json_resp['traits']:
+                current_traits = json_resp['traits']
+            if json_resp['resource_provider_generation']:
+                resource_provider_generation = \
+                    json_resp['resource_provider_generation']
+
+        updated_traits = list(set(current_traits) | set(traits))
+        payload = {
+            'traits': updated_traits,
+            'resource_provider_generation': resource_provider_generation,
+        }
+        resp = self.put(url, payload)
+        if resp:
+            LOG.info("Associated traits %s with resource provider %s",
+                     ",".join(traits), rp_uuid)
+            return
+        msg = ("Failed to associate traits %(traits)s with resource "
+               "provider %(rp_uuid)s. Got %(status_code)d: %(err_text)s.")
+        args = {
+            'traits': ','.join(traits),
+            'rp_uuid': rp_uuid,
+            'status_code': resp.status_code,
+            'err_text': resp.text,
+        }
+        LOG.error(msg, args)
+        raise exceptions.TraitAssociationFailed(
+            traits=','.join(traits), uuid=rp_uuid)
+
+    def dissociate_traits_with_resource_provider(self, rp_uuid, traits):
+        """Dissociate traits with the resource provider.
+
+        :param rp_uuid: The uuid of the resource provider
+        :param traits: The list of traits
+        :raises: TraitdissociationFailed error.
+        """
+        url = '/resource_providers/%s/traits' % rp_uuid
+        resp = self.get(url)
+        current_traits = []
+        resource_provider_generation = 0
+        if resp:
+            json_resp = resp.json()
+            if json_resp['traits']:
+                current_traits = json_resp['traits']
+            if json_resp['resource_provider_generation']:
+                resource_provider_generation = \
+                    json_resp['resource_provider_generation']
+
+        updated_traits = list(set(current_traits) - set(traits))
+
+        payload = {
+            'traits': updated_traits,
+            'resource_provider_generation': resource_provider_generation,
+        }
+        resp = self.put(url, payload)
+        if resp:
+            LOG.info("Dissociated traits %s with resource provider %s",
+                     ",".join(traits), rp_uuid)
+            return
+        msg = ("Failed to dissociate traits %(traits)s with resource "
+               "provider %(rp_uuid)s. Got %(status_code)d: %(err_text)s.")
+        args = {
+            'traits': ','.join(traits),
+            'rp_uuid': rp_uuid,
+            'status_code': resp.status_code,
+            'err_text': resp.text,
+        }
+        LOG.error(msg, args)
+        raise exceptions.TraitDissociationFailed(
+            traits=','.join(traits), uuid=rp_uuid)
+
+    def associate_reservation_trait_with_resource_provider(
+            self, rp_uuid, reserv_uuid, project_id):
+        """Associate reservation trait with the resource provider.
+
+        :param rp_uuid: The uuid of the resource provider
+        :param reserv_uuid: The reservation uuid
+        :raises: TraitAssociationFailed error.
+        """
+        self.associate_traits_with_resource_provider(
+            rp_uuid,
+            [self._get_custom_reservation_trait_name(reserv_uuid, project_id)])
+
+    def dissociate_reservation_trait_with_resource_provider(
+            self, rp_uuid, reserv_uuid, project_id):
+        """Dissociate reservation trait with the resource provider.
+
+        :param rp_uuid: The uuid of the resource provider
+        :param reserv_uuid: The reservation uuid
+        :raises: TraitAssociationFailed error.
+        """
+        self.dissociate_traits_with_resource_provider(
+            rp_uuid,
+            [self._get_custom_reservation_trait_name(reserv_uuid, project_id)])
+
+    def list_resource_providers(self):
+        """Get all resource providers
+        """
+        resp = self.get('/resource_providers')
+        resource_providers = []
+        if resp:
+            json_resp = resp.json()
+            if json_resp['resource_providers']:
+                resource_providers = json_resp['resource_providers']
+        return resource_providers
+
+    def get_trait_resource_providers(self, trait_name):
+        """Get all resource providers that associate with the trait
+
+        :param trait_name: The name of the trait
+        :return: A list of resource providers
+        """
+        trait_rps = []
+        # get all resource providers
+        resource_providers = self.list_resource_providers()
+
+        # filter resource providers with the trait
+        url = '/resource_providers/%s/traits'
+        for rp in resource_providers:
+            resp = self.get(url % rp['uuid'])
+            if resp:
+                json_resp = resp.json()
+                if json_resp['traits'] and trait_name in json_resp['traits']:
+                    trait_rps.append(rp)
+
+        return trait_rps
+
+    def get_reservation_trait_resource_providers(
+            self, reserv_uuid, project_id):
+        return self.get_trait_resource_providers(
+            self._get_custom_reservation_trait_name(reserv_uuid, project_id))

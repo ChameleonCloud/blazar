@@ -18,6 +18,10 @@
 import sys
 
 from oslo_config import cfg
+
+from blazar.db import exceptions as db_exc
+from blazar.db.sqlalchemy import facade_wrapper
+from blazar.db.sqlalchemy import models
 from oslo_db import exception as common_db_exc
 from oslo_db.sqlalchemy import session as db_session
 from oslo_log import log as logging
@@ -25,13 +29,11 @@ import sqlalchemy as sa
 from sqlalchemy.sql.expression import asc
 from sqlalchemy.sql.expression import desc
 
-from blazar.db import exceptions as db_exc
-from blazar.db.sqlalchemy import facade_wrapper
-from blazar.db.sqlalchemy import models
 
 EXTRA_CAPABILITY_MODELS = {
     'physical:host': models.ComputeHostExtraCapability,
-    'network': models.NetworkSegmentExtraCapability
+    'network': models.NetworkSegmentExtraCapability,
+    'device': models.DeviceExtraCapability,
 }
 
 LOG = logging.getLogger(__name__)
@@ -146,7 +148,7 @@ def reservation_get_all():
 
 def reservation_get_all_by_lease_id(lease_id):
     reservations = (model_query(models.Reservation,
-                    get_session()).filter_by(lease_id=lease_id))
+                                get_session()).filter_by(lease_id=lease_id))
     return reservations.all()
 
 
@@ -1582,8 +1584,419 @@ def network_extra_capability_get_latest_per_name(network_id, capability_name):
             .order_by(models.NetworkSegmentExtraCapability.created_at.desc())
             .first())
 
+# Devices
+
+
+def _device_get(session, device_id):
+    query = model_query(models.Device, session)
+    return query.filter_by(id=device_id).first()
+
+
+def _device_get_all(session):
+    query = model_query(models.Device, session)
+    return query
+
+
+def device_get(device_id):
+    return _device_get(get_session(), device_id)
+
+
+def device_list():
+    return model_query(models.Device, get_session()).all()
+
+
+def device_create(values):
+    values = values.copy()
+    device = models.Device()
+    device.update(values)
+
+    session = get_session()
+    with session.begin():
+        try:
+            device.save(session=session)
+        except common_db_exc.DBDuplicateEntry as e:
+            # raise exception about duplicated columns (e.columns)
+            raise db_exc.BlazarDBDuplicateEntry(
+                model=device.__class__.__name__, columns=e.columns)
+
+    return device_get(device.id)
+
+
+def device_update(device_id, values):
+    session = get_session()
+
+    with session.begin():
+        device = _device_get(session, device_id)
+        device.update(values)
+        device.save(session=session)
+
+    return device_get(device_id)
+
+
+def device_destroy(device_id):
+    session = get_session()
+    with session.begin():
+        device = _device_get(session, device_id)
+
+        if not device:
+            # raise not found error
+            raise db_exc.BlazarDBNotFound(
+                id=device_id, model='Device')
+
+        session.delete(device)
+
+
+# DeviceAllocation
+
+def _device_allocation_get(session, device_allocation_id):
+    query = model_query(models.DeviceAllocation, session)
+    return query.filter_by(id=device_allocation_id).first()
+
+
+def device_allocation_get(device_allocation_id):
+    return _device_allocation_get(get_session(),
+                                  device_allocation_id)
+
+
+def device_allocation_get_all():
+    query = model_query(models.DeviceAllocation, get_session())
+    return query.all()
+
+
+def device_allocation_create(values):
+    values = values.copy()
+    device_allocation = models.DeviceAllocation()
+    device_allocation.update(values)
+
+    session = get_session()
+    with session.begin():
+        try:
+            device_allocation.save(session=session)
+        except common_db_exc.DBDuplicateEntry as e:
+            # raise exception about duplicated columns (e.columns)
+            raise db_exc.BlazarDBDuplicateEntry(
+                model=device_allocation.__class__.__name__, columns=e.columns)
+
+    return device_allocation_get(device_allocation.id)
+
+
+def device_allocation_get_all_by_values(**kwargs):
+    """Returns all entries filtered by col=value."""
+    allocation_query = model_query(models.DeviceAllocation, get_session())
+    for name, value in kwargs.items():
+        column = getattr(models.DeviceAllocation, name, None)
+        if column:
+            allocation_query = allocation_query.filter(column == value)
+    return allocation_query.all()
+
+
+def device_allocation_update(device_allocation_id, values):
+    session = get_session()
+
+    with session.begin():
+        device_allocation = _device_allocation_get(session,
+                                                   device_allocation_id)
+        device_allocation.update(values)
+        device_allocation.save(session=session)
+
+    return device_allocation_get(device_allocation_id)
+
+
+def device_allocation_destroy(device_allocation_id):
+    session = get_session()
+    with session.begin():
+        device_allocation = _device_allocation_get(session,
+                                                   device_allocation_id)
+
+        if not device_allocation:
+            # raise not found error
+            raise db_exc.BlazarDBNotFound(
+                id=device_allocation_id, model='DeviceAllocation')
+
+        device_allocation.soft_delete(session=session)
+
+
+# DeviceReservation
+
+def device_reservation_create(values):
+    value = values.copy()
+    device_reservation = models.DeviceReservation()
+    device_reservation.update(value)
+
+    session = get_session()
+    with session.begin():
+        try:
+            device_reservation.save(session=session)
+        except common_db_exc.DBDuplicateEntry as e:
+            # raise exception about duplicated columns (e.columns)
+            raise db_exc.BlazarDBDuplicateEntry(
+                model=device_reservation.__class__.__name__,
+                columns=e.columns)
+
+    return device_reservation_get(device_reservation.id)
+
+
+def device_reservation_get(device_reservation_id, session=None):
+    if not session:
+        session = get_session()
+    query = model_query(models.DeviceReservation, session)
+    return query.filter_by(id=device_reservation_id).first()
+
+
+def device_reservation_update(device_reservation_id, values):
+    session = get_session()
+
+    with session.begin():
+        device_reservation = device_reservation_get(
+            device_reservation_id, session)
+
+        if not device_reservation:
+            raise db_exc.BlazarDBNotFound(
+                id=device_reservation_id, model='DeviceReservation')
+
+        device_reservation.update(values)
+        device_reservation.save(session=session)
+
+    return device_reservation_get(device_reservation_id)
+
+
+def device_reservation_destroy(device_reservation_id):
+    session = get_session()
+    with session.begin():
+        device = device_reservation_get(device_reservation_id)
+
+        if not device:
+            raise db_exc.BlazarDBNotFound(
+                id=device_reservation_id, model='DeviceReservation')
+
+        device.soft_delete(session=session)
+
+
+def device_get_all_by_filters(filters):
+    """Returns devices filtered by name of the field."""
+
+    devices_query = _device_get_all(get_session())
+
+    if 'status' in filters:
+        devices_query = devices_query.filter(
+            models.Device.status == filters['status'])
+
+    return devices_query.all()
+
+
+def _device_extra_capability_query(session):
+    return (
+        model_query(models.DeviceExtraCapability, session)
+        .join(models.ExtraCapability)
+        .add_column(models.ExtraCapability.capability_name))
+
+
+def device_get_all_by_queries(queries):
+    """Return devices filtered by an array of queries.
+
+    :param queries: array of queries "key op value" where op can be
+    http://docs.sqlalchemy.org/en/rel_0_7/core/expression_api.html
+            #sqlalchemy.sql.operators.ColumnOperators
+    """
+    devices_query = model_query(models.Device, get_session())
+
+    oper = {
+        '<': ['lt', lambda a, b: a >= b],
+        '>': ['gt', lambda a, b: a <= b],
+        '<=': ['le', lambda a, b: a > b],
+        '>=': ['ge', lambda a, b: a < b],
+        '==': ['eq', lambda a, b: a != b],
+        '!=': ['ne', lambda a, b: a == b],
+    }
+
+    devices = []
+    for query in queries:
+        try:
+            key, op, value = query.split(' ', 2)
+        except ValueError:
+            raise db_exc.BlazarDBInvalidFilter(query_filter=query)
+
+        column = getattr(models.Device, key, None)
+        if column is not None:
+            if op == 'in':
+                filt = column.in_(value.split(','))
+            else:
+                if op in oper:
+                    op = oper[op][0]
+                try:
+                    attr = [e for e in ['%s', '%s_', '__%s__']
+                            if hasattr(column, e % op)][0] % op
+                except IndexError:
+                    raise db_exc.BlazarDBInvalidFilterOperator(
+                        filter_operator=op)
+
+                if value == 'null':
+                    value = None
+
+                filt = getattr(column, attr)(value)
+
+            devices_query = devices_query.filter(filt)
+        else:
+            # looking for extra capabilities matches
+            extra_filter = (
+                _device_extra_capability_query(get_session())
+                .filter(models.ExtraCapability.capability_name == key)
+            ).all()
+
+            if not extra_filter:
+                raise db_exc.BlazarDBNotFound(
+                    id=key, model='DeviceExtraCapability')
+
+            for device, capability_name in extra_filter:
+                if op in oper and oper[op][1](device.capability_value, value):
+                    devices.append(device.device_id)
+                elif op not in oper:
+                    msg = 'Operator %s for extra capabilities not implemented'
+                    raise NotImplementedError(msg % op)
+
+            # We must also avoid selecting any device which doesn't have the
+            # extra capability present.
+            all_devices = [h.id for h in devices_query.all()]
+            extra_filter_devices = [h.device_id for h, _ in extra_filter]
+            devices += [h for h in all_devices if h not in
+                        extra_filter_devices]
+
+    return devices_query.filter(~models.Device.id.in_(devices)).all()
+
+
+def reservable_device_get_all_by_queries(queries):
+    """Return reservable devices filtered by an array of queries.
+
+    :param queries: array of queries "key op value" where op can be
+    http://docs.sqlalchemy.org/en/rel_0_7/core/expression_api.html
+        #sqlalchemy.sql.operators.ColumnOperators
+    """
+    queries.append('reservable == 1')
+    return device_get_all_by_queries(queries)
+
+
+def unreservable_device_get_all_by_queries(queries):
+    """Return unreservable devices filtered by an array of queries.
+
+    :param queries: array of queries "key op value" where op can be
+    http://docs.sqlalchemy.org/en/rel_0_7/core/expression_api.html
+        #sqlalchemy.sql.operators.ColumnOperators
+    """
+    # TODO(hiro-kobayashi): support the expression 'reservable == False'
+    queries.append('reservable == 0')
+    return device_get_all_by_queries(queries)
+
+
+# DeviceExtraCapability
+
+def _device_extra_capability_query(session):
+    return (
+        model_query(models.DeviceExtraCapability, session)
+        .join(models.ExtraCapability)
+        .add_column(models.ExtraCapability.capability_name))
+
+
+def _device_extra_capability_get(session, device_extra_capability_id):
+    query = _device_extra_capability_query(session).filter(
+        models.DeviceExtraCapability.id == device_extra_capability_id)
+
+    return query.first()
+
+
+def device_extra_capability_get(device_extra_capability_id):
+    return _device_extra_capability_get(get_session(),
+                                        device_extra_capability_id)
+
+
+def _device_extra_capability_get_all_per_device(session, device_id):
+    query = _device_extra_capability_query(session).filter(
+        models.DeviceExtraCapability.device_id == device_id)
+
+    return query
+
+
+def device_extra_capability_get_all_per_device(device_id):
+    return _device_extra_capability_get_all_per_device(get_session(),
+                                                       device_id).all()
+
+
+def device_extra_capability_create(values):
+    values = values.copy()
+
+    resource_property = _resource_property_get_or_create(
+        get_session(), 'device', values.get('capability_name'))
+
+    del values['capability_name']
+    values['capability_id'] = resource_property.id
+
+    device_extra_capability = models.DeviceExtraCapability()
+    device_extra_capability.update(values)
+
+    session = get_session()
+
+    with session.begin():
+        try:
+            device_extra_capability.save(session=session)
+        except common_db_exc.DBDuplicateEntry as e:
+            # raise exception about duplicated columns (e.columns)
+            raise db_exc.BlazarDBDuplicateEntry(
+                model=device_extra_capability.__class__.__name__,
+                columns=e.columns)
+
+    return device_extra_capability_get(device_extra_capability.id)
+
+
+def device_extra_capability_update(device_extra_capability_id, values):
+    session = get_session()
+
+    with session.begin():
+        device_extra_capability, _ = (
+            _device_extra_capability_get(session,
+                                         device_extra_capability_id))
+        device_extra_capability.update(values)
+        device_extra_capability.save(session=session)
+
+    return device_extra_capability_get(device_extra_capability_id)
+
+
+def device_extra_capability_destroy(device_extra_capability_id):
+    session = get_session()
+    with session.begin():
+        device_extra_capability = _device_extra_capability_get(
+            session, device_extra_capability_id)
+
+        if not device_extra_capability:
+            # raise not found error
+            raise db_exc.BlazarDBNotFound(
+                id=device_extra_capability_id,
+                model='DeviceExtraCapability')
+
+        session.delete(device_extra_capability[0])
+
+
+def device_extra_capability_get_all_per_name(device_id, capability_name):
+    session = get_session()
+
+    with session.begin():
+        query = _device_extra_capability_get_all_per_device(
+            session, device_id)
+        return query.filter_by(capability_name=capability_name).all()
+
+
+def device_extra_capability_get_latest_per_name(device_id, capability_name):
+    session = get_session()
+
+    with session.begin():
+        query = _device_extra_capability_get_all_per_device(session,
+                                                            device_id)
+        return (
+            query
+            .filter(models.ExtraCapability.capability_name == capability_name)
+            .order_by(models.DeviceExtraCapability.created_at.desc())
+            .first())
 
 # Resource Properties
+
 
 def _resource_property_get(session, resource_type, capability_name):
     query = (
