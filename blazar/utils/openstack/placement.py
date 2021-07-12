@@ -12,8 +12,8 @@
 # limitations under the License.
 
 from keystoneauth1 import adapter
-from keystoneauth1.identity import v3
 from keystoneauth1 import session
+from keystoneauth1.identity import v3
 from oslo_config import cfg
 
 from blazar import context
