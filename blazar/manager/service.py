@@ -805,6 +805,7 @@ class ManagerService(service_utils.RPCServer):
             resource_type = reservation['resource_type']
             res['start_date'] = lease['start_date']
             res['end_date'] = lease['end_date']
+            res['project_id'] = lease['project_id']
 
             if resource_type not in self.plugins:
                 raise exceptions.UnsupportedResourceType(

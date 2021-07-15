@@ -149,6 +149,11 @@ class BasePlugin(object):
                       unsupported)
         return options
 
+    def is_project_allowed(self, project_id, resource):
+        if "authorized_projects" in resource:
+            return project_id in resource["authorized_projects"]
+        return True
+
 
 @six.add_metaclass(abc.ABCMeta)
 class BaseMonitorPlugin():
