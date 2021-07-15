@@ -853,7 +853,8 @@ class ServiceTestCase(tests.TestCase):
                     'max': 3,
                     'resource_type': 'virtual:instance'
                 }
-            ]
+            ],
+            'project_id': u'e33c952e-6321-4ce6-93e3-c58d4925c5f8'
         }
         reservation_get_all = (
             self.patch(self.db_api, 'reservation_get_all_by_lease_id'))
@@ -1399,7 +1400,8 @@ class ServiceTestCase(tests.TestCase):
                     'max': 3,
                     'resource_type': 'virtual:instance'
                 }
-            ]
+            ],
+            'project_id': u'e33c952e-6321-4ce6-93e3-c58d4925c5f8'
         }
         reservation_get_all = (
             self.patch(self.db_api, 'reservation_get_all_by_lease_id'))
