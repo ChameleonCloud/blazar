@@ -15,21 +15,24 @@
 # under the License.
 
 import datetime
-from random import shuffle
+import re
 
+from oslo_config import cfg
+from oslo_utils import strutils
+from stevedore import named
+
+from blazar import status
 from blazar.db import api as db_api
 from blazar.db import exceptions as db_ex
 from blazar.db import utils as db_utils
 from blazar.manager import exceptions as manager_ex
 from blazar.plugins import base
 from blazar.plugins import devices as plugin
-from blazar import status
-from blazar.utils.openstack import placement
 from blazar.utils import plugins as plugins_utils
-from oslo_config import cfg
+from blazar.utils.openstack import placement
 from oslo_log import log as logging
-from oslo_utils import strutils
-from stevedore import named
+from random import shuffle
+
 
 plugin_opts = [
     cfg.StrOpt('before_end',
@@ -70,6 +73,30 @@ class DevicePlugin(base.BasePlugin):
         super(DevicePlugin, self).__init__()
         self.plugins = self._get_plugins()
         self.placement_client = placement.BlazarPlacementClient()
+        self._check_resource_providers()
+
+    def _check_resource_providers(self):
+        """
+        Check if there is a reservation provider for
+        all enrolled devices. Lazy create if not.
+        """
+        for blazar_device in db_api.device_list():
+            if not blazar_device['reservable']:
+                continue
+            name = blazar_device['name']
+            parent_rp = self.placement_client.get_resource_provider(
+                name)
+            reservation_rp = self.placement_client.get_reservation_provider(
+                name)
+            if not parent_rp:
+                LOG.warning("No resource provider found "
+                            "for blazar device {}".format(name))
+            elif not reservation_rp:
+                LOG.warning("No reservation provider found for blazar "
+                            "device {}. Auto-creating one. ".format(name))
+                rrp = self.placement_client.create_reservation_provider(name)
+                LOG.info(
+                    "Reservation provider {} has created.".format(rrp['name']))
 
     def _get_plugins(self):
         """Return dict of resource-plugin class pairs."""
