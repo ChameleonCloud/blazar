@@ -249,8 +249,13 @@ class DevicePlugin(base.BasePlugin):
 
     def get_device(self, device_id):
         device = db_api.device_get(device_id)
-        extra_capabilities = self._get_extra_capabilities(device_id)
-        if device is not None and extra_capabilities:
+        if device is None:
+            return device
+        return self.get_device_with_extra_capabilities(device)
+
+    def get_device_with_extra_capabilities(self, device):
+        extra_capabilities = self._get_extra_capabilities(device["id"])
+        if extra_capabilities:
             res = device.copy()
             res.update(extra_capabilities)
             return res
@@ -412,7 +417,7 @@ class DevicePlugin(base.BasePlugin):
         start_date = max(datetime.datetime.utcnow(), lease['start_date'])
         new_deviceids = self._matching_devices(
             device_reservation['resource_properties'],
-            '1-1', start_date, lease['end_date']
+            '1-1', start_date, lease['end_date'], lease['project_id']
         )
         if not new_deviceids:
             db_api.device_allocation_destroy(allocation['id'])
@@ -503,7 +508,8 @@ class DevicePlugin(base.BasePlugin):
             values['resource_properties'],
             values['count_range'],
             values['start_date'],
-            values['end_date']
+            values['end_date'],
+            values['project_id']
         )
 
         min_devices, _ = [int(n) for n in values['count_range'].split('-')]
@@ -549,7 +555,7 @@ class DevicePlugin(base.BasePlugin):
             values['on_start'] = 'default'
 
     def _matching_devices(self, resource_properties, count_range,
-                          start_date, end_date):
+                          start_date, end_date, project_id):
         """Return the matching devices (preferably not allocated)"""
         count_range = count_range.split('-')
         min_device = count_range[0]
@@ -567,6 +573,9 @@ class DevicePlugin(base.BasePlugin):
                 resource_properties)
         for device in db_api.device_get_all_by_queries(
                 filter_array):
+            device = self.get_device_with_extra_capabilities(device)
+            if not self.is_project_allowed(project_id, device):
+                continue
             if not db_api.device_allocation_get_all_by_values(
                     device_id=device['id']):
                 not_allocated_device_ids.append(device['id'])
@@ -620,7 +629,8 @@ class DevicePlugin(base.BasePlugin):
             device_ids = self._matching_devices(
                 resource_properties,
                 str(min_devices) + '-' + str(max_devices),
-                dates_after['start_date'], dates_after['end_date'])
+                dates_after['start_date'], dates_after['end_date'],
+                lease['project_id'])
             if len(device_ids) >= min_devices:
                 for device_id in device_ids:
                     db_api.device_allocation_create(

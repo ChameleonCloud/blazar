@@ -437,6 +437,7 @@ class ManagerService(service_utils.RPCServer):
                         reservation['lease_id'] = lease['id']
                         reservation['start_date'] = lease['start_date']
                         reservation['end_date'] = lease['end_date']
+                        reservation['project_id'] = lease['project_id']
                         self._create_reservation(reservation)
                 except Exception:
                     with save_and_reraise_exception():
@@ -786,6 +787,7 @@ class ManagerService(service_utils.RPCServer):
             resource_type = reservation['resource_type']
             res['start_date'] = lease['start_date']
             res['end_date'] = lease['end_date']
+            res['project_id'] = lease['project_id']
 
             if resource_type not in self.plugins:
                 raise exceptions.UnsupportedResourceType(
