@@ -150,8 +150,12 @@ class BasePlugin(object):
         return options
 
     def is_project_allowed(self, project_id, resource):
-        if "authorized_projects" in resource:
-            return project_id in resource["authorized_projects"]
+        # If this resource has the extra capability "authorized_projects"
+        if "authorized_projects" in resource and \
+                isinstance(resource["authorized_projects"], str):
+            # Parse the field as a CSV, and check the resulting list
+            authorized_projects = resource["authorized_projects"].split(",")
+            return project_id in authorized_projects
         return True
 
 

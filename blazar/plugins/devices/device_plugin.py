@@ -100,9 +100,6 @@ class DevicePlugin(base.BasePlugin):
 
     def reserve_resource(self, reservation_id, values):
         """Create reservation."""
-        reservation = db_api.reservation_get(reservation_id)
-        lease = db_api.lease_get(reservation["lease_id"])
-        values["project_id"] = lease["project_id"]
         device_ids = self.allocation_candidates(values)
 
         if not device_ids:

@@ -456,6 +456,7 @@ class ManagerService(service_utils.RPCServer):
                         reservation['lease_id'] = lease['id']
                         reservation['start_date'] = lease['start_date']
                         reservation['end_date'] = lease['end_date']
+                        reservation['project_id'] = lease['project_id']
                         self._create_reservation(reservation)
                 except Exception:
                     with save_and_reraise_exception():
