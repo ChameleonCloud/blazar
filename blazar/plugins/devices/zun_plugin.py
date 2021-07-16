@@ -88,12 +88,14 @@ class ZunPlugin(zun.ZunClientWrapper):
         return device['id']
 
     def cleanup_device(self, device):
-        for container in self.zun.containers.list(host=device['name']):
+        for container in self.zun.containers.list(all_projects=True,
+                                                  host=device['name']):
             try:
-                self.zun.containers.delete(container['uuid'])
+                self.zun.containers.delete(
+                    container.uuid, force=True, stop=True)
             except zun_ex.NotFound:
                 LOG.info('Could not find container %s, may have been deleted '
-                         'concurrently.', container['container_id'])
+                         'concurrently.', container.name)
             except Exception as e:
                 LOG.exception('Failed to delete %s: %s.',
-                              container['container_id'], str(e))
+                              container.name, str(e))
