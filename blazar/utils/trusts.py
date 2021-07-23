@@ -13,12 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import functools
-
 from oslo_config import cfg
 
 from blazar import context
 from blazar.utils.openstack import keystone
+import functools
+
 
 CONF = cfg.CONF
 
@@ -58,7 +58,9 @@ def create_ctx_from_trust(trust_id):
         project_id=session.get_project_id(),
         service_catalog=(
             ctx.service_catalog or
-            session.auth.get_auth_ref().service_catalog),
+            session.auth.get_auth_ref(
+                session=session
+            ).service_catalog.normalize_catalog()),
         request_id=ctx.request_id,
         global_request_id=ctx.global_request_id
     )

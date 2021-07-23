@@ -692,7 +692,11 @@ class ManagerService(service_utils.RPCServer):
         lease = self.get_lease(lease_id)
         allocations = self._existing_allocations(lease['reservations'])
         try:
-            self.enforcement.on_end(context.current(), lease, allocations)
+            # no rpc call with authentication context, i.e.
+            # context.current() doesn't work here.
+            # so need to get context from the lease trust.
+            self.enforcement.on_end(trusts.create_ctx_from_trust(
+                lease['trust_id']), lease, allocations)
         except Exception as e:
             LOG.error(e)
 
