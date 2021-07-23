@@ -469,6 +469,32 @@ class BlazarPlacementClient(object):
         project_id = project_id.upper().replace("-", "_")
         return "CUSTOM_RESERVATION_" + reserv_uuid + "_PROJECT_" + project_id
 
+    def _trait_exists(self, trait_name):
+        """Calls the placement API check if a trait exists.
+
+        :param trait: Name of the trait
+        :return: True if the trait exists
+                 or False if the trait doesn't exist.
+        :raise: TraitRetrievalFailed on error.
+        """
+
+        url = '/traits/%s' % trait_name
+        resp = self.get(url)
+        if resp.status_code == 204:
+            return True
+        elif resp.status_code == 404:
+            return False
+
+        msg = ("Failed to get trait %(name)s. "
+               "Got %(status_code)d: %(err_text)s.")
+        args = {
+            'name': trait_name,
+            'status_code': resp.status_code,
+            'err_text': resp.text,
+        }
+        LOG.error(msg, args)
+        raise exceptions.TraitRetrievalFailed(trait=trait_name)
+
     def create_trait(self, trait_name):
         """Calls the placement API to create a trait.
 
@@ -512,6 +538,16 @@ class BlazarPlacementClient(object):
         }
         LOG.error(msg, args)
         raise exceptions.TraitDeletionFailed(trait=trait_name)
+
+    def reservation_trait_exists(self, reserv_uuid, project_id):
+        """Check if the reservation trait exists.
+
+        :param reservation_uuid: The reservation uuid
+        :raises: TraitRetrievalFailed error.
+        """
+
+        return self._trait_exists(self._get_custom_reservation_trait_name(
+            reserv_uuid, project_id))
 
     def create_reservation_trait(self, reserv_uuid, project_id):
         """Create the reservation trait.

@@ -220,20 +220,30 @@ class DevicePlugin(base.BasePlugin):
         for allocation in allocations:
             db_api.device_allocation_destroy(allocation['id'])
 
+        # If a device lease fails to start, the reservation trait is never
+        # added to the parent resource provider. If that lease is deleted,
+        # deleting the trait fails because it does not exist. This case
+        # will be handled by logging a message rather than failing.
+        reservation_id = device_reservation['reservation_id']
+        project_id = lease['project_id']
+        if not self.placement_client.reservation_trait_exists(
+                reservation_id, project_id):
+            LOG.warning("Reservation trait doesn't exist for reservation {0} "
+                        "and project {1}".format(reservation_id, project_id))
+            return
         resource_providers = self.placement_client. \
-            get_reservation_trait_resource_providers(
-                device_reservation['reservation_id'],
-                lease['project_id'])
+            get_reservation_trait_resource_providers(reservation_id,
+                                                     project_id)
         for rp in resource_providers:
             self.placement_client. \
                 dissociate_reservation_trait_with_resource_provider(
                     rp['uuid'],
-                    device_reservation['reservation_id'],
-                    lease['project_id'])
+                    reservation_id,
+                    project_id)
             device = self.get_device(rp['parent_provider_uuid'])
             self.plugins[device['device_driver']].cleanup_device(device)
         self.placement_client.delete_reservation_trait(
-            device_reservation['reservation_id'], lease['project_id'])
+            reservation_id, project_id)
 
     def _get_extra_capabilities(self, device_id):
         extra_capabilities = {}

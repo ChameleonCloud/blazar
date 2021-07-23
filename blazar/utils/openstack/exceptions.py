@@ -68,6 +68,10 @@ class NeutronUsesFloatingIP(exceptions.InvalidInput):
                 "or gateway_ip in subnet %(subnet)s .")
 
 
+class TraitRetrievalFailed(exceptions.BlazarException):
+    msg_fmt = _("Failed to get trait %(trait)s")
+
+
 class TraitCreationFailed(exceptions.BlazarException):
     msg_fmt = _("Failed to create trait '%(trait)s'")
 
