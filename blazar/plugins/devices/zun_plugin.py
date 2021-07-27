@@ -88,8 +88,26 @@ class ZunPlugin(zun.ZunClientWrapper):
         return device['id']
 
     def cleanup_device(self, device):
-        for container in self.zun.containers.list(all_projects=True,
-                                                  host=device['name']):
+        try:
+            # TODO(jason): zunclient is broken when passing both all_projects
+            # and 'host' as a keyword argument; the parameters are encoded
+            # like /v1/containers/?all_projects=1?host=..., which is malformed.
+            # Passing in 'host' to the list() function would however probably
+            # be more efficient.
+            host_containers = [
+                container for container in
+                self.zun.containers.list(all_projects=True)
+                if container.host == device['name']
+            ]
+        except zun_ex.ClientException as exc:
+            LOG.error((
+                'During lease teardown, failed to enumerate containers. '
+                'Containers may need to be manually cleaned up on %s.'
+                'Error: %s'
+            ), device['name'], exc)
+            host_containers = []
+
+        for container in host_containers:
             try:
                 self.zun.containers.delete(
                     container.uuid, force=True, stop=True)
