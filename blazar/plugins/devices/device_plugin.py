@@ -241,7 +241,13 @@ class DevicePlugin(base.BasePlugin):
                     reservation_id,
                     project_id)
             device = self.get_device(rp['parent_provider_uuid'])
-            self.plugins[device['device_driver']].cleanup_device(device)
+            if device:
+                self.plugins[device['device_driver']].cleanup_device(device)
+            else:
+                LOG.warning(
+                    'Failed to retrieve device from resource provider %s',
+                    rp['parent_provider_uuid']
+                )
         self.placement_client.delete_reservation_trait(
             reservation_id, project_id)
 
