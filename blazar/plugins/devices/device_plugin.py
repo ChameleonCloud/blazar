@@ -25,10 +25,12 @@ from blazar import status
 from blazar.db import api as db_api
 from blazar.db import exceptions as db_ex
 from blazar.db import utils as db_utils
+from blazar.i18n import _
 from blazar.manager import exceptions as manager_ex
 from blazar.plugins import base
 from blazar.plugins import devices as plugin
 from blazar.utils import plugins as plugins_utils
+from blazar.utils.openstack import keystone
 from blazar.utils.openstack import placement
 from oslo_log import log as logging
 from random import shuffle
@@ -465,8 +467,34 @@ class DevicePlugin(base.BasePlugin):
         options['detail'] = detail
         devices_allocations = self.query_device_allocations(devices_id_list,
                                                             **options)
+
+        for _, allocs in devices_allocations.items():
+            for alloc in allocs:
+                alloc["extras"] = []
+        self.get_extra_allocation_info(devices_allocations)
+
         return [{"resource_id": device, "reservations": allocs}
                 for device, allocs in devices_allocations.items()]
+
+    def get_extra_allocation_info(self, devices_allocations):
+        # TODO Get a config option here
+        ids = []
+        for device, allocations in devices_allocations.items():
+            for alloc in allocations:
+                ids.append(alloc["lease_id"])
+        items = db_utils.get_user_ids_for_lease_ids(ids)
+        keystoneclient = keystone.BlazarKeystoneClient()
+        lease_to_name = dict()
+        for lease_id, user_id in items:
+            user = keystoneclient.users.get(user_id)
+            lease_to_name[lease_id] = user.name
+
+        for device, allocations in devices_allocations.items():
+            for alloc in allocations:
+                alloc["extras"] = [
+                    (_("Reserved by"), lease_to_name[alloc["lease_id"]]),
+                ]
+
 
     def get_allocations(self, device_id, query, detail=False):
         options = self.get_query_options(query, QUERY_TYPE_ALLOCATION)

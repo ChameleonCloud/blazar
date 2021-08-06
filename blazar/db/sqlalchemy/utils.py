@@ -312,6 +312,15 @@ def get_reservation_allocations_by_device_ids(device_ids, start_date, end_date,
     return reservations
 
 
+def get_user_ids_for_lease_ids(lease_ids):
+    session = get_session()
+
+    leases_query = (session.query(models.Lease.id, models.Lease.user_id)
+        .filter(models.Lease.id.in_(lease_ids)))
+
+    return leases_query.all()
+
+
 def get_plugin_reservation(resource_type, resource_id):
     if resource_type == host_plugin.RESOURCE_TYPE:
         return api.host_reservation_get(resource_id)
