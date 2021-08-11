@@ -13,7 +13,6 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-
 from oslo_config import cfg
 
 from blazar.db import api as db_api
@@ -23,7 +22,6 @@ from blazar.utils.openstack import placement
 from blazar.utils.openstack import zun
 from oslo_log import log as logging
 from zunclient import exceptions as zun_ex
-
 
 CONF = cfg.CONF
 LOG = logging.getLogger(__name__)
@@ -117,3 +115,23 @@ class ZunPlugin(zun.ZunClientWrapper):
             except Exception as e:
                 LOG.exception('Failed to delete %s: %s.',
                               container.name, str(e))
+
+    def poll_resource_failures(self, devices):
+        failed_devices = []
+        recovered_devices = []
+
+        zun_compute_services = {s.host: s for s in self.zun.services.list()}
+        zun_devices = {d["name"]: d for d in devices
+                       if d.get("device_driver") == self.device_driver}
+
+        for device_name, device in zun_devices.items():
+            is_reservable = device.get("reservable")
+            cs = zun_compute_services.get(device_name)
+            if is_reservable and cs and \
+               cs.state == 'down' or cs.disabled:
+                    failed_devices.append(device)
+            if not is_reservable and cs and \
+               cs.state == 'up' and not cs.disabled:
+                    recovered_devices.append(device)
+
+        return failed_devices, recovered_devices

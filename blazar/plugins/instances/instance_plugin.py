@@ -12,28 +12,30 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-import collections
 import datetime
-import retrying
 
 from novaclient import exceptions as nova_exceptions
 from oslo_config import cfg
-from oslo_log import log as logging
 from oslo_utils import strutils
 from oslo_utils.strutils import bool_from_string
+import six
 
 from blazar import context
+from blazar import status
 from blazar.db import api as db_api
 from blazar.db import utils as db_utils
 from blazar.manager import exceptions as mgr_exceptions
 from blazar.plugins import base
 from blazar.plugins import instances as plugin
 from blazar.plugins import oshosts
-from blazar import status
+from blazar.utils import plugins as plugins_utils
 from blazar.utils.openstack import exceptions as openstack_ex
 from blazar.utils.openstack import nova
 from blazar.utils.openstack import placement
-from blazar.utils import plugins as plugins_utils
+import collections
+from oslo_log import log as logging
+import retrying
+
 
 CONF = cfg.CONF
 LOG = logging.getLogger(__name__)
@@ -44,6 +46,8 @@ INSTANCE_DELETION_TIMEOUT = 10 * 60 * 1000  # 10 minutes
 
 NONE_VALUES = ('None', 'none', None)
 QUERY_TYPE_ALLOCATION = 'allocation'
+
+MONITOR_ARGS = {"resource_type": plugin.RESOURCE_TYPE}
 
 
 class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
@@ -58,8 +62,13 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
     def __init__(self):
         super(VirtualInstancePlugin, self).__init__()
         self.freepool_name = CONF.nova.aggregate_freepool_name
-        self.monitor = oshosts.host_plugin.PhysicalHostMonitorPlugin()
+        self.monitor = oshosts.host_plugin.PhysicalHostMonitorPlugin(
+            **MONITOR_ARGS
+            )
         self.monitor.register_healing_handler(self.heal_reservations)
+        self.monitor.register_reallocater(
+            oshosts.host_plugin.PhysicalHostPlugin._reallocate
+            )
         self.placement_client = placement.BlazarPlacementClient()
 
     def filter_hosts_by_reservation(self, hosts, start_date, end_date,

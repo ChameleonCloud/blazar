@@ -14,10 +14,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from collections import defaultdict
 import sys
-
-import sqlalchemy as sa
 
 from blazar.db.sqlalchemy import api
 from blazar.db.sqlalchemy import facade_wrapper
@@ -25,6 +22,9 @@ from blazar.db.sqlalchemy import models
 from blazar.manager import exceptions as mgr_exceptions
 from blazar.plugins import instances as instance_plugin
 from blazar.plugins import oshosts as host_plugin
+from collections import defaultdict
+import sqlalchemy as sa
+
 
 get_session = facade_wrapper.get_session
 
@@ -139,6 +139,19 @@ def get_reservations_by_device_id(device_id, start_date, end_date):
              .join(models.DeviceAllocation)
              .filter(models.DeviceAllocation.deleted.is_(None))
              .filter(models.DeviceAllocation.device_id == device_id)
+             .filter(sa.and_(border0, border1)))
+    return query.all()
+
+
+def get_reservations_by_device_ids(device_ids, start_date, end_date):
+    session = get_session()
+    border0 = start_date <= models.Lease.end_date
+    border1 = models.Lease.start_date <= end_date
+    query = (session.query(models.Reservation).join(models.Lease)
+             .join(models.DeviceAllocation)
+             .filter(models.DeviceAllocation.deleted.is_(None))
+             .filter(models.DeviceAllocation.device_id
+                     .in_(device_ids))
              .filter(sa.and_(border0, border1)))
     return query.all()
 

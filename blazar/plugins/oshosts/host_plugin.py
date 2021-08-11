@@ -15,27 +15,29 @@
 # under the License.
 
 import datetime
-from random import shuffle
-from uuid import UUID
 
 from novaclient import exceptions as nova_exceptions
 from oslo_config import cfg
-from oslo_log import log as logging
 from oslo_utils import strutils
 
 from blazar import context
+from blazar import status
 from blazar.db import api as db_api
 from blazar.db import exceptions as db_ex
 from blazar.db import utils as db_utils
 from blazar.manager import exceptions as manager_ex
 from blazar.plugins import base
+from blazar.plugins import monitor
 from blazar.plugins import oshosts as plugin
-from blazar import status
+from blazar.utils import plugins as plugins_utils
 from blazar.utils.openstack import heat
 from blazar.utils.openstack import ironic
 from blazar.utils.openstack import nova
 from blazar.utils.openstack import placement
-from blazar.utils import plugins as plugins_utils
+from oslo_log import log as logging
+from random import shuffle
+from uuid import UUID
+
 
 plugin_opts = [
     cfg.StrOpt('blazar_az_prefix',
@@ -45,30 +47,9 @@ plugin_opts = [
                default='',
                help='Actions which we will be taken before the end of '
                     'the lease'),
-    cfg.BoolOpt('enable_notification_monitor',
-                default=False,
-                help='Enable notification-based resource monitoring. '
-                     'If it is enabled, the blazar-manager monitors states of '
-                     'compute hosts by subscribing to notifications of Nova.'),
-    cfg.ListOpt('notification_topics',
-                default=['notifications', 'versioned_notifications'],
-                help='Notification topics to subscribe to.'),
-    cfg.BoolOpt('enable_polling_monitor',
-                default=False,
-                help='Enable polling-based resource monitoring. '
-                     'If it is enabled, the blazar-manager monitors states '
-                     'of compute hosts by polling the Nova API.'),
-    cfg.IntOpt('polling_interval',
-               default=60,
-               min=1,
-               help='Interval (seconds) of polling for health checking.'),
-    cfg.IntOpt('healing_interval',
-               default=60,
-               min=0,
-               help='Interval (minutes) of reservation healing. '
-                    'If 0 is specified, the interval is infinite and all the '
-                    'reservations in the future is healed at one time.'),
 ]
+
+plugin_opts.extend(monitor.monitor_opts)
 
 CONF = cfg.CONF
 CONF.register_opts(plugin_opts, group=plugin.RESOURCE_TYPE)
@@ -79,6 +60,8 @@ before_end_options = ['', 'snapshot', 'default', 'email']
 on_start_options = ['', 'default', 'orchestration']
 
 QUERY_TYPE_ALLOCATION = 'allocation'
+
+MONITOR_ARGS = {"resource_type": plugin.RESOURCE_TYPE}
 
 
 class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
@@ -94,8 +77,8 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
 
     def __init__(self):
         super(PhysicalHostPlugin, self).__init__()
-        self.monitor = PhysicalHostMonitorPlugin()
-        self.monitor.register_healing_handler(self.heal_reservations)
+        self.monitor = PhysicalHostMonitorPlugin(**MONITOR_ARGS)
+        self.monitor.register_reallocater(self._reallocate)
         self.placement_client = placement.BlazarPlacementClient()
 
     def reserve_resource(self, reservation_id, values):
@@ -240,45 +223,6 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             pool.delete(host_reservation['aggregate_id'])
         except manager_ex.AggregateNotFound:
             pass
-
-    def heal_reservations(self, failed_resources, interval_begin,
-                          interval_end):
-        """Heal reservations which suffer from resource failures.
-
-        :param failed_resources: a list of failed hosts.
-        :param interval_begin: start date of the period to heal.
-        :param interval_end: end date of the period to heal.
-        :return: a dictionary of {reservation id: flags to update}
-                 e.g. {'de27786d-bd96-46bb-8363-19c13b2c6657':
-                       {'missing_resources': True}}
-        """
-        reservation_flags = {}
-
-        host_ids = [h['id'] for h in failed_resources]
-        reservations = db_utils.get_reservations_by_host_ids(host_ids,
-                                                             interval_begin,
-                                                             interval_end)
-
-        for reservation in reservations:
-            if reservation['resource_type'] != plugin.RESOURCE_TYPE:
-                continue
-
-            for allocation in [alloc for alloc
-                               in reservation['computehost_allocations']
-                               if alloc['compute_host_id'] in host_ids]:
-                if self._reallocate(allocation):
-                    if reservation['status'] == status.reservation.ACTIVE:
-                        if reservation['id'] not in reservation_flags:
-                            reservation_flags[reservation['id']] = {}
-                        reservation_flags[reservation['id']].update(
-                            {'resources_changed': True})
-                else:
-                    if reservation['id'] not in reservation_flags:
-                        reservation_flags[reservation['id']] = {}
-                    reservation_flags[reservation['id']].update(
-                        {'missing_resources': True})
-
-        return reservation_flags
 
     def _reallocate(self, allocation):
         """Allocate an alternative host.
@@ -831,42 +775,31 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             return db_api.host_list()
 
 
-class PhysicalHostMonitorPlugin(base.BaseMonitorPlugin,
+class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                                 nova.NovaClientWrapper):
     """Monitor plugin for physical host resource."""
 
-    # Singleton design pattern
-    _instance = None
+    def __new__(cls, *args, **kwargs):
+        return super(PhysicalHostMonitorPlugin, cls).__new__(cls, *args,
+                                                             **kwargs)
 
-    def __new__(cls):
-        if not cls._instance:
-            cls._instance = super(PhysicalHostMonitorPlugin, cls).__new__(cls)
-            cls._instance.healing_handlers = []
-            super(PhysicalHostMonitorPlugin, cls._instance).__init__()
-        return cls._instance
+    def filter_allocations(self, reservation, host_ids):
+        return [alloc for alloc
+                in reservation['computehost_allocations']
+                if alloc['compute_host_id'] in host_ids]
 
-    def __init__(self):
-        """Do nothing.
+    def get_reservations_by_resource_ids(self, host_ids,
+                                         interval_begin, interval_end):
+        return db_utils.get_reservations_by_host_ids(host_ids,
+                                                     interval_begin,
+                                                     interval_end)
 
-        This class uses the Singleton design pattern and an instance of this
-        class is generated and initialized in __new__().
-        """
-        pass
-
-    def register_healing_handler(self, handler):
-        self.healing_handlers.append(handler)
-
-    def is_notification_enabled(self):
-        """Check if the notification monitor is enabled."""
-        return CONF[plugin.RESOURCE_TYPE].enable_notification_monitor
+    def get_unreservable_resourses(self):
+        return db_api.unreservable_host_get_all_by_queries([])
 
     def get_notification_event_types(self):
         """Get event types of notification messages to handle."""
         return ['service.update']
-
-    def get_notification_topics(self):
-        """Get topics of notification to subscribe to."""
-        return CONF[plugin.RESOURCE_TYPE].notification_topics
 
     def notification_callback(self, event_type, payload):
         """Handle a notification message.
@@ -903,37 +836,12 @@ class PhysicalHostMonitorPlugin(base.BaseMonitorPlugin,
 
         return reservation_flags
 
-    def is_polling_enabled(self):
-        """Check if the polling monitor is enabled."""
-        return CONF[plugin.RESOURCE_TYPE].enable_polling_monitor
+    def set_reservable(self, resource, is_reservable):
+        db_api.host_update(resource["id"], {"reservable": is_reservable})
+        LOG.warn('%s %s.', resource["hypervisor_hostname"],
+                 "recovered" if is_reservable else "failed")
 
-    def get_polling_interval(self):
-        """Get interval of polling."""
-        return CONF[plugin.RESOURCE_TYPE].polling_interval
-
-    def poll(self):
-        """Detect and handle resource failures.
-
-        :return: a dictionary of {reservation id: flags to update}
-                 e.g. {'de27786d-bd96-46bb-8363-19c13b2c6657':
-                 {'missing_resources': True}}
-        """
-        LOG.trace('Poll...')
-        reservation_flags = {}
-
-        failed_hosts, recovered_hosts = self._poll_resource_failures()
-        if failed_hosts:
-            for host in failed_hosts:
-                LOG.warn('%s failed.', host['hypervisor_hostname'])
-            reservation_flags = self._handle_failures(failed_hosts)
-        if recovered_hosts:
-            for host in recovered_hosts:
-                db_api.host_update(host['id'], {'reservable': True})
-                LOG.warn('%s recovered.', host['hypervisor_hostname'])
-
-        return reservation_flags
-
-    def _poll_resource_failures(self):
+    def poll_resource_failures(self):
         """Check health of hosts by calling Nova Hypervisors API.
 
         :return: a list of failed hosts, a list of recovered hosts.
@@ -1001,50 +909,3 @@ class PhysicalHostMonitorPlugin(base.BaseMonitorPlugin,
             LOG.exception('Skipping health check. %s', str(e))
 
         return failed_hosts, recovered_hosts
-
-    def _handle_failures(self, failed_hosts):
-        """Handle resource failures.
-
-        :param failed_hosts: a list of failed hosts.
-        :return: a dictionary of {reservation id: flags to update}
-                 e.g. {'de27786d-bd96-46bb-8363-19c13b2c6657':
-                 {'missing_resources': True}}
-        """
-
-        # Update the computehosts table
-        for host in failed_hosts:
-            try:
-                db_api.host_update(host['id'], {'reservable': False})
-            except Exception as e:
-                LOG.exception('Failed to update %s. %s',
-                              host['hypervisor_hostname'], str(e))
-
-        # Heal related reservations
-        return self.heal()
-
-    def get_healing_interval(self):
-        """Get interval of reservation healing in minutes."""
-        return CONF[plugin.RESOURCE_TYPE].healing_interval
-
-    def heal(self):
-        """Heal suffering reservations in the next healing interval.
-
-        :return: a dictionary of {reservation id: flags to update}
-        """
-        reservation_flags = {}
-        hosts = db_api.unreservable_host_get_all_by_queries([])
-
-        interval_begin = datetime.datetime.utcnow()
-        interval = self.get_healing_interval()
-        if interval == 0:
-            interval_end = datetime.date.max
-        else:
-            interval_end = interval_begin + datetime.timedelta(
-                minutes=interval)
-
-        for handler in self.healing_handlers:
-            reservation_flags.update(handler(hosts,
-                                             interval_begin,
-                                             interval_end))
-
-        return reservation_flags
