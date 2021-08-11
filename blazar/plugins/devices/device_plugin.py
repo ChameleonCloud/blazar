@@ -25,7 +25,6 @@ from blazar import status
 from blazar.db import api as db_api
 from blazar.db import exceptions as db_ex
 from blazar.db import utils as db_utils
-from blazar.i18n import _
 from blazar.manager import exceptions as manager_ex
 from blazar.plugins import base
 from blazar.plugins import devices as plugin
@@ -466,9 +465,7 @@ class DevicePlugin(base.BasePlugin):
         options['detail'] = detail
         devices_allocations = self.query_device_allocations(devices_id_list,
                                                             **options)
-
         self.add_extra_allocation_info(devices_allocations)
-
         return [{"resource_id": device, "reservations": allocs}
                 for device, allocs in devices_allocations.items()]
 
