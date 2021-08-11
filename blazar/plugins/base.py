@@ -17,6 +17,9 @@ import abc
 import collections
 
 from blazar.db import api as db_api
+from blazar.db import utils as db_utils
+from blazar.i18n import _
+from blazar.utils.openstack import keystone
 from oslo_config import cfg
 from oslo_log import log as logging
 
@@ -156,6 +159,29 @@ class BasePlugin(object, metaclass=abc.ABCMeta):
             return project_id in authorized_projects
         return True
 
+    def add_extra_allocation_info(self, resource_allocations):
+        """Add extra information to allocations (to show in calendar)"""
+        extras = CONF.manager.extras
+        for allocs in resource_allocations.values():
+            for alloc in allocs:
+                alloc["extras"] = []
+        if "name" in extras:
+            ids = []
+            for allocations in resource_allocations.values():
+                for alloc in allocations:
+                    ids.append(alloc["lease_id"])
+            items = db_utils.get_user_ids_for_lease_ids(ids)
+            keystoneclient = keystone.BlazarKeystoneClient()
+            lease_to_name = dict()
+            for lease_id, user_id in items:
+                user = keystoneclient.users.get(user_id)
+                lease_to_name[lease_id] = user.name
+
+            for allocations in resource_allocations.values():
+                for alloc in allocations:
+                    alloc["extras"] = [
+                        (_("Reserved by"), lease_to_name[alloc["lease_id"]]),
+                    ]
 
 class BaseMonitorPlugin(metaclass=abc.ABCMeta):
     """Base class of monitor plugin."""
