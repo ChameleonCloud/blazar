@@ -18,7 +18,6 @@ import collections
 
 from blazar.db import api as db_api
 from blazar.db import utils as db_utils
-from blazar.i18n import _
 from blazar.utils.openstack import keystone
 from oslo_config import cfg
 from oslo_log import log as logging
@@ -164,7 +163,7 @@ class BasePlugin(object, metaclass=abc.ABCMeta):
         extras = CONF.manager.extras
         for allocs in resource_allocations.values():
             for alloc in allocs:
-                alloc["extras"] = []
+                alloc["extras"] = {}
         if "name" in extras:
             ids = []
             for allocations in resource_allocations.values():
@@ -172,16 +171,16 @@ class BasePlugin(object, metaclass=abc.ABCMeta):
                     ids.append(alloc["lease_id"])
             items = db_utils.get_user_ids_for_lease_ids(ids)
             keystoneclient = keystone.BlazarKeystoneClient()
+            users = keystoneclient.users.list()
+            user_map = { user.id: user for user in users }
             lease_to_name = dict()
             for lease_id, user_id in items:
-                user = keystoneclient.users.get(user_id)
+                user = user_map[user_id]
                 lease_to_name[lease_id] = user.name
 
             for allocations in resource_allocations.values():
                 for alloc in allocations:
-                    alloc["extras"] = [
-                        (_("Reserved by"), lease_to_name[alloc["lease_id"]]),
-                    ]
+                    alloc["extras"]["name"] = lease_to_name[alloc["lease_id"]]
 
 class BaseMonitorPlugin(metaclass=abc.ABCMeta):
     """Base class of monitor plugin."""
