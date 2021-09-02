@@ -162,11 +162,11 @@ class BasePlugin(object):
 
     def add_extra_allocation_info(self, resource_allocations):
         """Add extra information to allocations (to show in calendar)"""
-        extras = CONF.manager.extras
+        extras = CONF.api.allocation_extras
         for allocs in resource_allocations.values():
             for alloc in allocs:
                 alloc["extras"] = {}
-        if "name" in extras:
+        if "user_name" in extras:
             ids = []
             for allocations in resource_allocations.values():
                 for alloc in allocations:
@@ -182,7 +182,7 @@ class BasePlugin(object):
 
             for allocations in resource_allocations.values():
                 for alloc in allocations:
-                    alloc["extras"]["name"] = lease_to_name[alloc["lease_id"]]
+                    alloc["extras"]["user_name"] = lease_to_name[alloc["lease_id"]]
 
 @six.add_metaclass(abc.ABCMeta)
 class BaseMonitorPlugin():

@@ -53,9 +53,6 @@ manager_opts = [
                min=0,
                max=50,
                help='Number of times to retry an event action.'),
-    cfg.ListOpt('extras',
-                default=[],
-                help='What extra information to include with allocations.'),
 ]
 
 CONF = cfg.CONF
