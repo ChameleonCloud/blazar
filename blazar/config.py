@@ -88,6 +88,11 @@ CONF.register_cli_opts(cli_opts)
 CONF.register_opts(os_opts)
 CONF.register_opts(api_opts)
 CONF.register_opts(lease_opts)
+CONF.register_opts([
+    cfg.ListOpt('allocation_extras',
+                default=[],
+                help='What extra information to include with allocations.'),
+], 'api')
 logging.register_options(cfg.CONF)
 
 
