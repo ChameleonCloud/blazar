@@ -718,6 +718,7 @@ class DevicePlugin(base.BasePlugin):
         return allocs_to_remove
 
     def _filter_devices_by_properties(self, resource_properties):
+        filter = []
         if resource_properties:
             filter += plugins_utils.convert_requirements(resource_properties)
         if filter:
