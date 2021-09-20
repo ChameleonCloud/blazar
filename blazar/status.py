@@ -213,20 +213,18 @@ class LeaseStatus(BaseStatus):
                     LOG.debug('Status of lease %s changed from %s to %s.',
                               lease_id, original_status, transition)
                 else:
-                    LOG.warn('Aborting %s. '
-                             'Invalid lease status transition from %s to %s.',
-                             func.__name__, original_status,
-                             transition)
+                    LOG.warning('Aborting %s. '
+                                'Invalid lease status transition '
+                                'from %s to %s.',
+                                func.__name__, original_status,
+                                transition)
                     raise exceptions.InvalidStatus
 
                 # Executing the wrapped function
                 try:
                     result = func(*args, **kwargs)
                 except Exception as e:
-                    is_non_fatal = any(
-                        [isinstance(e, non_fatal_type)
-                         for non_fatal_type in non_fatal_exceptions])
-                    if is_non_fatal:
+                    if type(e) in non_fatal_exceptions:
                         LOG.exception('Non-fatal exception during transition '
                                       'of lease %s', lease_id)
                         db_api.lease_update(lease_id,
