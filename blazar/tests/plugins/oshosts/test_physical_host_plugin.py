@@ -68,7 +68,7 @@ class PhysicalHostPluginSetupOnlyTestCase(tests.TestCase):
     def test__get_extra_capabilities_with_values(self):
         ComputeHostExtraCapability = collections.namedtuple(
             'ComputeHostExtraCapability',
-            ['id', 'capability_id', 'capability_value', 'computehost_id'])
+            ['id', 'property_id', 'capability_value', 'computehost_id'])
         self.db_host_extra_capability_get_all_per_host.return_value = [
             (ComputeHostExtraCapability(1, 'foo', 'bar', 1), 'foo'),
             (ComputeHostExtraCapability(2, 'buzz', 'word', 1), 'buzz')]
@@ -219,7 +219,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         # NOTE(sbauza): 'id' will be pop'd, we need to keep track of it
         fake_request = fake_host.copy()
         fake_capa = {'computehost_id': '1',
-                     'capability_name': 'foo',
+                     'property_name': 'foo',
                      'capability_value': 'bar',
                      }
         self.get_extra_capabilities.return_value = {'foo': 'bar'}
@@ -338,7 +338,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
                                                  host_values)
         self.db_host_extra_capability_create.assert_called_once_with({
             'computehost_id': '1',
-            'capability_name': 'qux',
+            'property_name': 'qux',
             'capability_value': 'word'
         })
 

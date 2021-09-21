@@ -188,21 +188,21 @@ class Event(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
         return super(Event, self).to_dict()
 
 
-class ExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
-    """Defines an extra capability by resource type."""
+class ResourceProperty(mb.BlazarBase):
+    """Defines an resource property by resource type."""
 
-    __tablename__ = 'extra_capabilities'
+    __tablename__ = 'resource_properties'
 
     id = _id_column()
     resource_type = sa.Column(sa.String(255), nullable=False)
-    capability_name = sa.Column(sa.String(255), nullable=False)
+    property_name = sa.Column(sa.String(255), nullable=False)
     private = sa.Column(sa.Boolean, nullable=False,
                         server_default=sa.false())
 
-    __table_args__ = (sa.UniqueConstraint('resource_type', 'capability_name'),)
+    __table_args__ = (sa.UniqueConstraint('resource_type', 'property_name'),)
 
     def to_dict(self):
-        return super(ExtraCapability, self).to_dict()
+        return super(ResourceProperty, self).to_dict()
 
 
 class ComputeHostReservation(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
@@ -304,9 +304,9 @@ class ComputeHostExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
 
     id = _id_column()
     computehost_id = sa.Column(sa.String(36), sa.ForeignKey('computehosts.id'))
-    capability_id = sa.Column(sa.String(255),
-                              sa.ForeignKey('extra_capabilities.id'),
-                              nullable=False)
+    property_id = sa.Column(sa.String(36),
+                            sa.ForeignKey('resource_properties.id'),
+                            nullable=False)
     capability_value = sa.Column(MediumText(), nullable=False)
 
     def to_dict(self):
@@ -449,9 +449,9 @@ class NetworkSegmentExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     id = _id_column()
     network_id = sa.Column(sa.String(36), sa.ForeignKey('network_segments.id'),
                            nullable=False)
-    capability_id = sa.Column(sa.String(255),
-                              sa.ForeignKey('extra_capabilities.id'),
-                              nullable=False)
+    property_id = sa.Column(sa.String(36),
+                            sa.ForeignKey('resource_properties.id'),
+                            nullable=False)
     capability_value = sa.Column(MediumText(), nullable=False)
 
     def to_dict(self):
@@ -534,9 +534,9 @@ class DeviceExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     id = _id_column()
     device_id = sa.Column(sa.String(36), sa.ForeignKey('devices.id'),
                           nullable=False)
-    capability_id = sa.Column(sa.String(255),
-                              sa.ForeignKey('extra_capabilities.id'),
-                              nullable=False)
+    property_id = sa.Column(sa.String(36),
+                            sa.ForeignKey('resource_properties.id'),
+                            nullable=False)
     capability_value = sa.Column(MediumText(), nullable=False)
 
     def to_dict(self):

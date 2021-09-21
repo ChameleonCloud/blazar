@@ -103,7 +103,7 @@ class API(object):
         """List resource properties for hosts."""
         return self.plugin.list_resource_properties(query)
 
-    @policy.authorize('oshosts', 'patch_resource_properties')
+    @policy.authorize('oshosts', 'update_resource_properties')
     def update_resource_property(self, property_name, data):
         """Update a host resource property."""
         return self.plugin.update_resource_property(property_name, data)

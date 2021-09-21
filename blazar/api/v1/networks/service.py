@@ -99,7 +99,7 @@ class API(object):
         """List resource properties for networks."""
         return self.plugin.list_resource_properties(query)
 
-    @policy.authorize('networks', 'patch_resource_properties')
+    @policy.authorize('networks', 'update_resource_properties')
     def update_resource_property(self, property_name, data):
         """Update a network resource property."""
         return self.plugin.update_resource_property(property_name, data)
