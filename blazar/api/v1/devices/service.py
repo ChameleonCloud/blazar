@@ -104,7 +104,7 @@ class API(object):
         """List resource properties for devices."""
         return self.plugin.list_resource_properties(query)
 
-    @policy.authorize('devices', 'patch_resource_properties')
+    @policy.authorize('devices', 'update_resource_properties')
     def update_resource_property(self, property_name, data):
         """Update a device resource property."""
         return self.plugin.update_resource_property(property_name, data)

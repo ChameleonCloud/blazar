@@ -103,7 +103,7 @@ oshosts_policies = [
         ]
     ),
     policy.DocumentedRuleDefault(
-        name=POLICY_ROOT % 'patch_resource_properties',
+        name=POLICY_ROOT % 'update_resource_properties',
         check_str=base.RULE_ADMIN,
         description='Policy rule for Resource Properties API.',
         operations=[

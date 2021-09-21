@@ -16,6 +16,8 @@
 import abc
 import collections
 
+from blazar import context
+from blazar import policy
 from blazar.db import api as db_api
 from blazar.db import utils as db_utils
 from blazar.utils.openstack import keystone
@@ -104,12 +106,16 @@ class BasePlugin(object, metaclass=abc.ABCMeta):
 
     def list_resource_properties(self, query):
         detail = False if not query else query.get('detail', False)
+        all_properties = False if not query else query.get('all', False)
         resource_properties = collections.defaultdict(list)
+
+        include_private = all_properties and policy.enforce(
+            context.current(), 'admin', {}, do_raise=False)
 
         for name, private, value in db_api.resource_properties_list(
                 self.resource_type):
 
-            if not private:
+            if include_private or not private:
                 resource_properties[name].append(value)
 
         if detail:
