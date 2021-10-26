@@ -604,7 +604,7 @@ class DevicePlugin(base.BasePlugin):
         if resource_properties:
             filter_array += plugins_utils.convert_requirements(
                 resource_properties)
-        for device in db_api.device_get_all_by_queries(
+        for device in db_api.reservable_device_get_all_by_queries(
                 filter_array):
             device = self.get_device_with_extra_capabilities(device)
             if not self.is_project_allowed(project_id, device):
