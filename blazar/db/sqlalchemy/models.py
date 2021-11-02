@@ -128,6 +128,16 @@ class Reservation(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
                                       cascade="all,delete",
                                       backref='reservation',
                                       lazy='joined')
+    resource_reservation = relationship('ResourceReservation',
+                                      uselist=False,
+                                      cascade="all,delete",
+                                      backref='reservation',
+                                      lazy='joined')
+    resource_allocations = relationship('ResourceAllocation',
+                                      uselist=True,
+                                      cascade="all,delete",
+                                      backref='reservation',
+                                      lazy='joined')
 
     def to_dict(self):
         d = super(Reservation, self).to_dict()
@@ -540,3 +550,80 @@ class DeviceExtraCapability(mb.BlazarBase):
 
     def to_dict(self):
         return super(DeviceExtraCapability, self).to_dict()
+
+
+# THIRD PLUGIN PLUGINS
+
+class Resource(mb.BlazarBase):
+    """Description
+
+    Specifies resources asked by reservation from Resource Reservation API.
+    """
+
+    __tablename__ = 'resources'
+
+    id = _id_column()
+    resource_type = sa.Column(sa.String(255), nullable=False)
+    reservable = sa.Column(sa.Boolean, nullable=False,
+                           server_default=sa.true())
+    data = sa.Column(sa.JSON)
+
+    def to_dict(self):
+        return super(Resource, self).to_dict()
+
+
+class ResourceReservation(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
+    """Description
+
+    Specifies resources asked by reservation from
+    Resource Reservation API.
+    """
+
+    __tablename__ = 'resource_reservations'
+
+    id = _id_column()
+    reservation_id = sa.Column(sa.String(36), sa.ForeignKey('reservations.id'))
+    count_range = sa.Column(sa.String(36))
+    resource_properties = sa.Column(MediumText())
+    before_end = sa.Column(sa.String(36))
+    values = sa.Column(sa.JSON)
+
+    def to_dict(self, include=None):
+        return super(ResourceReservation, self).to_dict(include=include)
+
+
+class ResourceAllocation(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
+    """Mapping between Resource, ResourceReservation and Reservation."""
+
+    __tablename__ = 'resource_allocations'
+
+    id = _id_column()
+    resource_id = sa.Column(sa.String(36),
+                          sa.ForeignKey('resources.id'))
+    reservation_id = sa.Column(sa.String(36),
+                               sa.ForeignKey('reservations.id'))
+
+    def to_dict(self):
+        return super(ResourceAllocation, self).to_dict()
+
+
+class ResourceExtraCapability(mb.BlazarBase):
+    """Description
+
+    Allows to define extra capabilities per administrator request for each
+    Resource added.
+    """
+
+    __tablename__ = 'resource_extra_capabilities'
+
+    id = _id_column()
+    resource_id = sa.Column(sa.String(36), sa.ForeignKey('resources.id'),
+                          nullable=False)
+    capability_id = sa.Column(sa.String(255),
+                              sa.ForeignKey('extra_capabilities.id'),
+                              nullable=False)
+    capability_value = sa.Column(MediumText(), nullable=False)
+
+    def to_dict(self):
+        return super(ResourceExtraCapability, self).to_dict()
+

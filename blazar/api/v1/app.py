@@ -30,6 +30,7 @@ from blazar.api.v1 import request_id
 from blazar.api.v1 import request_log
 from blazar.api.v1 import utils as api_utils
 
+from blazar.plugins.third_party_plugins.plugin_manager import ManagerRPCAPI
 
 LOG = logging.getLogger(__name__)
 
@@ -82,6 +83,10 @@ def make_app():
         namespace='blazar.api.v1.extensions',
         invoke_on_load=False
         )
+
+    LOG.info("getting plugins")
+    manager_rpcapi = ManagerRPCAPI()
+    LOG.info(manager_rpcapi.list_plugins())
 
     for ext in extension_manager.extensions:
         bp = ext.plugin()

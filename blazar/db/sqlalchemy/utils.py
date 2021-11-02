@@ -28,10 +28,28 @@ import sqlalchemy as sa
 
 get_session = facade_wrapper.get_session
 
+import logging
+LOG = logging.getLogger(__name__)
 
 def get_backend():
     """The backend is this module itself."""
     return sys.modules[__name__]
+
+
+def _get_leases_from_resource_id(resource_id, start_date, end_date):
+    session = get_session()
+    border0 = sa.and_(models.Lease.start_date < start_date,
+                      models.Lease.end_date < start_date)
+    border1 = sa.and_(models.Lease.start_date > end_date,
+                      models.Lease.end_date > end_date)
+    query = (api.model_query(models.Lease, session=session)
+             .join(models.Reservation)
+             .join(models.ResourceAllocation)
+             .filter(models.ResourceAllocation.deleted.is_(None))
+             .filter(models.ResourceAllocation.resource_id == resource_id)
+             .filter(~sa.or_(border0, border1)))
+    for lease in query:
+        yield lease
 
 
 def _get_leases_from_network_id(network_id, start_date, end_date):
@@ -156,6 +174,30 @@ def get_reservations_by_device_ids(device_ids, start_date, end_date):
     return query.all()
 
 
+def get_reservations_by_resource_id(resource_id, resource_type, start_date, end_date):
+    session = get_session()
+    border0 = start_date <= models.Lease.end_date
+    border1 = models.Lease.start_date <= end_date
+    query = (session.query(models.Reservation).join(models.Lease)
+             .join(models.ResourceAllocation)
+             .filter(models.ResourceAllocation.deleted.is_(None))
+             .filter(models.ResourceAllocation.resource_id == resource_id)
+             .filter(sa.and_(border0, border1)))
+    return query.all()
+
+
+def get_reservations_by_resource_ids(resource_ids, resource_type, start_date, end_date):
+    session = get_session()
+    border0 = start_date <= models.Lease.end_date
+    border1 = models.Lease.start_date <= end_date
+    query = (session.query(models.Reservation).join(models.Lease)
+             .join(models.ResourceAllocation)
+             .filter(models.ResourceAllocation.deleted.is_(None))
+             .filter(models.ResourceAllocation.resource_id
+                     .in_(resource_ids))
+             .filter(sa.and_(border0, border1)))
+    return query.all()
+
 def get_reservations_for_allocations(session, start_date, end_date,
                                      lease_id=None, reservation_id=None):
     fields = ['id', 'status', 'lease_id', 'start_date',
@@ -181,6 +223,11 @@ def get_reservations_for_allocations(session, start_date, end_date,
 
     # Only enforce time restrictions if we're not targeting a specific
     # lease or reservation.
+    LOG.info("LOOK_HERE")
+    LOG.info(lease_id)
+    LOG.info(reservation_id)
+    LOG.info(start_date)
+    LOG.info(end_date)
     if not (lease_id or reservation_id):
         border0 = models.Lease.end_date >= start_date
         border1 = models.Lease.start_date <= end_date
@@ -293,6 +340,32 @@ def get_reservation_allocations_by_device_ids(device_ids, start_date, end_date,
     return reservations
 
 
+def get_reservation_allocations_by_resource_ids(resource_ids, start_date, end_date,
+                                              lease_id=None,
+                                              reservation_id=None):
+    session = get_session()
+    reservations = get_reservations_for_allocations(
+        session, start_date, end_date, lease_id, reservation_id)
+
+    allocations_query = (session.query(
+        models.ResourceAllocation.reservation_id,
+        models.ResourceAllocation.resource_id)
+        .filter(models.ResourceAllocation.deleted.is_(None))
+        .filter(models.ResourceAllocation.resource_id.in_(resource_ids))
+        .filter(models.ResourceAllocation.reservation_id.in_(
+            list(set([x['id'] for x in reservations])))))
+
+    allocations = defaultdict(list)
+
+    for row in allocations_query.all():
+        allocations[row[0]].append(row[1])
+
+    for r in reservations:
+        r['resource_ids'] = allocations[r['id']]
+
+    return reservations
+
+
 def get_user_ids_for_lease_ids(lease_ids):
     session = get_session()
 
@@ -320,6 +393,7 @@ def get_free_periods(resource_id, start_date, end_date, duration,
                                             end_date,
                                             duration,
                                             resource_type=resource_type)
+    #raise Exception(reserved_periods)
     free_periods = []
     previous = (start_date, start_date)
     if len(reserved_periods) >= 1:
@@ -348,7 +422,8 @@ def _get_events(resource_id, start_date, end_date, resource_type):
     elif resource_type == 'device':
         leases = _get_leases_from_device_id(resource_id, start_date, end_date)
     else:
-        mgr_exceptions.UnsupportedResourceType(resource_type)
+        leases = _get_leases_from_resource_id(resource_id, start_date, end_date)
+        #mgr_exceptions.UnsupportedResourceType(resource_type)
 
     for lease in leases:
         if lease.start_date < start_date:
