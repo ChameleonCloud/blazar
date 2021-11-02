@@ -95,8 +95,8 @@ class GeneralMonitorPlugin(base.BaseMonitorPlugin, metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def get_reservations_by_resource_ids(self, resource_ids,
-                                         interval_begin, interval_end):
+    def get_reservations_by_resource_ids(
+            self, resource_ids, interval_begin, interval_end):
         """Get reservations by resource ids.
 
         :param resource ids: a list of resource ids.
@@ -141,9 +141,8 @@ class GeneralMonitorPlugin(base.BaseMonitorPlugin, metaclass=abc.ABCMeta):
         reservation_flags = {}
 
         resource_ids = [h['id'] for h in failed_resources]
-        reservations = self.get_reservations_by_resource_ids(resource_ids,
-                                                             interval_begin,
-                                                             interval_end)
+        reservations = self.get_reservations_by_resource_ids(
+            resource_ids, self.resource_type, interval_begin, interval_end)
 
         for reservation in reservations:
             if reservation['resource_type'] != self.resource_type:

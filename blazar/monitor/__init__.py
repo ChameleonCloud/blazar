@@ -25,20 +25,20 @@ def load_monitors(plugins):
 
     # Setup a notification monitor
     notification_plugins = set([])
-    for plugin in plugins.values():
+    polling_plugins = set([])
+    if hasattr(plugins, "values"):
+        iterable = plugins.values()
+    else:
+        iterable = plugins
+    for plugin in iterable:
         if plugin.monitor:
             if plugin.monitor.is_notification_enabled():
                 notification_plugins.add(plugin.monitor)
+            if plugin.monitor.is_polling_enabled():
+                polling_plugins.add(plugin.monitor)
     if notification_plugins:
         monitors.append(
             notification_monitor.NotificationMonitor(notification_plugins))
-
-    # Setup a polling monitor
-    polling_plugins = set([])
-    for plugin in plugins.values():
-        if plugin.monitor:
-            if plugin.monitor.is_polling_enabled():
-                polling_plugins.add(plugin.monitor)
     if polling_plugins:
         monitors.append(polling_monitor.PollingMonitor(polling_plugins))
 

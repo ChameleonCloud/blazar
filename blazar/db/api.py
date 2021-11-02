@@ -815,3 +815,124 @@ def resource_property_update(resource_type, property_name, values):
 
 def resource_property_create(values):
     return IMPL.resource_property_create(values)
+
+
+
+# Resource reservation
+def resource_reservation_create(resource_reservation_values):
+    return IMPL.resource_reservation_create(resource_reservation_values)
+
+
+@to_dict
+def resource_reservation_get(resource_reservation_id):
+    return IMPL.resource_reservation_get(resource_reservation_id)
+
+
+def resource_reservation_update(resource_reservation_id, resource_reservation_values):
+    """Update floating IP reservation."""
+    return IMPL.resource_reservation_update(resource_reservation_id,
+                                       resource_reservation_values)
+
+
+def resource_reservation_destroy(resource_reservation_id):
+    """Delete specific floating ip reservation."""
+    return IMPL.resource_reservation_destroy(resource_type, resource_reservation_id)
+
+
+# resource Allocation
+
+def resource_allocation_create(allocation_values):
+    """Create a floating ip allocation from the values."""
+    return IMPL.resource_allocation_create(allocation_values)
+
+
+@to_dict
+def resource_allocation_get_all_by_values(**kwargs):
+    """Returns all entries filtered by col=value."""
+    return IMPL.resource_allocation_get_all_by_values(**kwargs)
+
+
+def resource_allocation_destroy(allocation_id):
+    """Delete specific floating ip allocation."""
+    IMPL.resource_allocation_destroy(allocation_id)
+
+
+def resource_allocation_update(allocation_id, allocation_values):
+    """Update floating ip allocation."""
+    IMPL.resource_allocation_update(allocation_id, allocation_values)
+
+
+# resource core
+def resource_create(resource_type, data):
+    return IMPL.resource_create(resource_type, data)
+
+
+@to_dict
+def resource_get(resource_type, resource_id):
+    """Return a specific floating ip."""
+    return IMPL.resource_get(resource_type, resource_id)
+
+
+@to_dict
+def resource_list(resource_type):
+    """Return a list of floating ip."""
+    return IMPL.resource_list(resource_type)
+
+
+@to_dict
+def resource_get_all_by_queries(resource_type, queries):
+    """Returns reservable resources filtered by an array of queries."""
+    return IMPL.resource_get_all_by_queries(resource_type, queries)
+
+
+def resource_destroy(resource_type, resource_id):
+    IMPL.resource_destroy(resource_type, resource_id)
+
+def resource_update(resource_type, resource_id, data):
+    """Update device."""
+    IMPL.resource_update(resource_type, resource_id, data)
+
+# Resource ExtraCapabilities
+
+def resource_extra_capability_create(resource_type, values):
+    return IMPL.resource_extra_capability_create(resource_type, values)
+
+
+@to_dict
+def resource_extra_capability_get(resource_extra_capability_id):
+    return IMPL.resource_extra_capability_get(resource_extra_capability_id)
+
+
+def resource_extra_capability_get_all_per_resource(resource_id):
+    return IMPL.resource_extra_capability_get_all_per_resource(resource_id)
+
+
+def resource_extra_capability_destroy(resource_extra_capability_id):
+    IMPL.resource_extra_capability_destroy(resource_extra_capability_id)
+
+
+def resource_extra_capability_update(resource_extra_capability_id, values):
+    IMPL.resource_extra_capability_update(resource_extra_capability_id, values)
+
+
+def resource_extra_capability_get_all_per_name(resource_id,
+                                             extra_capability_name):
+    return IMPL.resource_extra_capability_get_all_per_name(
+        resource_id, extra_capability_name)
+
+
+def resource_extra_capability_get_latest_per_name(resource_id,
+                                                extra_capability_name):
+    return IMPL.resource_extra_capability_get_latest_per_name(
+        resource_id, extra_capability_name
+    )
+
+
+@to_dict
+def unreservable_resource_get_all_by_queries(resource_type, queries):
+    return IMPL.unreservable_resource_get_all_by_queries(resource_type, queries)
+
+
+@to_dict
+def resource_get_all_by_filters(resource_type, filters):
+    return IMPL.resource_get_all_by_filters(filters)

@@ -41,6 +41,9 @@ class RPCClient(object):
         ctx = context.current()
         return self._client.call(ctx.to_dict(), name, **kwargs)
 
+    def call_without_context(self, name, **kwargs):
+        with context.BlazarContext() as ctx:
+            return self._client.call(ctx, name, **kwargs)
 
 class RPCServer(service.Service):
     def __init__(self, target):

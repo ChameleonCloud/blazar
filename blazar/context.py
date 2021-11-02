@@ -17,8 +17,10 @@ import threading
 
 from oslo_config import cfg
 from oslo_context import context
+from oslo_log import log as logging
 
 CONF = cfg.CONF
+LOG = logging.getLogger(__name__)
 
 
 class BlazarContext(context.RequestContext):
@@ -57,6 +59,9 @@ class BlazarContext(context.RequestContext):
     @classmethod
     def current(cls):
         try:
+            LOG.info("current context")
+            LOG.info(cls)
+            LOG.info(dir(cls._context_stack))
             return cls._context_stack.stack[-1]
         except (AttributeError, IndexError):
             raise RuntimeError("Context isn't available here")
