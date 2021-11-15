@@ -1,23 +1,27 @@
 from oslo_log import log as logging
 from oslo_utils import strutils
 from oslo_config import cfg
+from oslo_serialization import jsonutils
 
-from blazar.utils import plugins as plugins_utils
+from blazar.api.v1 import validation
+from blazar.api.v1 import utils as api_utils
+from blazar.db import api as db_api
 from blazar.db import exceptions as db_ex
 from blazar.db import utils as db_utils
 from blazar.manager import exceptions as manager_ex
 from blazar.plugins import monitor
+from blazar.utils import plugins as plugins_utils
+from blazar.utils.openstack import keystone
+
+from . import exceptions as plugin_ex
+
 import datetime
 from random import shuffle
-
-from blazar.db import api as db_api
-
-from .exceptions import NotEnoughResourcesAvailable
-
 import collections
 
 LOG = logging.getLogger(__name__)
 CONF = cfg.CONF
+QUERY_TYPE_ALLOCATION = 'allocation'
 
 plugin_opts = [
     cfg.StrOpt('before_end',
@@ -34,11 +38,30 @@ plugin_opts = [
 
 plugin_opts.extend(monitor.monitor_opts)
 
-
 class BasePlugin():
+    query_options = {
+        QUERY_TYPE_ALLOCATION: ['lease_id', 'reservation_id']
+    }
+
     def __init__(self):
         CONF.register_opts(plugin_opts, group=self.resource_type())
         self.monitor = ResourceMonitorPlugin(self)
+
+    def validate_data(
+            self, data, required_keys, optional_keys, action_type="create"):
+        if action_type == "create":
+            ex_fn = exceptions.InvalidCreateResourceData
+        elif action_type == "update":
+            ex_fn = exceptions.InvalidUpdateResourceData
+        data_keys = set(data.keys())
+        required_keys = set(required_keys)
+        missing_required_keys = required_keys - data_keys
+        if missing_required_keys:
+            raise ex_fn(f"{self.resource_type()} plugin requires '{missing_required_keys}'")
+        optional_keys = set(optional_keys)
+        extra_keys = (data_keys - optional_keys) - required_keys
+        if extra_keys:
+            raise ex_fn(f"Invalid keys in data '{extra_params}'")
 
     def resource_type(self):
         pass
@@ -49,11 +72,11 @@ class BasePlugin():
     def deallocate(self, resources, lease):
         pass
 
-    def on_start(self, resources, lease):
+    def on_start(self, resource_id, lease):
         LOG.info("ON START")
         pass
 
-    def before_end(self, resources, lease):
+    def before_end(self, resource_id, lease):
         LOG.info("BEFORE END")
         pass
 
@@ -68,9 +91,15 @@ class BasePlugin():
             db_api.resource_allocation_destroy(allocation['id'])
 
     def validate_create_params(self, data):
+        return data
+
+    def rollback_create(self, data):
         pass
 
     def validate_update_params(self, data):
+        return data
+
+    def validate_delete(self, resource_id):
         pass
 
     def matching_resources(
@@ -126,9 +155,7 @@ class BasePlugin():
     def list_allocations(self, query, detail=False):
         resource_id_list = [
             r['id']
-            for r in db_api.resource_list(
-                self.resource_type(), self.resource_type()
-            )
+            for r in db_api.resource_list(self.resource_type())
         ]
         options = self.get_query_options(query, "allocation")
         options['detail'] = detail
@@ -137,6 +164,31 @@ class BasePlugin():
         self.add_extra_allocation_info(resource_allocations)
         return [{"resource_id": resource, "reservations": allocs}
                 for resource, allocs in resource_allocations.items()]
+
+    def add_extra_allocation_info(self, resource_allocations):
+        """Add extra information to allocations (to show in calendar)"""
+        extras = CONF.api.allocation_extras
+        for allocs in resource_allocations.values():
+            for alloc in allocs:
+                alloc["extras"] = {}
+        if "user_name" in extras:
+            ids = []
+            for allocations in resource_allocations.values():
+                for alloc in allocations:
+                    ids.append(alloc["lease_id"])
+            items = db_utils.get_user_ids_for_lease_ids(ids)
+            keystoneclient = keystone.BlazarKeystoneClient()
+            users = keystoneclient.users.list()
+            user_map = {user.id: user for user in users}
+            lease_to_name = dict()
+            for lease_id, user_id in items:
+                user = user_map[user_id]
+                lease_to_name[lease_id] = user.name
+
+            for allocations in resource_allocations.values():
+                for alloc in allocations:
+                    alloc["extras"]["user_name"] = \
+                        lease_to_name[alloc["lease_id"]]
 
     def get_query_options(self, params, index_type):
         options = {k: params[k] for k in params
@@ -384,6 +436,210 @@ class BasePlugin():
     def get_notification_event_types(self):
         return []
 
+    def api_list(self):
+        raw_resource_list = db_api.resource_list(self.resource_type())
+        resource_list = []
+        for resource in raw_resource_list:
+            resource_list.append(self.get(resource['id']))
+        return resource_list
+
+    def api_create(self, data):
+        data = self.validate_create_params(data["data"])
+        try:
+            resource = db_api.resource_create(self.resource_type(), data)
+        except db_ex.BlazarDBException as e:
+            self.rollback_create(data["data"])
+            raise e
+        return resource
+
+    def api_get(self, resource_id):
+        resource = self.get(resource_id)
+        if resource is None:
+            raise manager_ex.ResourceNotFound(
+                resource=resource_id, resource_type=self.resource_type())
+        return resource
+
+    def api_update(self, resource_id, data):
+        extras = data["extras"]
+        data = data["data"]
+        if not data and not extras:
+            return None
+        else:
+            if data:
+                data = self.validate_update_params(data)
+                db_api.resource_update(self.resource_type(),
+                                       resource_id,
+                                       jsonutils.loads(data["data"]))
+            if extras:
+                self.update_extra_capabilities(resource_id, extras)
+            return db_api.resource_get(self.resource_type(), resource_id)
+
+    def api_delete(self, resource_id):
+        resource = db_api.resource_get(self.resource_type(), resource_id)
+        if resource is None:
+            raise manager_ex.ResourceNotFound(
+                resource=resource_id, resource_type=self.resource_type())
+        allocations = db_api.resource_allocation_get_all_by_values(
+            resource_id=resource_id)
+        if allocations:
+            msg = 'Resource id %s is allocated by reservations.' % resource_id
+            LOG.info(msg)
+            raise manager_ex.CantDeleteResource(resource=resource_id, msg=msg, resource_type=resource_type)
+        try:
+            self.validate_delete()
+            db_api.resource_destroy(self.resource_type(), resource_id)
+        except db_ex.BlazarDBException as e:
+            raise manager_ex.CantDeleteResource(
+                resource=resource_id,
+                resource_type=self.resource_type(),
+                msg=str(e)
+            )
+
+    def api_list_allocations(self, query):
+        resource_id_list = [
+            r['id'] for r in db_api.resource_list(self.resource_type())]
+        options = self.get_query_options(query, QUERY_TYPE_ALLOCATION)
+        options['detail'] = False  # TODO use conf
+        resource_allocations = self.query_resource_allocations(
+            resource_id_list, **options)
+
+        return [
+            {"resource_id": resource, "reservations": allocs}
+            for resource, allocs in resource_allocations.items()
+        ]
+
+    def api_get_allocations(self, resource_id, query):
+        options = self.get_query_options(query, QUERY_TYPE_ALLOCATION)
+        options['detail'] = False  # self.query_device_allocations TODO use conf
+        resource_allocations = self.query_resource_allocations(
+            [resource_id], **options)
+        allocs = resource_allocations.get(resource_id, [])
+        return {"resource_id": resource_id, "reservations": allocs}
+
+    # TODO
+    def api_reallocate(self, resource_id, data):
+        raise Exception("unimplemented")
+
+    def api_list_resource_properties(self, query):
+        detail = False if not query else query.get('detail', False)
+        resource_properties = collections.defaultdict(list)
+
+        for name, private, value in db_api.resource_properties_list(
+                self.resource_type()):
+
+            if not private:
+                resource_properties[name].append(value)
+
+        if detail:
+            resource_properties = [
+                dict(property=k, private=False, values=v)
+                for k, v in resource_properties.items()]
+        else:
+            resource_properties = [
+                dict(property=k) for k, v in resource_properties.items()]
+        return resource_properties
+
+    def api_update_resource_property(self, property_name, data):
+            return db_api.resource_property_update(
+                self.resource_type(), property_name, data)
+
+    def create_API(self):
+        rest = api_utils.Rest(f'{self.resource_type()}_v1_0',
+                              __name__,
+                              url_prefix=f'/v1/{self.resource_type()}')
+
+        @rest.get('', query=True)
+        def resource_list(req, query=None):
+            return api_utils.render(resources=self.api_list())
+
+        @rest.post('')
+        def resource_create(req, data):
+            return api_utils.render(resource=self.api_create(data))
+
+        @rest.get('/<resource_id>')
+        @validation.check_exists(self.get, resource_id='resource_id')
+        def resource_get(req, resource_id):
+            return api_utils.render(resource=self.api_get(resource_id))
+
+        @rest.put('/<resource_id>')
+        @validation.check_exists(self.get, resource_id='resource_id')
+        def resource_update(req, resource_id, data):
+            resource = self.api_update(resource_id, data)
+            if resource:
+                return api_utils.render(resource=resource)
+            else:
+                return api_utils.internal_error(status_code=400,
+                                                descr="No data to update")
+
+        @rest.delete('/<resource_id>')
+        @validation.check_exists(self.get, resource_id='resource_id')
+        def resource_delete(req, resource_id):
+            self.api_delete(resource_id)
+            return api_utils.render(status=200)
+
+        @rest.get('/allocations', query=True)
+        def allocations_list(req, query):
+            return api_utils.render(
+                    allocations=self.api_list_allocations(query))
+
+        @rest.get('/<resource_id>/allocation', query=True)
+        @validation.check_exists(self.get, resource_id='resource_id')
+        def allocations_get(req, resource_id, query):
+            return api_utils.render(
+                    allocation=self.api_get_allocations(resource_id, query))
+
+        @rest.put('/<resource_id>/allocation')
+        @validation.check_exists(self.get, resource_id='resource_id')
+        def reallocate(req, resource_id, data):
+            return api_utils.render(
+                    allocation=self.api_reallocate(resource_id, data))
+
+        @rest.get('/properties', query=True)
+        def resource_properties_list(req, query=None):
+            return api_utils.render(
+                resource_properties=self.api_list_resource_properties(query))
+
+        @rest.patch('/properties/<property_name>')
+        def resource_property_update(req, property_name, data):
+            return api_utils.render(
+                    resource_property=self.api_update_resource_property(
+                        property_name, data))
+
+        return rest
+
+    def get_query_options(self, params, index_type):
+        options = {k: params[k] for k in params
+                   if k in self.query_options[index_type]}
+        unsupported = set(params) - set(options)
+        if unsupported:
+            LOG.debug('Unsupported query key is specified in API request: %s',
+                      unsupported)
+        return options
+
+    def query_resource_allocations(self, resources, lease_id=None,
+                                   reservation_id=None, detail=False):
+        start = datetime.datetime.utcnow()
+        end = datetime.date.max
+
+        reservations = db_utils.get_reservation_allocations_by_resource_ids(
+            resources, start, end, lease_id, reservation_id)
+        resource_allocations = {d: [] for d in resources}
+
+        for reservation in reservations:
+            # TODO detail config?
+            if detail:
+                del reservation['project_id']
+                del reservation['lease_name']
+                del reservation['status']
+
+            for resource_id in reservation['resource_ids']:
+                if resource_id in resource_allocations.keys():
+                    resource_allocations[resource_id].append({
+                        k: v for k, v in reservation.items()
+                        if k != 'resource_ids'})
+
+        return resource_allocations
+
 
 class ResourceMonitorPlugin(monitor.GeneralMonitorPlugin):
     def __new__(cls, plugin, *args, **kwargs):
@@ -427,3 +683,4 @@ class ResourceMonitorPlugin(monitor.GeneralMonitorPlugin):
 
     def poll_resource_failures(self):
         return self.plugin.poll_resource_failures()
+

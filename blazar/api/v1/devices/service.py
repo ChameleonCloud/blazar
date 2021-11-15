@@ -14,19 +14,19 @@
 # limitations under the License.
 
 from blazar import context
-from blazar.manager.devices import rpcapi as manager_rpcapi
 from blazar import policy
+from blazar.manager.service import get_plugins
 from blazar.utils import trusts
 
 
 class API(object):
     def __init__(self):
-        self.manager_rpcapi = manager_rpcapi.ManagerRPCAPI()
+        self.plugin = get_plugins()["device"]
 
     @policy.authorize('devices', 'get')
     def get_devices(self):
         """List all existing devices."""
-        return self.manager_rpcapi.list_devices()
+        return self.plugin.list_devices()
 
     @policy.authorize('devices', 'post')
     @trusts.use_trust_auth()
@@ -37,7 +37,7 @@ class API(object):
         :type data: dict
         """
 
-        return self.manager_rpcapi.create_device(data)
+        return self.plugin.create_device(data)
 
     @policy.authorize('devices', 'get')
     def get_device(self, device_id):
@@ -46,7 +46,7 @@ class API(object):
         :param device_id: ID of the device in Blazar DB.
         :type device_id: str
         """
-        return self.manager_rpcapi.get_device(device_id)
+        return self.plugin.get_device(device_id)
 
     @policy.authorize('devices', 'put')
     def update_device(self, device_id, data):
@@ -57,7 +57,7 @@ class API(object):
         :param data: New device characteristics.
         :type data: dict
         """
-        return self.manager_rpcapi.update_device(device_id, data)
+        return self.plugin.update_device(device_id, data)
 
     @policy.authorize('devices', 'delete')
     def delete_device(self, device_id):
@@ -66,12 +66,12 @@ class API(object):
         :param device_id: ID of the device in Blazar DB.
         :type device_id: str
         """
-        self.manager_rpcapi.delete_device(device_id)
+        self.plugin.delete_device(device_id)
 
     @policy.authorize('devices', 'reallocate')
     def reallocate(self, device_id, data):
         """Exchange device from allocations."""
-        return self.manager_rpcapi.reallocate(device_id, data)
+        return self.plugin.reallocate(device_id, data)
 
     @policy.authorize('devices', 'get_allocations')
     def list_allocations(self, query):
@@ -86,7 +86,7 @@ class API(object):
         if policy.enforce(ctx, 'admin', {}, do_raise=False):
             detail = True
 
-        return self.manager_rpcapi.list_allocations(query, detail=detail)
+        return self.plugin.list_allocations(query, detail=detail)
 
     @policy.authorize('devices', 'get_allocations')
     def get_allocations(self, device_id, query):
@@ -97,15 +97,14 @@ class API(object):
         :param query: parameters to query allocation
         :type query: dict
         """
-        return self.manager_rpcapi.get_allocations(device_id, query)
+        return self.plugin.get_allocations(device_id, query)
 
     @policy.authorize('devices', 'get_resource_properties')
     def list_resource_properties(self, query):
         """List resource properties for devices."""
-        return self.manager_rpcapi.list_resource_properties(query)
+        return self.plugin.list_resource_properties(query)
 
     @policy.authorize('devices', 'patch_resource_properties')
     def update_resource_property(self, property_name, data):
         """Update a device resource property."""
-        return self.manager_rpcapi.update_resource_property(property_name,
-                                                            data)
+        return self.plugin.update_resource_property(property_name, data)

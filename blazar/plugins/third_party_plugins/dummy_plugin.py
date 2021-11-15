@@ -15,9 +15,6 @@ class DummyPlugin(base.BasePlugin):
         return "dummy"
 
     def validate_data(self, data, action_type):
-        LOG.info("validate")
-        LOG.info(type(data))
-        LOG.info(type(action_type))
         if action_type == "create":
             ex_fn = exceptions.InvalidCreateResourceData
         elif action_type == "update":
@@ -34,15 +31,15 @@ class DummyPlugin(base.BasePlugin):
         if extra_params:
             raise ex_fn(f"Invalid keys in data '{extra_params}'")
 
+        return data
+
     def validate_create_params(self, data):
-        self.validate_data(data, "create")
+        return self.validate_data(data, "create")
 
     def validate_update_params(self, data):
-        self.validate_data(data, "update")
+        return self.validate_data(data, "update")
 
     def allocate(self, reservation_id, values):
-        LOG.info("allocate()")
-        LOG.info(values)
         self._validate_min_max_range(values, values["min"], values["max"])
         resource_ids = self.allocation_candidates(values)
         resource_rsrv_values = {
@@ -60,4 +57,4 @@ class DummyPlugin(base.BasePlugin):
         return resource_reservation['id']
 
     def deallocate(self, resources, lease):
-        LOG.info("allocating dummy")
+        LOG.info("deallocating dummy")

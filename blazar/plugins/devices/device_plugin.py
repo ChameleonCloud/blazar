@@ -81,8 +81,6 @@ def _get_plugins():
     for ext in extension_manager.extensions:
         try:
             plugin_obj = ext.plugin()
-            LOG.info(ext)
-            LOG.info(plugin_obj)
         except Exception as e:
             LOG.warning("Could not load {0} plugin "
                         "for resource type {1} '{2}'".format(
@@ -606,7 +604,7 @@ class DevicePlugin(base.BasePlugin):
         if resource_properties:
             filter_array += plugins_utils.convert_requirements(
                 resource_properties)
-        for device in db_api.device_get_all_by_queries(
+        for device in db_api.reservable_device_get_all_by_queries(
                 filter_array):
             device = self.get_device_with_extra_capabilities(device)
             if not self.is_project_allowed(project_id, device):

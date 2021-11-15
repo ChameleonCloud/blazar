@@ -14,12 +14,18 @@
 #    under the License.
 
 from blazar.notification import notifier
+from oslo_log import log as logging
 
 IMPL = notifier.Notifier()
 
+LOG = logging.getLogger(__name__)
 
 def send_lease_notification(context, lease, notification):
-    IMPL.send_lease_notification(context, lease, notification)
+    try:
+        IMPL.send_lease_notification(context, lease, notification)
+    except:
+        LOG.info("Lease notification")
+        LOG.info(lease)
 
 
 def format_lease_payload(lease):

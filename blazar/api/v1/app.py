@@ -30,7 +30,8 @@ from blazar.api.v1 import request_id
 from blazar.api.v1 import request_log
 from blazar.api.v1 import utils as api_utils
 
-from blazar.plugins.third_party_plugins.plugin_manager import ManagerRPCAPI
+from blazar.plugins.third_party_plugins.dummy_plugin import DummyPlugin
+from blazar.plugins.third_party_plugins.host_plugin import HostPlugin
 
 LOG = logging.getLogger(__name__)
 
@@ -84,12 +85,14 @@ def make_app():
         invoke_on_load=False
         )
 
-    LOG.info("getting plugins")
-    manager_rpcapi = ManagerRPCAPI()
-    LOG.info(manager_rpcapi.list_plugins())
-
     for ext in extension_manager.extensions:
         bp = ext.plugin()
+        app.register_blueprint(bp, url_prefix=bp.url_prefix)
+
+    for plugin in [DummyPlugin, HostPlugin]:
+        plugin = plugin()
+        LOG.info(f"Creating plugin API for {plugin.resource_type()}")
+        bp = plugin.create_API()
         app.register_blueprint(bp, url_prefix=bp.url_prefix)
 
     for code in werkzeug_exceptions.default_exceptions:

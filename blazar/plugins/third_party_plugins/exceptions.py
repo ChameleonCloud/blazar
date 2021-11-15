@@ -1,4 +1,5 @@
 from blazar import exceptions
+from blazar.i18n import _
 
 
 class ResourceNotFound(exceptions.NotFound):
