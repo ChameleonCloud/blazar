@@ -38,9 +38,6 @@ from collections import defaultdict
 import eventlet
 from oslo_log import log as logging
 
-from blazar.plugins.third_party_plugins.dummy_plugin import DummyPlugin
-from blazar.plugins.third_party_plugins.host_plugin import HostPlugin
-
 manager_opts = [
     cfg.ListOpt('plugins',
                 default=['dummy.vm.plugin'],

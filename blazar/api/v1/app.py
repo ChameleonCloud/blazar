@@ -30,9 +30,6 @@ from blazar.api.v1 import request_id
 from blazar.api.v1 import request_log
 from blazar.api.v1 import utils as api_utils
 
-from blazar.plugins.third_party_plugins.dummy_plugin import DummyPlugin
-from blazar.plugins.third_party_plugins.host_plugin import HostPlugin
-
 LOG = logging.getLogger(__name__)
 
 CONF = cfg.CONF
@@ -66,6 +63,8 @@ def version_list():
     }, status="300 Multiple Choices")
 
 
+
+
 def make_app():
     """App builder (wsgi).
 
@@ -77,6 +76,7 @@ def make_app():
     app.route('/versions', methods=['GET'])(version_list)
 
     LOG.debug("List of plugins: %s", cfg.CONF.manager.plugins)
+
 
     plugins = cfg.CONF.manager.plugins + ['leases']
     extension_manager = enabled.EnabledExtensionManager(
@@ -90,6 +90,7 @@ def make_app():
         app.register_blueprint(bp, url_prefix=bp.url_prefix)
 
     # Load third party plugins
+    resource_plugins = []
     extension_manager = enabled.EnabledExtensionManager(
         check_func=lambda ext: ext.name in cfg.CONF.manager.third_party_plugins,
         namespace='blazar.resource.third_party_plugins',
@@ -99,6 +100,12 @@ def make_app():
         plugin = ext.plugin()
         bp = plugin.create_API()
         app.register_blueprint(bp, url_prefix=bp.url_prefix)
+        resource_plugins.append(
+            {"name": plugin.resource_type(), "prefix": bp.url_prefix})
+
+    def resources_list():
+        return api_utils.render(resource_plugins)
+    app.route('/v1/resources', methods=['GET'])(resources_list)
 
     for code in werkzeug_exceptions.default_exceptions:
         app.register_error_handler(code, make_json_error)
