@@ -979,3 +979,38 @@ def get_plugins():
 
             plugins[plugin_obj.resource_type] = plugin_obj
     return plugins
+
+
+@lru_cache(maxsize=None)
+def get_third_party_plugins():
+    config_plugins = CONF.manager.third_party_plugins
+    plugins = {}
+
+    extension_manager = enabled.EnabledExtensionManager(
+        check_func=lambda ext: ext.name in config_plugins,
+        namespace='blazar.resource.third_party_plugins',
+        invoke_on_load=False
+    )
+
+    invalid_plugins = (set(config_plugins) -
+                       set([ext.name for ext
+                            in extension_manager.extensions]))
+    if invalid_plugins:
+        raise common_ex.BlazarException('Invalid third party plugin names are '
+                                        'specified: %s' % invalid_plugins)
+
+    for ext in extension_manager.extensions:
+        try:
+            plugin_obj = ext.plugin()
+        except Exception as e:
+            LOG.warning("Could not load {0} plugin "
+                        "for resource type {1} '{2}'".format(
+                            ext.name, ext.plugin.resource_type, e))
+        else:
+            if plugin_obj.resource_type in plugins:
+                msg = ("You have provided several plugins for "
+                       "one resource type in configuration file. "
+                       "Please set one plugin per resource type.")
+                raise exceptions.PluginConfigurationError(error=msg)
+            plugins[plugin_obj.resource_type()] = plugin_obj
+    return plugins
