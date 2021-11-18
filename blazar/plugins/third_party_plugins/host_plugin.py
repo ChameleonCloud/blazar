@@ -126,9 +126,9 @@ class HostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             'before_end': values['before_end'],
             'on_start': values['on_start']
         }
-        host_reservation = db_api.host_reservation_create(host_rsrv_values)
+        host_reservation = db_api.resource_reservation_create(host_rsrv_values)
         for host_id in host_ids:
-            db_api.host_allocation_create({'compute_host_id': host_id,
+            db_api.resource_allocation_create({'compute_host_id': host_id,
                                           'reservation_id': reservation_id})
         return host_reservation['id']
 
@@ -137,12 +137,12 @@ class HostPlugin(base.BasePlugin, nova.NovaClientWrapper):
 
     def on_start(self, resource_id, lease=None):
         """Add the hosts in the pool."""
-        host_reservation = db_api.host_reservation_get(resource_id)
+        host_reservation = db_api.resource_reservation_get(resource_id)
         pool = nova.ReservationPool()
         hosts = []
-        for allocation in db_api.host_allocation_get_all_by_values(
+        for allocation in db_api.resource_allocation_get_all_by_values(
                 reservation_id=host_reservation['reservation_id']):
-            host = db_api.host_get(allocation['compute_host_id'])
+            host = db_api.resource_get(allocation['compute_host_id'])
             hosts.append(host['hypervisor_hostname'])
         pool.add_computehost(host_reservation['aggregate_id'], hosts)
 
@@ -160,7 +160,7 @@ class HostPlugin(base.BasePlugin, nova.NovaClientWrapper):
 
     def before_end(self, resource_id, lease=None):
         """Take an action before the end of a lease."""
-        host_reservation = db_api.host_reservation_get(resource_id)
+        host_reservation = db_api.resource_reservation_get(resource_id)
 
         action = host_reservation['before_end']
         if action == 'default':
@@ -185,13 +185,7 @@ class HostPlugin(base.BasePlugin, nova.NovaClientWrapper):
 
     def on_end(self, resource_id, lease=None):
         """Remove the hosts from the pool."""
-        host_reservation = db_api.host_reservation_get(resource_id)
-        db_api.host_reservation_update(host_reservation['id'],
-                                       {'status': 'completed'})
-        allocations = db_api.host_allocation_get_all_by_values(
-            reservation_id=host_reservation['reservation_id'])
-        for allocation in allocations:
-            db_api.host_allocation_destroy(allocation['id'])
+        super(HostPlugin, self).on_end(resource_id, lease)
         pool = nova.ReservationPool()
         for host in pool.get_computehosts(host_reservation['aggregate_id']):
             for server in self.nova.servers.list(

@@ -89,9 +89,14 @@ def make_app():
         bp = ext.plugin()
         app.register_blueprint(bp, url_prefix=bp.url_prefix)
 
-    for plugin in [DummyPlugin, HostPlugin]:
-        plugin = plugin()
-        LOG.info(f"Creating plugin API for {plugin.resource_type()}")
+    # Load third party plugins
+    extension_manager = enabled.EnabledExtensionManager(
+        check_func=lambda ext: ext.name in cfg.CONF.manager.third_party_plugins,
+        namespace='blazar.resource.third_party_plugins',
+        invoke_on_load=False
+    )
+    for ext in extension_manager.extensions:
+        plugin = ext.plugin()
         bp = plugin.create_API()
         app.register_blueprint(bp, url_prefix=bp.url_prefix)
 

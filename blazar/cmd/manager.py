@@ -22,7 +22,6 @@ from functools import partial
 
 from oslo_config import cfg
 from oslo_service import service
-from oslo_log import log as logging
 
 gettext.install('blazar')
 
@@ -31,7 +30,6 @@ from blazar.manager import service as manager_service
 from blazar.notification import notifier
 from blazar.utils import service as service_utils
 
-LOG = logging.getLogger(__name__)
 
 class ManagerServiceSingleton:
     _instance = manager_service.ManagerService()
@@ -46,9 +44,7 @@ def main():
     cfg.CONF(project='blazar', prog='blazar-manager')
     service_utils.prepare_service(sys.argv)
     db_api.setup_db()
-    LOG.info("set up db")
     notifier.init()
-    LOG.info("inited notifier")
     service.launch(
         cfg.CONF,
         ManagerServiceSingleton(),
