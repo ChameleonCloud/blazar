@@ -200,7 +200,10 @@ class LeaseStatus(BaseStatus):
                 LOG.info(args)
                 LOG.info(kwargs)
                 # Update a lease status
-                lease_id = kwargs['lease_id']
+                if "lease_id" in kwargs:
+                    lease_id = kwargs["lease_id"]
+                else:
+                    lease_id = args[1]
                 l = db_api.lease_get(lease_id)
                 original_status = l['status']
                 if cls.is_valid_transition(original_status,

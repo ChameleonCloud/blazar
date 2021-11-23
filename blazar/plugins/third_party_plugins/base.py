@@ -11,6 +11,7 @@ from blazar.db import utils as db_utils
 from blazar.manager import exceptions as manager_ex
 from blazar.plugins import monitor
 from blazar.utils import plugins as plugins_utils
+from blazar.utils import trusts
 from blazar.utils.openstack import keystone
 
 from . import exceptions as plugin_ex
@@ -89,6 +90,10 @@ class BasePlugin():
             reservation_id=resource_reservation['reservation_id'])
         for allocation in allocations:
             db_api.resource_allocation_destroy(allocation['id'])
+
+    def allocation_candidates(self, values):
+        super()
+        super(Resource, cls).__new__(cls, *args, **kwargs)
 
     def validate_create_params(self, data):
         return data
@@ -443,8 +448,12 @@ class BasePlugin():
             resource_list.append(self.get(resource['id']))
         return resource_list
 
+    @trusts.use_trust_auth()
     def api_create(self, data):
-        data = self.validate_create_params(data["data"])
+        create_data = data["data"]
+        trust_id = data["trust_id"]
+        create_data["trust_id"] = trust_id
+        data = self.validate_create_params(create_data)
         try:
             resource = db_api.resource_create(self.resource_type(), data)
         except db_ex.BlazarDBException as e:
