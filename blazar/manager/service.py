@@ -60,6 +60,7 @@ manager_opts = [
 
 CONF = cfg.CONF
 CONF.register_opts(manager_opts, 'manager')
+
 LOG = logging.getLogger(__name__)
 
 LEASE_DATE_FORMAT = "%Y-%m-%d %H:%M"
@@ -77,11 +78,10 @@ class ManagerService(service_utils.RPCServer):
     def __init__(self):
         target = manager.get_target()
         super(ManagerService, self).__init__(target)
-
-        self.plugins = self._get_plugins()
-        self.plugin_manager = plugin_manager.PluginManager.instance()
-        self.plugin_manager.add_plugin(DummyPlugin, None, False)
-
+        self.plugins = get_plugins()
+        self.third_party_plugins = get_third_party_plugins()
+        LOG.info("GETTING THIRD PARTY PLUGINS")
+        LOG.info(self.third_party_plugins)
         self.resource_actions = self._setup_actions()
         self.monitors = monitor.load_monitors(self.plugins) \
                 + monitor.load_monitors(self.plugin_manager.plugins)
@@ -118,6 +118,11 @@ class ManagerService(service_utils.RPCServer):
             actions[resource_type]['on_end'] = plugin.on_end
             actions[resource_type]['before_end'] = plugin.before_end
             plugin.setup(None)
+        for resource_type, plugin in self.third_party_plugins.items():
+            actions[resource_type] = {}
+            actions[resource_type]['on_start'] = plugin.on_start
+            actions[resource_type]['on_end'] = plugin.on_end
+            actions[resource_type]['before_end'] = plugin.before_end
         return actions
 
     @service_utils.with_empty_context
@@ -224,6 +229,9 @@ class ManagerService(service_utils.RPCServer):
 
     def _exec_event(self, event):
         """Execute an event function"""
+        LOG.info("EXEC EVENT HERE")
+        LOG.info(self.plugins)
+        LOG.info(self.third_party_plugins)
         event_fn = getattr(self, event['event_type'], None)
         if event_fn is None:
             raise exceptions.EventError(
@@ -299,6 +307,11 @@ class ManagerService(service_utils.RPCServer):
                 values['end_date'] < values['start_date']):
             raise common_ex.InvalidInput(
                 'End date must be later than current and start date')
+
+    def _get_plugin(self, resource_type):
+        return self.plugins.get(resource_type,
+            self.third_party_plugins.get(resource_type)
+        )
 
     def validate_params(self, values, required_params):
         if isinstance(required_params, list):
@@ -423,6 +436,8 @@ class ManagerService(service_utils.RPCServer):
                 try:
                     for event in events:
                         event['lease_id'] = lease['id']
+                        LOG.info("CREATING EVENT")
+                        LOG.info(event)
                         db_api.event_create(event)
                 except (exceptions.UnsupportedResourceType,
                         common_ex.BlazarException):
@@ -492,10 +507,7 @@ class ManagerService(service_utils.RPCServer):
 
         try:
             [
-                self.plugins.get(
-                    r['resource_type'],
-                    self.plugin_manager.get(r['resource_type'])
-                )
+                self._get_plugin(r['resource_type'])
                 for r in (reservations + existing_reservations)
             ]
         except KeyError:
@@ -514,8 +526,6 @@ class ManagerService(service_utils.RPCServer):
             new_reservations = existing_reservations
             new_allocs = existing_allocs
 
-        # TODO third party enforecment
-        '''
         try:
             self.enforcement.check_update(context.current(), lease, values,
                                           existing_allocs, new_allocs,
@@ -524,7 +534,6 @@ class ManagerService(service_utils.RPCServer):
         except common_ex.NotAuthorized as e:
             LOG.error("Enforcement checks failed. %s", str(e))
             raise common_ex.NotAuthorized(e)
-        '''
 
         # TODO(frossigneux) rollback if an exception is raised
         for reservation in (existing_reservations):
@@ -542,12 +551,7 @@ class ManagerService(service_utils.RPCServer):
             if resource_type != reservation['resource_type']:
                 raise exceptions.CantUpdateParameter(
                     param='resource_type')
-
-            if reservation['resource_type'] in self.plugins:
-                plugin = self.plugins[reservation['resource_type']]
-            elif self.plugin_manager.supports(reservation['resource_type']):
-                plugin = self.plugin_manager.get(reservation['resource_type'])
-
+            plugin = self._get_plugin(reservation['resource_type'])
             plugin.update_reservation(reservation['id'], v)
 
         event = db_api.event_get_first_sorted_by_filters(
@@ -648,10 +652,7 @@ class ManagerService(service_utils.RPCServer):
         unclean_end = False
         for reservation in self._reservations_execution_ordered(lease):
             if reservation['status'] != status.reservation.DELETED:
-                if reservation['resource_type'] in self.plugins:
-                    plugin = self.plugins[reservation['resource_type']]
-                elif self.plugin_manager.supports(reservation['resource_type']):
-                    plugin = self.plugin_manager.get(reservation['resource_type'])
+                plugin = self._get_plugin(reservation['resource_type'])
                 try:
                     plugin.on_end(reservation['resource_id'], lease=lease)
                 except (db_ex.BlazarDBException, RuntimeError):
@@ -673,6 +674,8 @@ class ManagerService(service_utils.RPCServer):
         transition=status.lease.STARTING,
         result_in=(status.lease.ACTIVE, status.lease.ERROR))
     def start_lease(self, lease_id, event_id):
+        LOG.info("START LEASE")
+        LOG.info(self.third_party_plugins)
         self._basic_action(lease_id, event_id, 'on_start',
                            status.reservation.ACTIVE)
 
@@ -700,11 +703,15 @@ class ManagerService(service_utils.RPCServer):
     def _basic_action(self, lease_id, event_id, action_time,
                       reservation_status=None):
         """Commits basic lease actions such as starting and ending."""
+        LOG.info("BASIC ACTION")
+        LOG.info(self.third_party_plugins)
+        LOG.info(self.resource_actions)
         lease = self.get_lease(lease_id)
 
         event_status = status.event.DONE
         for reservation in self._reservations_execution_ordered(lease):
             resource_type = reservation['resource_type']
+            #raise Exception("ACTION HERE")
             try:
                 if reservation_status is not None:
                     if not status.reservation.is_valid_transition(
@@ -713,7 +720,7 @@ class ManagerService(service_utils.RPCServer):
                 if self.resource_actions.get(resource_type, None):
                     action_fn = self.resource_actions.get[resource_type][action_time]
                 else:
-                    action_fn = getattr(self.plugin_manager.get(resource_type), action_time)
+                    LOG.info("THIS SHOULD NEVER HAPPEN")
                 action_fn(reservation['resource_id'], lease=lease)
             except Exception as exc:
                 if not isinstance(exc, common_ex.BlazarException):
@@ -774,8 +781,9 @@ class ManagerService(service_utils.RPCServer):
             )
             db_api.reservation_update(reservation['id'],
                                       {'resource_id': resource_id})
-
-        elif self.plugin_manager.supports(resource_type):
+        elif resource_type in self.third_party_plugins:
+            LOG.info("CREATE RESERVATION THIRD PARTY")
+            LOG.info(values)
             reservation_values = {
                 'lease_id': values['lease_id'],
                 'resource_type': resource_type,
@@ -999,7 +1007,9 @@ def get_third_party_plugins():
         raise common_ex.BlazarException('Invalid third party plugin names are '
                                         'specified: %s' % invalid_plugins)
 
+    LOG.info("MANAGER LOADING PLUGIN")
     for ext in extension_manager.extensions:
+        LOG.info(ext.name)
         try:
             plugin_obj = ext.plugin()
         except Exception as e:
