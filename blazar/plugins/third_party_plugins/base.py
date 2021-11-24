@@ -39,6 +39,7 @@ plugin_opts = [
 
 plugin_opts.extend(monitor.monitor_opts)
 
+
 class BasePlugin():
     query_options = {
         QUERY_TYPE_ALLOCATION: ['lease_id', 'reservation_id']
@@ -58,7 +59,9 @@ class BasePlugin():
         required_keys = set(required_keys)
         missing_required_keys = required_keys - data_keys
         if missing_required_keys:
-            raise ex_fn(f"{self.resource_type()} plugin requires '{missing_required_keys}'")
+            msg = f"{self.resource_type()} plugin requires " \
+                   "'{missing_required_keys}'"
+            raise ex_fn(msg)
         optional_keys = set(optional_keys)
         extra_keys = (data_keys - optional_keys) - required_keys
         if extra_keys:
@@ -493,7 +496,8 @@ class BasePlugin():
         if allocations:
             msg = 'Resource id %s is allocated by reservations.' % resource_id
             LOG.info(msg)
-            raise manager_ex.CantDeleteResource(resource=resource_id, msg=msg, resource_type=resource_type)
+            raise manager_ex.CantDeleteResource(
+                resource=resource_id, msg=msg, resource_type=resource_type)
         try:
             self.validate_delete()
             db_api.resource_destroy(self.resource_type(), resource_id)
@@ -519,7 +523,7 @@ class BasePlugin():
 
     def api_get_allocations(self, resource_id, query):
         options = self.get_query_options(query, QUERY_TYPE_ALLOCATION)
-        options['detail'] = False  # self.query_device_allocations TODO use conf
+        options['detail'] = False
         resource_allocations = self.query_resource_allocations(
             [resource_id], **options)
         allocs = resource_allocations.get(resource_id, [])
@@ -549,8 +553,8 @@ class BasePlugin():
         return resource_properties
 
     def api_update_resource_property(self, property_name, data):
-            return db_api.resource_property_update(
-                self.resource_type(), property_name, data)
+        return db_api.resource_property_update(
+            self.resource_type(), property_name, data)
 
     def create_API(self):
         rest = api_utils.Rest(f'{self.resource_type()}_v1_0',
@@ -666,10 +670,10 @@ class ResourceMonitorPlugin(monitor.GeneralMonitorPlugin):
 
     def get_reservations_by_resource_ids(
             self, resource_ids, interval_begin, interval_end):
-        return db_utils.get_reservations_by_resource_ids(resource_ids,
-                                                         self.plugin.resource_type(),
-                                                         interval_begin,
-                                                         interval_end)
+        return db_utils.get_reservations_by_resource_ids(
+            resource_ids, self.plugin.resource_type(),
+            interval_begin, interval_end
+        )
 
     def get_unreservable_resourses(self):
         return db_api.unreservable_resource_get_all_by_queries(
@@ -692,4 +696,3 @@ class ResourceMonitorPlugin(monitor.GeneralMonitorPlugin):
 
     def poll_resource_failures(self):
         return self.plugin.poll_resource_failures()
-

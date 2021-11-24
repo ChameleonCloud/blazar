@@ -129,15 +129,15 @@ class Reservation(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
                                       backref='reservation',
                                       lazy='joined')
     resource_reservation = relationship('ResourceReservation',
-                                      uselist=False,
-                                      cascade="all,delete",
-                                      backref='reservation',
-                                      lazy='joined')
+                                        uselist=False,
+                                        cascade="all,delete",
+                                        backref='reservation',
+                                        lazy='joined')
     resource_allocations = relationship('ResourceAllocation',
-                                      uselist=True,
-                                      cascade="all,delete",
-                                      backref='reservation',
-                                      lazy='joined')
+                                        uselist=True,
+                                        cascade="all,delete",
+                                        backref='reservation',
+                                        lazy='joined')
 
     def to_dict(self):
         d = super(Reservation, self).to_dict()
@@ -553,7 +553,6 @@ class DeviceExtraCapability(mb.BlazarBase):
 
 
 # THIRD PLUGIN PLUGINS
-
 class Resource(mb.BlazarBase):
     """Description
 
@@ -599,7 +598,7 @@ class ResourceAllocation(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
 
     id = _id_column()
     resource_id = sa.Column(sa.String(36),
-                          sa.ForeignKey('resources.id'))
+                            sa.ForeignKey('resources.id'))
     reservation_id = sa.Column(sa.String(36),
                                sa.ForeignKey('reservations.id'))
 
@@ -618,7 +617,7 @@ class ResourceExtraCapability(mb.BlazarBase):
 
     id = _id_column()
     resource_id = sa.Column(sa.String(36), sa.ForeignKey('resources.id'),
-                          nullable=False)
+                            nullable=False)
     capability_id = sa.Column(sa.String(255),
                               sa.ForeignKey('extra_capabilities.id'),
                               nullable=False)
@@ -626,4 +625,3 @@ class ResourceExtraCapability(mb.BlazarBase):
 
     def to_dict(self):
         return super(ResourceExtraCapability, self).to_dict()
-

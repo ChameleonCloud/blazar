@@ -30,6 +30,7 @@ from blazar.api.v1 import request_id
 from blazar.api.v1 import request_log
 from blazar.api.v1 import utils as api_utils
 
+
 LOG = logging.getLogger(__name__)
 
 CONF = cfg.CONF
@@ -63,8 +64,6 @@ def version_list():
     }, status="300 Multiple Choices")
 
 
-
-
 def make_app():
     """App builder (wsgi).
 
@@ -76,7 +75,6 @@ def make_app():
     app.route('/versions', methods=['GET'])(version_list)
 
     LOG.debug("List of plugins: %s", cfg.CONF.manager.plugins)
-
 
     plugins = cfg.CONF.manager.plugins + ['leases']
     extension_manager = enabled.EnabledExtensionManager(
@@ -92,7 +90,8 @@ def make_app():
     # Load third party plugins
     resource_plugins = []
     extension_manager = enabled.EnabledExtensionManager(
-        check_func=lambda ext: ext.name in cfg.CONF.manager.third_party_plugins,
+        check_func=lambda ext:
+            ext.name in cfg.CONF.manager.third_party_plugins,
         namespace='blazar.resource.third_party_plugins',
         invoke_on_load=False
     )

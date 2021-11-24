@@ -796,10 +796,6 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
         return super(PhysicalHostMonitorPlugin, cls).__new__(cls, *args,
                                                              **kwargs)
 
-    def allocation_candidates(self, values):
-        return super(PhysicalHostMonitorPlugin, cls).allocation_candidates(values)
-
-
     def filter_allocations(self, reservation, host_ids):
         return [alloc for alloc
                 in reservation['computehost_allocations']

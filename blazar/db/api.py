@@ -817,7 +817,6 @@ def resource_property_create(values):
     return IMPL.resource_property_create(values)
 
 
-
 # Resource reservation
 def resource_reservation_create(resource_reservation_values):
     return IMPL.resource_reservation_create(resource_reservation_values)
@@ -828,15 +827,17 @@ def resource_reservation_get(resource_reservation_id):
     return IMPL.resource_reservation_get(resource_reservation_id)
 
 
-def resource_reservation_update(resource_reservation_id, resource_reservation_values):
+def resource_reservation_update(
+        resource_reservation_id, resource_reservation_values):
     """Update floating IP reservation."""
     return IMPL.resource_reservation_update(resource_reservation_id,
-                                       resource_reservation_values)
+                                            resource_reservation_values)
 
 
 def resource_reservation_destroy(resource_reservation_id):
     """Delete specific floating ip reservation."""
-    return IMPL.resource_reservation_destroy(resource_type, resource_reservation_id)
+    return IMPL.resource_reservation_destroy(
+        resource_type, resource_reservation_id)
 
 
 # resource Allocation
@@ -888,12 +889,13 @@ def resource_get_all_by_queries(resource_type, queries):
 def resource_destroy(resource_type, resource_id):
     IMPL.resource_destroy(resource_type, resource_id)
 
+
 def resource_update(resource_type, resource_id, data):
     """Update device."""
     IMPL.resource_update(resource_type, resource_id, data)
 
-# Resource ExtraCapabilities
 
+# Resource ExtraCapabilities
 def resource_extra_capability_create(resource_type, values):
     return IMPL.resource_extra_capability_create(resource_type, values)
 
@@ -916,13 +918,13 @@ def resource_extra_capability_update(resource_extra_capability_id, values):
 
 
 def resource_extra_capability_get_all_per_name(resource_id,
-                                             extra_capability_name):
+                                               extra_capability_name):
     return IMPL.resource_extra_capability_get_all_per_name(
         resource_id, extra_capability_name)
 
 
 def resource_extra_capability_get_latest_per_name(resource_id,
-                                                extra_capability_name):
+                                                  extra_capability_name):
     return IMPL.resource_extra_capability_get_latest_per_name(
         resource_id, extra_capability_name
     )
@@ -930,7 +932,8 @@ def resource_extra_capability_get_latest_per_name(resource_id,
 
 @to_dict
 def unreservable_resource_get_all_by_queries(resource_type, queries):
-    return IMPL.unreservable_resource_get_all_by_queries(resource_type, queries)
+    return IMPL.unreservable_resource_get_all_by_queries(
+        resource_type, queries)
 
 
 @to_dict
