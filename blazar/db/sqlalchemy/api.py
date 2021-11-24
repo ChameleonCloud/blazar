@@ -56,6 +56,7 @@ def _read_deleted_filter(query, db_model, deleted):
         query = query.filter(db_model.deleted == default_deleted_value)
     return query
 
+
 def _resource_type_filter(query, db_model, resource_type):
     return query.filter(db_model.resource_type == resource_type)
 
@@ -69,9 +70,11 @@ def model_query(model, session=None, deleted=False):
 
     return _read_deleted_filter(session.query(model), model, deleted)
 
+
 def resource_query(model, resource_type, session=None):
     session = session or get_session()
     return _resource_type_filter(model_query(model, session), model, resource_type)
+
 
 def setup_db():
     try:
@@ -2013,14 +2016,18 @@ def resource_properties_list(resource_type):
     session = get_session()
 
     with session.begin():
-        resource_model = EXTRA_CAPABILITY_MODELS.get(resource_type, models.ResourceExtraCapability)
+        resource_model = EXTRA_CAPABILITY_MODELS.get(
+            resource_type,
+            models.ResourceExtraCapability
+        )
         query = session.query(
             models.ExtraCapability.capability_name,
             models.ExtraCapability.private,
             resource_model.capability_value).join(resource_model).distinct()
         # Add extra filter if using 3rd party resource type
-        if not resource_type in EXTRA_CAPABILITY_MODELS:
-            query = query.join(models.Resource).filter_by(resource_type=resource_type)
+        ifresource_type not in EXTRA_CAPABILITY_MODELS:
+            query = query.join(models.Resource).filter_by(
+                resource_type=resource_type)
 
         return query.all()
 
@@ -2086,11 +2093,7 @@ def resource_property_get_or_create(resource_type, capability_name):
         get_session(), resource_type, capability_name)
 
 
-
-
-
 # resource reservation
-
 def resource_reservation_create(resource_reservation_values):
     values = resource_reservation_values.copy()
     resource_reservation = models.ResourceReservation()
@@ -2103,7 +2106,9 @@ def resource_reservation_create(resource_reservation_values):
         except common_db_exc.DBDuplicateEntry as e:
             # raise exception about duplicated columns (e.columns)
             raise db_exc.BlazarDBDuplicateEntry(
-                model=resource_reservation.__class__.__name__, columns=e.columns)
+                model=resource_reservation.__class__.__name__,
+                columns=e.columns
+            )
 
     return resource_reservation_get(resource_reservation.id)
 
@@ -2117,11 +2122,13 @@ def resource_reservation_get(resource_reservation_id):
     return _resource_reservation_get(get_session(), resource_reservation_id)
 
 
-def resource_reservation_update(resource_reservation_id, resource_reservation_values):
+def resource_reservation_update(
+        resource_reservation_id, resource_reservation_values):
     session = get_session()
 
     with session.begin():
-        resource_reservation = _resource_reservation_get(session, resource_reservation_id)
+        resource_reservation = _resource_reservation_get(
+            session, resource_reservation_id)
         resource_reservation.update(resource_reservation_values)
         resource_reservation.save(session=session)
 
@@ -2131,7 +2138,8 @@ def resource_reservation_update(resource_reservation_id, resource_reservation_va
 def resource_reservation_destroy(resource_reservation_id):
     session = get_session()
     with session.begin():
-        resource_reservation = _resource_reservation_get(session, resource_reservation_id)
+        resource_reservation = _resource_reservation_get(
+            session, resource_reservation_id)
 
         if not resource_reservation:
             # raise not found error
@@ -2217,7 +2225,8 @@ def _resource_get_all(session, resource_type):
 
 
 def resource_get_all_by_queries(resource_type, queries):
-    resources_query = resource_query(models.Resource, resource_type, get_session())
+    resources_query = resource_query(
+        models.Resource, resource_type, get_session())
 
     oper = {
         '<': ['lt', lambda a, b: a >= b],
@@ -2310,6 +2319,7 @@ def resource_update(resource_type, resource_id, data):
         resource.update({"data": data})
         resource.save(session=session)
 
+
 def _resource_extra_capability_query(session):
     return (
         model_query(models.ResourceExtraCapability, session)
@@ -2326,7 +2336,7 @@ def _resource_extra_capability_get(session, resource_extra_capability_id):
 
 def resource_extra_capability_get(resource_extra_capability_id):
     return _resource_extra_capability_get(get_session(),
-                                        resource_extra_capability_id)
+                                          resource_extra_capability_id)
 
 
 def _resource_extra_capability_get_all_per_resource(session, resource_id):
@@ -2337,8 +2347,8 @@ def _resource_extra_capability_get_all_per_resource(session, resource_id):
 
 
 def resource_extra_capability_get_all_per_resource(resource_id):
-    return _resource_extra_capability_get_all_per_resource(get_session(),
-                                                       resource_id).all()
+    return _resource_extra_capability_get_all_per_resource(
+            get_session(), resource_id).all()
 
 
 def resource_extra_capability_create(resource_type, values):
@@ -2373,7 +2383,7 @@ def resource_extra_capability_update(resource_extra_capability_id, values):
     with session.begin():
         resource_extra_capability, _ = (
             _resource_extra_capability_get(session,
-                                         resource_extra_capability_id))
+                                           resource_extra_capability_id))
         resource_extra_capability.update(values)
         resource_extra_capability.save(session=session)
 
@@ -2404,12 +2414,13 @@ def resource_extra_capability_get_all_per_name(resource_id, capability_name):
         return query.filter_by(capability_name=capability_name).all()
 
 
-def resource_extra_capability_get_latest_per_name(resource_id, capability_name):
+def resource_extra_capability_get_latest_per_name(
+        resource_id, capability_name):
     session = get_session()
 
     with session.begin():
         query = _resource_extra_capability_get_all_per_resource(session,
-                                                            resource_id)
+                                                                resource_id)
         return (
             query
             .filter(models.ExtraCapability.capability_name == capability_name)

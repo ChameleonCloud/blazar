@@ -124,8 +124,10 @@ def get_reservations_by_device_ids(device_ids, start_date, end_date):
     return IMPL.get_reservations_by_device_ids(device_ids, start_date,
                                                end_date)
 
+
 def get_reservations_by_resource_id(resource_id, start_date, end_date):
-    return IMPL.get_reservations_by_resource_id(resource_id, start_date, end_date)
+    return IMPL.get_reservations_by_resource_id(
+        resource_id, start_date, end_date)
 
 
 def get_reservations_by_resource_ids(
@@ -160,10 +162,12 @@ def get_reservation_allocations_by_device_ids(device_ids, start_date, end_date,
     return IMPL.get_reservation_allocations_by_device_ids(
         device_ids, start_date, end_date, lease_id, reservation_id)
 
-# TODO resource type filter?
-def get_reservation_allocations_by_resource_ids(resource_ids, start_date, end_date,
-                                              lease_id=None,
-                                              reservation_id=None):
+
+def get_reservation_allocations_by_resource_ids(resource_ids,
+                                                start_date,
+                                                end_date,
+                                                lease_id=None,
+                                                reservation_id=None):
     return IMPL.get_reservation_allocations_by_resource_ids(
         resource_ids, start_date, end_date, lease_id, reservation_id)
 

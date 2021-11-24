@@ -59,7 +59,6 @@ manager_opts = [
 
 CONF = cfg.CONF
 CONF.register_opts(manager_opts, 'manager')
-
 LOG = logging.getLogger(__name__)
 
 LEASE_DATE_FORMAT = "%Y-%m-%d %H:%M"
@@ -68,7 +67,6 @@ EVENT_INTERVAL = 10
 
 
 class ManagerService(service_utils.RPCServer):
-#class ManagerService(service.Service):
     """Service class for the blazar-manager service.
 
     Responsible for working with Blazar DB, scheduling logic, running events,
@@ -138,10 +136,9 @@ class ManagerService(service_utils.RPCServer):
             db_api.event_update(event['id'],
                                 {'status': status.event.IN_PROGRESS})
             try:
-                event_thread = eventlet.spawn(self._exec_event, event)
-                #event_thread = eventlet.spawn(
-                #    service_utils.with_empty_context(self._exec_event),
-                #    event)
+                event_thread = eventlet.spawn(
+                    service_utils.with_empty_context(self._exec_event),
+                    event)
                 event_threads[event['id']] = event_thread
             except Exception:
                 db_api.event_update(event['id'],
@@ -363,7 +360,6 @@ class ManagerService(service_utils.RPCServer):
 
             allocations = self._allocation_candidates(
                 lease_values, reservations)
-
             try:
                 self.enforcement.check_create(
                     context.current(), lease_values, reservations, allocations)
@@ -699,7 +695,6 @@ class ManagerService(service_utils.RPCServer):
         event_status = status.event.DONE
         for reservation in self._reservations_execution_ordered(lease):
             resource_type = reservation['resource_type']
-            #raise Exception("ACTION HERE")
             try:
                 if reservation_status is not None:
                     if not status.reservation.is_valid_transition(

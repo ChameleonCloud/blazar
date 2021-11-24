@@ -32,6 +32,7 @@ plugin_opts = [
 before_end_options = ['', 'snapshot', 'default', 'email']
 on_start_options = ['', 'default', 'orchestration']
 
+
 class HostPlugin(base.BasePlugin, nova.NovaClientWrapper):
     freepool_name = CONF.nova.aggregate_freepool_name
 
@@ -173,10 +174,11 @@ class HostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             "count_range": values["count_range"],
             "resource_type": self.resource_type(),
         }
-        resource_reservation = db_api.resource_reservation_create(host_rsrv_values)
+        resource_reservation = db_api.resource_reservation_create(
+            host_rsrv_values)
         for host_id in host_ids:
-            db_api.resource_allocation_create({'resource_id': host_id,
-                                          'reservation_id': reservation_id})
+            db_api.resource_allocation_create(
+                {'resource_id': host_id, 'reservation_id': reservation_id})
         return resource_reservation['id']
 
     def on_start(self, resource_id, lease=None):
@@ -186,8 +188,8 @@ class HostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         hosts = []
         for allocation in db_api.resource_allocation_get_all_by_values(
                 reservation_id=host_reservation['reservation_id']):
-            host = db_api.resource_get(self.resource_type(), allocation['resource_id'])
-            #hosts.append(host['hypervisor_hostname'])
+            host = db_api.resource_get(
+                self.resource_type(), allocation['resource_id'])
         pool.add_computehost(host_reservation["values"]['aggregate_id'], hosts)
 
         action = host_reservation["values"].get('on_start', 'default')
@@ -232,7 +234,8 @@ class HostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         super(HostPlugin, self).on_end(resource_id, lease)
         resource_reservation = db_api.resource_reservation_get(resource_id)
         pool = nova.ReservationPool()
-        for host in pool.get_computehosts(resource_reservation["values"]['aggregate_id']):
+        for host in pool.get_computehosts(
+                resource_reservation["values"]['aggregate_id']):
             for server in self.nova.servers.list(
                     search_opts={"node": host, "all_tenants": 1}):
                 try:
