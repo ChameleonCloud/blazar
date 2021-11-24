@@ -665,9 +665,9 @@ class ResourceMonitorPlugin(monitor.GeneralMonitorPlugin):
                 if alloc['resource_id'] in resource_ids]
 
     def get_reservations_by_resource_ids(
-            self, resource_ids, resource_type, interval_begin, interval_end):
+            self, resource_ids, interval_begin, interval_end):
         return db_utils.get_reservations_by_resource_ids(resource_ids,
-                                                         resource_type,
+                                                         self.plugin.resource_type(),
                                                          interval_begin,
                                                          interval_end)
 

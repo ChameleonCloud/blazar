@@ -143,7 +143,7 @@ class GeneralMonitorPlugin(base.BaseMonitorPlugin):
 
         resource_ids = [h['id'] for h in failed_resources]
         reservations = self.get_reservations_by_resource_ids(
-            resource_ids, self.resource_type, interval_begin, interval_end)
+            resource_ids, interval_begin, interval_end)
 
         for reservation in reservations:
             if reservation['resource_type'] != self.resource_type:

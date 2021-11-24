@@ -37,6 +37,7 @@ from blazar.utils import trusts
 from collections import defaultdict
 import eventlet
 from oslo_log import log as logging
+from oslo_service import service
 
 manager_opts = [
     cfg.ListOpt('plugins',
@@ -70,6 +71,7 @@ EVENT_INTERVAL = 10
 
 
 class ManagerService(service_utils.RPCServer):
+#class ManagerService(service.Service):
     """Service class for the blazar-manager service.
 
     Responsible for working with Blazar DB, scheduling logic, running events,
@@ -81,8 +83,6 @@ class ManagerService(service_utils.RPCServer):
         super(ManagerService, self).__init__(target)
         self.plugins = get_plugins()
         self.third_party_plugins = get_third_party_plugins()
-        LOG.info("GETTING THIRD PARTY PLUGINS")
-        LOG.info(self.third_party_plugins)
         self.resource_actions = self._setup_actions()
         self.monitors = monitor.load_monitors(self.plugins) \
                 + monitor.load_monitors(self.third_party_plugins)
@@ -142,9 +142,10 @@ class ManagerService(service_utils.RPCServer):
             db_api.event_update(event['id'],
                                 {'status': status.event.IN_PROGRESS})
             try:
-                event_thread = eventlet.spawn(
-                    service_utils.with_empty_context(self._exec_event),
-                    event)
+                event_thread = eventlet.spawn(self._exec_event, event)
+                #event_thread = eventlet.spawn(
+                #    service_utils.with_empty_context(self._exec_event),
+                #    event)
                 event_threads[event['id']] = event_thread
             except Exception:
                 db_api.event_update(event['id'],
@@ -225,15 +226,11 @@ class ManagerService(service_utils.RPCServer):
                      'time': {'op': 'le',
                               'border': datetime.datetime.utcnow()}}
         )
-
         for batch in self._select_for_execution(events):
             self._process_events_concurrently(batch)
 
     def _exec_event(self, event):
         """Execute an event function"""
-        LOG.info("EXEC EVENT HERE")
-        LOG.info(self.plugins)
-        LOG.info(self.third_party_plugins)
         event_fn = getattr(self, event['event_type'], None)
         if event_fn is None:
             raise exceptions.EventError(
@@ -360,7 +357,6 @@ class ManagerService(service_utils.RPCServer):
             raise common_ex.InvalidInput(
                 'End date must be later than start date.')
 
-        LOG.info("EXISTING_ALLOCATIONS")
         with trusts.create_ctx_from_trust(trust_id) as ctx:
             # NOTE(priteau): We should not get user_id from ctx, because we are
             # in the context of the trustee (blazar user).
@@ -439,8 +435,6 @@ class ManagerService(service_utils.RPCServer):
                 try:
                     for event in events:
                         event['lease_id'] = lease['id']
-                        LOG.info("CREATING EVENT")
-                        LOG.info(event)
                         db_api.event_create(event)
                 except (exceptions.UnsupportedResourceType,
                         common_ex.BlazarException):
@@ -676,8 +670,6 @@ class ManagerService(service_utils.RPCServer):
         transition=status.lease.STARTING,
         result_in=(status.lease.ACTIVE, status.lease.ERROR))
     def start_lease(self, lease_id, event_id):
-        LOG.info("START LEASE")
-        LOG.info(self.third_party_plugins)
         self._basic_action(lease_id, event_id, 'on_start',
                            status.reservation.ACTIVE)
 
@@ -705,9 +697,6 @@ class ManagerService(service_utils.RPCServer):
     def _basic_action(self, lease_id, event_id, action_time,
                       reservation_status=None):
         """Commits basic lease actions such as starting and ending."""
-        LOG.info("BASIC ACTION")
-        LOG.info(self.third_party_plugins)
-        LOG.info(self.resource_actions)
         lease = self.get_lease(lease_id)
 
         event_status = status.event.DONE
@@ -719,10 +708,7 @@ class ManagerService(service_utils.RPCServer):
                     if not status.reservation.is_valid_transition(
                             reservation['status'], reservation_status):
                         raise common_ex.InvalidStatus
-                if self.resource_actions.get(resource_type, None):
-                    action_fn = self.resource_actions.get[resource_type][action_time]
-                else:
-                    LOG.info("THIS SHOULD NEVER HAPPEN")
+                action_fn = self.resource_actions[resource_type][action_time]
                 action_fn(reservation['resource_id'], lease=lease)
             except Exception as exc:
                 if not isinstance(exc, common_ex.BlazarException):
@@ -774,8 +760,6 @@ class ManagerService(service_utils.RPCServer):
                 'resource_type': resource_type,
                 'status': status.reservation.PENDING
             }
-            LOG.info("CREATE RESERVATION")
-            LOG.info(values)
             reservation = db_api.reservation_create(reservation_values)
             resource_id = self.plugins[resource_type].reserve_resource(
                 reservation['id'],
@@ -784,8 +768,6 @@ class ManagerService(service_utils.RPCServer):
             db_api.reservation_update(reservation['id'],
                                       {'resource_id': resource_id})
         elif resource_type in self.third_party_plugins:
-            LOG.info("CREATE RESERVATION THIRD PARTY")
-            LOG.info(values)
             reservation_values = {
                 'lease_id': values['lease_id'],
                 'resource_type': resource_type,
@@ -800,7 +782,6 @@ class ManagerService(service_utils.RPCServer):
             db_api.reservation_update(reservation['id'],
                                       {'resource_id': resource_id})
         else:
-            LOG.info("CREATE_RESERVATION")
             raise exceptions.UnsupportedResourceType(
                 resource_type=resource_type)
 
@@ -864,7 +845,6 @@ class ManagerService(service_utils.RPCServer):
                 allocations[resource_type] = [
                     plugin.get(rid) for rid in resource_ids]
             else:
-                LOG.info("EXISTING_ALLOCATIONS")
                 raise exceptions.UnsupportedResourceType(
                     resource_type=resource_type)
 
@@ -957,7 +937,7 @@ def get_plugins():
     return plugins
 
 
-@lru_cache(maxsize=None)
+#@lru_cache(maxsize=None)
 def get_third_party_plugins():
     config_plugins = CONF.manager.third_party_plugins
     plugins = {}
@@ -975,9 +955,7 @@ def get_third_party_plugins():
         raise common_ex.BlazarException('Invalid third party plugin names are '
                                         'specified: %s' % invalid_plugins)
 
-    LOG.info("MANAGER LOADING PLUGIN")
     for ext in extension_manager.extensions:
-        LOG.info(ext.name)
         try:
             plugin_obj = ext.plugin()
         except Exception as e:

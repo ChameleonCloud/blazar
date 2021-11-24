@@ -22,6 +22,7 @@ from functools import partial
 
 from oslo_config import cfg
 from oslo_service import service
+from oslo_log import log as logging
 
 gettext.install('blazar')
 
@@ -30,10 +31,13 @@ from blazar.manager import service as manager_service
 from blazar.notification import notifier
 from blazar.utils import service as service_utils
 
+LOG = logging.getLogger(__name__)
 
 class ManagerServiceSingleton:
-    _instance = manager_service.ManagerService()
+    _instance = None
     def __new__(self, resource_type=None):
+        if not ManagerServiceSingleton._instance:
+            ManagerServiceSingleton._instance = manager_service.ManagerService()
         if resource_type:
             return partial(ManagerServiceSingleton._instance.call, resource_type)
         return ManagerServiceSingleton._instance
@@ -48,7 +52,7 @@ def main():
     service.launch(
         cfg.CONF,
         ManagerServiceSingleton(),
-        restart_method='mutate'
+        #restart_method='mutate'
     ).wait()
 
 

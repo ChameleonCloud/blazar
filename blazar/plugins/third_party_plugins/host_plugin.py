@@ -160,8 +160,6 @@ class HostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                             pool_name)
         pool_instance = pool.create(
             name=pool_name, project_id=ctx.project_id, az=az_name)
-        LOG.info("ALLOCATE VLAUES")
-        LOG.info(values)
         rsrv_values = {
             "resource_properties": values["resource_properties"],
             "before_end": values['before_end'],
@@ -181,9 +179,6 @@ class HostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                                           'reservation_id': reservation_id})
         return resource_reservation['id']
 
-    def deallocate(self, resources, lease):
-        LOG.info("deallocating host")
-
     def on_start(self, resource_id, lease=None):
         """Add the hosts in the pool."""
         host_reservation = db_api.resource_reservation_get(resource_id)
@@ -191,7 +186,7 @@ class HostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         hosts = []
         for allocation in db_api.resource_allocation_get_all_by_values(
                 reservation_id=host_reservation['reservation_id']):
-            host = db_api.resource_get(allocation['compute_host_id'])
+            host = db_api.resource_get(self.resource_type(), allocation['resource_id'])
             #hosts.append(host['hypervisor_hostname'])
         pool.add_computehost(host_reservation["values"]['aggregate_id'], hosts)
 
@@ -213,7 +208,7 @@ class HostPlugin(base.BasePlugin, nova.NovaClientWrapper):
 
         action = host_reservation["values"]['before_end']
         if action == 'default':
-            action = CONF[plugin.RESOURCE_TYPE].before_end
+            action = CONF[self.resource_type()].before_end
 
         if action == 'snapshot':
             pool = nova.ReservationPool()
