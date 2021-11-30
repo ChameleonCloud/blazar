@@ -2027,7 +2027,7 @@ def resource_properties_list(resource_type):
             models.ExtraCapability.private,
             resource_model.capability_value).join(resource_model).distinct()
         # Add extra filter if using 3rd party resource type
-        ifresource_type not in EXTRA_CAPABILITY_MODELS:
+        if resource_type not in EXTRA_CAPABILITY_MODELS:
             query = query.join(models.Resource).filter_by(
                 resource_type=resource_type)
 

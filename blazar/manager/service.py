@@ -499,10 +499,8 @@ class ManagerService(service_utils.RPCServer):
                 'IDs are: %s' % ','.join([str(id) for id in invalid_ids]))
 
         try:
-            [
+            for r in (reservations + existing_reservations):
                 self._get_plugin(r['resource_type'])
-                for r in (reservations + existing_reservations)
-            ]
         except KeyError:
             raise exceptions.CantUpdateParameter(param='resource_type')
 
@@ -512,6 +510,9 @@ class ManagerService(service_utils.RPCServer):
             new_reservations = reservations
             new_allocs = self._allocation_candidates(values,
                                                      existing_reservations)
+            LOG.info("LOOK HERE")
+            LOG.info(new_reservations)
+            LOG.info(new_allocs)
         else:
             # User is not updating reservation parameters, e.g., is only
             # adjusting lease start/end dates.

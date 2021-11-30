@@ -196,9 +196,6 @@ class LeaseStatus(BaseStatus):
         def decorator(func):
             @wraps(func)
             def wrapper(*args, **kwargs):
-                LOG.info("WRAPPING LEASE STATUS")
-                LOG.info(args)
-                LOG.info(kwargs)
                 # Update a lease status
                 if "lease_id" in kwargs:
                     lease_id = kwargs["lease_id"]
