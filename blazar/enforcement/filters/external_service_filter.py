@@ -50,10 +50,15 @@ class ExternalServiceFilterException(exceptions.NotAuthorized):
 class ExternalServiceFilter(base_filter.BaseFilter):
 
     enforcement_opts = [
-        cfg.StrOpt(
-            'external_service_endpoint',
-            default=False,
-            help='The url of the external service API. A value of -1 will '
+        cfg.ListOpt(
+            'external_service_endpoint_v1',
+            default=[],
+            help='The url of the external service API v1. A value of -1 will '
+                 'disabled the service.'),
+        cfg.ListOpt(
+            'external_service_endpoint_v2',
+            default=[],
+            help='The url of the external service API v2. A value of -1 will '
                  'disabled the service.'),
         cfg.StrOpt(
             'external_service_token',
@@ -75,8 +80,8 @@ class ExternalServiceFilter(base_filter.BaseFilter):
 
         return headers
 
-    def post(self, path, body):
-        url = self.external_service_endpoint
+    def post_v1(self, path, body):
+        url = self.external_service_endpoint_v1
 
         if url[-1] == '/':
             url += path[1:]
@@ -95,24 +100,66 @@ class ExternalServiceFilter(base_filter.BaseFilter):
             raise ExternalServiceUnsupportedHTTPResponse(
                 status=req.status_code)
 
+    def post(self, path, body):
+        url = self.external_service_endpoint_v2
+
+        if url[-1] == '/':
+            url += path[1:]
+        else:
+            url += path
+
+        body = json.dumps(body, cls=DateTimeEncoder)
+        req = requests.post(url, headers=self.get_headers(), data=body)
+
+        balance_service_version = req.json().get("balance_service_version")
+
+        if req.status_code == 204:
+            return balance_service_version
+
+        if balance_service_version == 1:
+            if req.status_code == 403:
+                LOG.error(req.json().get('message'))
+            else:
+                LOG.error(f"Unknown error with status code {req.status_code}")
+            return balance_service_version
+        else:
+            if req.status_code == 403:
+                raise ExternalServiceFilterException(
+                    message=req.json().get('message'))
+            else:
+                raise ExternalServiceUnsupportedHTTPResponse(
+                    status=req.status_code)
+
     def check_create(self, context, lease_values):
-        if self.external_service_endpoint:
-            path = '/v1/check-create'
+        if self.external_service_endpoint_v2:
+            path = '/v2/check-create/'
             body = dict(context=context, lease=lease_values)
 
-            self.post(path, body)
+            balance_service_version = self.post(path, body)
+
+            if balance_service_version == 1 and self.external_service_endpoint_v1:
+                path = '/v1/check-create'
+                self.post_v1(path, body)
 
     def check_update(self, context, current_lease_values, new_lease_values):
-        if self.external_service_endpoint:
-            path = '/v1/check-update'
+        if self.external_service_endpoint_v2:
+            path = '/v2/check-update/'
             body = dict(context=context, current_lease=current_lease_values,
                         lease=new_lease_values)
 
-            self.post(path, body)
+            balance_service_version = self.post(path, body)
+
+            if balance_service_version == 1 and self.external_service_endpoint_v1:
+                path = '/v1/check-update'
+                self.post_v1(path, body)
 
     def on_end(self, context, lease_values):
-        if self.external_service_endpoint:
-            path = '/v1/on-end'
+        if self.external_service_endpoint_v2:
+            path = '/v2/on-end/'
             body = dict(context=context, lease=lease_values)
 
-            self.post(path, body)
+            balance_service_version = self.post(path, body)
+
+            if balance_service_version == 1 and self.external_service_endpoint_v1:
+                path = '/v1/on-end'
+                self.post_v1(path, body)
