@@ -495,10 +495,8 @@ class ManagerService(service_utils.RPCServer):
                 'IDs are: %s' % ','.join([str(id) for id in invalid_ids]))
 
         try:
-            [
+            for r in (reservations + existing_reservations):
                 self._get_plugin(r['resource_type'])
-                for r in (reservations + existing_reservations)
-            ]
         except KeyError:
             raise exceptions.CantUpdateParameter(param='resource_type')
 

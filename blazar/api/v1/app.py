@@ -25,6 +25,7 @@ from oslo_middleware import debug
 from stevedore import enabled
 from werkzeug import exceptions as werkzeug_exceptions
 
+from blazar import policy
 from blazar.api.v1 import api_version_request
 from blazar.api.v1 import request_id
 from blazar.api.v1 import request_log
@@ -101,6 +102,7 @@ def make_app():
         app.register_blueprint(bp, url_prefix=bp.url_prefix)
         resource_plugins.append(
             {"name": plugin.resource_type(), "prefix": bp.url_prefix})
+        policy.register_plugin_opts(plugin.get_policy())
 
     def resources_list():
         return api_utils.render(resource_plugins)

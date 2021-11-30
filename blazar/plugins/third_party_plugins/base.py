@@ -1,12 +1,20 @@
 from oslo_log import log as logging
 from oslo_utils import strutils
 from oslo_config import cfg
+from oslo_serialization import jsonutils
+from oslo_policy.policy import DocumentedRuleDefault
 
-from blazar.utils import plugins as plugins_utils
+from blazar import status
+from blazar import policy
+from blazar.api.v1 import validation
+from blazar.api.v1 import utils as api_utils
+from blazar.db import api as db_api
 from blazar.db import exceptions as db_ex
 from blazar.db import utils as db_utils
 from blazar.manager import exceptions as manager_ex
 from blazar.plugins import monitor
+from blazar.policies import base
+from blazar.utils import plugins as plugins_utils
 from blazar.utils import trusts
 import datetime
 from random import shuffle
@@ -130,7 +138,7 @@ class BasePlugin():
             shuffle(not_allocated_resource_ids)
             return not_allocated_resource_ids[:int(min_resources)]
         else:
-            raise NotEnoughResourcesAvailable()
+            raise manager_ex.NotEnoughResourcesAvailable()
 
     def allocation_candidates(self, values):
         return self.matching_resources(
@@ -238,22 +246,28 @@ class BasePlugin():
             min_resources = min_resources - kept_resources \
                 if (min_resources - kept_resources) > 0 else 0
             max_resources = max_resources - kept_resources
+            # TODO func does not exist
             resource_ids = self._matching_resources(
                 resource_properties,
                 str(min_resources) + '-' + str(max_resources),
                 dates_after['start_date'], dates_after['end_date'],
                 lease['project_id'])
             if len(resource_ids) >= min_resources:
-                for resource_id in resource_ids:
-                    db_api.resource_allocation_create(
-                        {'resource_id': resource_id,
-                         'reservation_id': reservation_id})
-                    # TODO call allocate() here?
+                self.update_new_resources()
             else:
                 raise manager_ex.NotEnoughResourcesAvailable()
 
         for allocation in allocs_to_remove:
             db_api.resource_allocation_destroy(allocation['id'])
+
+    def update_new_resources(self, resource_reservation, resource_ids):
+        for resource_id in resource_ids:
+            db_api.resource_allocation_create(
+                {'resource_id': resource_id,
+                 'reservation_id': reservation_id})
+            new_resource = db_api.resource_get(resource_id)
+            new_resourcess.append(new_resource['hypervisor_hostname'])
+            # TODO call allocate() here?
 
     def _convert_int_param(self, param, name):
         """
@@ -411,7 +425,11 @@ class BasePlugin():
     def get_notification_event_types(self):
         return []
 
+    def reallocate(self, allocation):
+        return True
+
     def api_list(self):
+        policy.check_enforcement(self.resource_type(), "get")
         raw_resource_list = db_api.resource_list(self.resource_type())
         resource_list = []
         for resource in raw_resource_list:
@@ -420,6 +438,7 @@ class BasePlugin():
 
     @trusts.use_trust_auth()
     def api_create(self, data):
+        policy.check_enforcement(self.resource_type(), "post")
         create_data = data["data"]
         trust_id = data["trust_id"]
         create_data["trust_id"] = trust_id
@@ -432,6 +451,7 @@ class BasePlugin():
         return resource
 
     def api_get(self, resource_id):
+        policy.check_enforcement(self.resource_type(), "get")
         resource = self.get(resource_id)
         if resource is None:
             raise manager_ex.ResourceNotFound(
@@ -439,6 +459,7 @@ class BasePlugin():
         return resource
 
     def api_update(self, resource_id, data):
+        policy.check_enforcement(self.resource_type(), "put")
         extras = data["extras"]
         data = data["data"]
         if not data and not extras:
@@ -454,6 +475,7 @@ class BasePlugin():
             return db_api.resource_get(self.resource_type(), resource_id)
 
     def api_delete(self, resource_id):
+        policy.check_enforcement(self.resource_type(), "delete")
         resource = db_api.resource_get(self.resource_type(), resource_id)
         if resource is None:
             raise manager_ex.ResourceNotFound(
@@ -476,10 +498,11 @@ class BasePlugin():
             )
 
     def api_list_allocations(self, query):
+        policy.check_enforcement(self.resource_type(), "get_allocations")
         resource_id_list = [
             r['id'] for r in db_api.resource_list(self.resource_type())]
         options = self.get_query_options(query, QUERY_TYPE_ALLOCATION)
-        options['detail'] = False  # TODO use conf
+        options['detail'] = False
         resource_allocations = self.query_resource_allocations(
             resource_id_list, **options)
 
@@ -488,7 +511,7 @@ class BasePlugin():
             for resource, allocs in resource_allocations.items()
         ]
 
-    def api_get_allocations(self, resource_id, query):
+    def get_allocations(self, resource_id, query, detail=False):
         options = self.get_query_options(query, QUERY_TYPE_ALLOCATION)
         options['detail'] = False
         resource_allocations = self.query_resource_allocations(
@@ -496,11 +519,34 @@ class BasePlugin():
         allocs = resource_allocations.get(resource_id, [])
         return {"resource_id": resource_id, "reservations": allocs}
 
-    # TODO
+    def api_get_allocations(self, resource_id, query):
+        policy.check_enforcement(self.resource_type(), "get_allocations")
+        return self.get_allocations(resource_id, query)
+
     def api_reallocate(self, resource_id, data):
-        raise Exception("unimplemented")
+        policy.check_enforcement(self.resource_type(), "reallocate")
+        allocations = self.get_allocations(resource_id, data, detail=True)
+
+        for alloc in allocations['reservations']:
+            reservation_flags = {}
+            resource_allocation = db_api.resource_allocation_get_all_by_values(
+                resource_id=resource_id,
+                reservation_id=alloc['id'])[0]
+
+            if self.reallocate(resource_allocation):
+                if alloc['status'] == status.reservation.ACTIVE:
+                    reservation_flags.update(dict(resources_changed=True))
+                    db_api.lease_update(alloc['lease_id'], dict(degraded=True))
+            else:
+                reservation_flags.update(dict(missing_resources=True))
+                db_api.lease_update(alloc['lease_id'], dict(degraded=True))
+
+            db_api.reservation_update(alloc['id'], reservation_flags)
+
+        return self.get_allocations(resource_id, data)
 
     def api_list_resource_properties(self, query):
+        policy.check_enforcement(self.resource_type(), "get_resource_properties")
         detail = False if not query else query.get('detail', False)
         resource_properties = collections.defaultdict(list)
 
@@ -520,6 +566,7 @@ class BasePlugin():
         return resource_properties
 
     def api_update_resource_property(self, property_name, data):
+        policy.check_enforcement(self.resource_type(), "patch_resource_properties")
         return db_api.resource_property_update(
             self.resource_type(), property_name, data)
 
@@ -606,7 +653,6 @@ class BasePlugin():
         resource_allocations = {d: [] for d in resources}
 
         for reservation in reservations:
-            # TODO detail config?
             if detail:
                 del reservation['project_id']
                 del reservation['lease_name']
@@ -619,6 +665,109 @@ class BasePlugin():
                         if k != 'resource_ids'})
 
         return resource_allocations
+
+    def get_policy(self):
+        policy_root = f'blazar:{self.resource_type()}:%s'
+        resource_policy = [
+            DocumentedRuleDefault(
+                name=policy_root % 'get',
+                check_str=base.RULE_ADMIN,
+                description='Policy rule for List/Show Resource(s) API.',
+                operations=[
+                    {
+                        'path': '/{api_version}/'+self.resource_type(),
+                        'method': 'GET'
+                    },
+                    {
+                        'path': '/{api_version}/'+self.resource_type(),
+                        'method': 'GET'
+                    }
+                ]
+            ),
+            DocumentedRuleDefault(
+                name=policy_root % 'post',
+                check_str=base.RULE_ADMIN,
+                description='Policy rule for Create Resource API.',
+                operations=[
+                    {
+                        'path': '/{api_version}/'+self.resource_type(),
+                        'method': 'POST'
+                    }
+                ]
+            ),
+            DocumentedRuleDefault(
+                name=policy_root % 'put',
+                check_str=base.RULE_ADMIN,
+                description='Policy rule for Update Resource API.',
+                operations=[
+                    {
+                        'path': '/{api_version}/'+self.resource_type()+'/{resource_id}',
+                        'method': 'PUT'
+                    }
+                ]
+            ),
+            DocumentedRuleDefault(
+                name=policy_root % 'delete',
+                check_str=base.RULE_ADMIN,
+                description='Policy rule for Delete Resource API.',
+                operations=[
+                    {
+                        'path': '/{api_version}/'+self.resource_type()+'/{resource_id}',
+                        'method': 'DELETE'
+                    }
+                ]
+            ),
+            DocumentedRuleDefault(
+                name=policy_root % 'get_allocations',
+                check_str=base.RULE_ADMIN,
+                description='Policy rule for List/Get Resource(s) Allocations API.',
+                operations=[
+                    {
+                        'path': '/{api_version}/'+self.resource_type()+'/allocations',
+                        'method': 'GET'
+                    },
+                    {
+                        'path': '/{api_version}/'+self.resource_type()+'/{resource_id}/allocation',
+                        'method': 'GET'
+                    }
+                ]
+            ),
+            DocumentedRuleDefault(
+                name=policy_root % 'reallocate',
+                check_str=base.RULE_ADMIN,
+                description='Policy rule for Reallocate Resource API.',
+                operations=[
+                    {
+                        'path': '/{api_version}/'+self.resource_type()+'/{resource_id}/allocation',
+                        'method': 'PUT'
+                    }
+                ]
+            ),
+            DocumentedRuleDefault(
+                name=policy_root % 'get_resource_properties',
+                check_str=base.RULE_ADMIN,
+                description='Policy rule for Resource Properties API.',
+                operations=[
+                    {
+                        'path': '/{api_version}/'+self.resource_type()+'/resource_properties',
+                        'method': 'GET'
+                    }
+                ]
+            ),
+            DocumentedRuleDefault(
+                name=policy_root % 'patch_resource_properties',
+                check_str=base.RULE_ADMIN,
+                description='Policy rule for Resource Properties API.',
+                operations=[
+                    {
+                        'path': ('/{api_version}/'+self.resource_type()+'/resource_properties/'
+                                 '{property_name}'),
+                        'method': 'PATCH'
+                    }
+                ]
+            ),
+        ]
+        return resource_policy
 
 
 class ResourceMonitorPlugin(monitor.GeneralMonitorPlugin):

@@ -22,8 +22,7 @@ def send_lease_notification(context, lease, notification):
     try:
         IMPL.send_lease_notification(context, lease, notification)
     except Exception:
-        LOG.info("Lease notification")
-        LOG.info(lease)
+        pass
 
 
 def format_lease_payload(lease):
