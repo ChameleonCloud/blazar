@@ -180,51 +180,30 @@ class HostPlugin(base.BasePlugin, nova.NovaClientWrapper):
 
         return super(HostPlugin, self).allocation_candidates(values)
 
-    def allocate(self, reservation_id, values):
-        self._validate_min_max_range(values, values["min"], values["max"])
-        ctx = context.current()
-        host_ids = self.allocation_candidates(values)
-
-        if not host_ids:
-            raise manager_ex.NotEnoughHostsAvailable()
-
+    def reservation_values(self, reservation_id, values):
         pool = nova.ReservationPool()
         pool_name = reservation_id
         az_name = "%s%s" % (CONF[self.resource_type()].blazar_az_prefix,
                             pool_name)
+        ctx = context.current()
         pool_instance = pool.create(
             name=pool_name, project_id=ctx.project_id, az=az_name)
-        rsrv_values = {
+        return {
             "resource_properties": values["resource_properties"],
             "before_end": values['before_end'],
             "on_start": values['on_start'],
             "aggregate_id": pool_instance.id,
         }
-        host_rsrv_values = {
-            "reservation_id": reservation_id,
-            "values": rsrv_values,
-            "status": "pending",
-            "count_range": values["count_range"],
-            "resource_type": self.resource_type(),
-        }
-        resource_reservation = db_api.resource_reservation_create(
-            host_rsrv_values)
-        for host_id in host_ids:
-            db_api.resource_allocation_create(
-                {'resource_id': host_id, 'reservation_id': reservation_id})
-        return resource_reservation['id']
 
-    def update_new_resources(self, resource_reservation, resource_ids):
+    def reserve_new_resources(self, reservation_id, reservation_status, resource_ids):
+        super(HostPlugin, self).reserve_new_resources(
+            reservation_id, reservation_status, resource_ids)
         new_hosts = []
-        pool = nova.ReservationPool()
-        for host_id in resource_ids:
-            db_api.host_allocation_create(
-                {'resource_id': resource_id,
-                 'reservation_id': reservation_id})
-            new_host = db_api.resource_get(host_id)
+        for resource_id in resource_ids:
+            new_host = db_api.resource_get(self.resource_type(), resource_id)
             new_hosts.append(new_host["data"]['hypervisor_hostname'])
         if reservation_status == status.reservation.ACTIVE:
-            # Add new hosts into the aggregate.
+            pool = nova.ReservationPool()
             pool.add_computehost(resource_reservation["values"]['aggregate_id'], new_hosts)
 
     def on_start(self, resource_id, lease=None):
