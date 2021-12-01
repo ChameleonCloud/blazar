@@ -44,7 +44,7 @@ plugin_opts = [
 plugin_opts.extend(monitor.monitor_opts)
 
 
-class BasePlugin():
+class BasePlugin(metaclass=abc.ABCMeta):
     query_options = {
         QUERY_TYPE_ALLOCATION: ['lease_id', 'reservation_id']
     }
@@ -53,8 +53,14 @@ class BasePlugin():
         CONF.register_opts(plugin_opts, group=self.resource_type())
         self.monitor = ResourceMonitorPlugin(self)
 
+    @abc.abstractmethod
+    def resource_type(self):
+        """Gets the resource type for this plugin"""
+        pass
+
     def validate_data(
             self, data, required_keys, optional_keys, action_type="create"):
+        """A helper function to validate data has the proper structure"""
         if action_type == "create":
             ex_fn = exceptions.InvalidCreateResourceData
         elif action_type == "update":
@@ -71,25 +77,25 @@ class BasePlugin():
         if extra_keys:
             raise ex_fn(f"Invalid keys in data '{extra_params}'")
 
-    def resource_type(self):
+    # TODO what information should they have here?
+    def allocate(self, reservation_id, resource_id):
+        """Take action after an allocation is made"""
         pass
 
-    def allocate(self, reservation_id, values):
+    def deallocate(self, resource_id):
+        """Take action after an allocation is deleted"""
         pass
 
-    def deallocate(self, resources, lease):
+    def on_start(self, resource_id, lease):
+        """Wake up resource"""
         pass
 
-    def on_start(self, resources, lease):
-        LOG.info("ON START")
-        pass
-
-    def before_end(self, resources, lease):
-        LOG.info("BEFORE END")
+    def before_end(self, resource_id, lease):
+        """Take actions before the end of a lease"""
         pass
 
     def on_end(self, resource_id, lease=None):
-        LOG.info("ON END")
+        """Delete resource."""
         resource_reservation = db_api.resource_reservation_get(resource_id)
         db_api.resource_reservation_update(resource_reservation['id'],
                                            {'status': 'completed'})
@@ -97,21 +103,29 @@ class BasePlugin():
             reservation_id=resource_reservation['reservation_id'])
         for allocation in allocations:
             db_api.resource_allocation_destroy(allocation['id'])
-
-    def allocation_candidates(self, values):
-        super()
-        super(Resource, cls).__new__(cls, *args, **kwargs)
+            self.deallocate(resource_id)
 
     def validate_create_params(self, data):
+        """Modify and check the create resource params are valid"""
+        return data
+
+    def rollback_create(self, data):
+        """Rollback after an exception while creating the resource"""
         pass
 
     def validate_update_params(self, data):
+        """Modify and check the update resource params are valid"""
+        return data
+
+    def validate_delete(self, resource_id):
+        """Validate that the resource can be deleted"""
         pass
 
     def matching_resources(
         self, resource_properties,
         start_date, end_date, min_resources, max_resources
     ):
+        """Returns a list of all resources matching the parameters"""
         cleaning_time_delta = datetime.timedelta(
             minutes=getattr(CONF, self.resource_type()).cleaning_time)
         start_date_with_margin = start_date - cleaning_time_delta
@@ -141,6 +155,7 @@ class BasePlugin():
             raise manager_ex.NotEnoughResourcesAvailable()
 
     def allocation_candidates(self, values):
+        """Returns a list of all resources matching the parameters"""
         return self.matching_resources(
             values["resource_properties"],
             values["start_date"],
@@ -150,6 +165,7 @@ class BasePlugin():
         )
 
     def get(self, resource_id):
+        """Gets the resource with the ID, and extra capabilities"""
         resource = db_api.resource_get(self.resource_type(), resource_id)
         extra_capabilities = self._get_extra_capabilities(resource_id)
         if extra_capabilities:
@@ -159,6 +175,7 @@ class BasePlugin():
         return resource
 
     def list_allocations(self, query, detail=False):
+        """List all allocations"""
         resource_id_list = [
             r['id']
             for r in db_api.resource_list(
@@ -236,7 +253,6 @@ class BasePlugin():
         allocs_to_remove = self._allocations_to_remove(
             dates_before, dates_after, max_resources,
             resource_properties, allocs)
-
         if (allocs_to_remove and
                 reservation_status == status.reservation.ACTIVE):
             raise manager_ex.NotEnoughResourcesAvailable()
@@ -253,21 +269,41 @@ class BasePlugin():
                 dates_after['start_date'], dates_after['end_date'],
                 lease['project_id'])
             if len(resource_ids) >= min_resources:
-                self.update_new_resources()
+                self.reserve_new_resources(reservation_id, reservation_status)
             else:
                 raise manager_ex.NotEnoughResourcesAvailable()
 
         for allocation in allocs_to_remove:
             db_api.resource_allocation_destroy(allocation['id'])
 
-    def update_new_resources(self, resource_reservation, resource_ids):
+    def reservation_values(self, reservation_id, values):
+        """Get the values to be stored with the reservation"""
+        return values["resource_properties"]
+
+    def reserve_resource(self, reservation_id, values):
+        """Reserve the resources"""
+        self._validate_min_max_range(values, values["min"], values["max"])
+        resource_ids = self.allocation_candidates(values)
+        if not resource_ids:
+            raise manager_ex.NotEnoughResourcesAvailable()
+        rsrv_values = {
+            "reservation_id": reservation_id,
+            "values": self.reservation_values(reservation_id, values),
+            "status": "pending",
+            "count_range": values["count_range"],
+            "resource_type": self.resource_type(),
+        }
+        resource_reservation = db_api.resource_reservation_create(
+            rsrv_values)
+        self.reserve_new_resources(reservation_id, None, resource_ids)
+        return resource_reservation["id"]
+
+    def reserve_new_resources(self, reservation_id, reservation_status, resource_ids):
+        """Reserve and create allocations for these new resources"""
         for resource_id in resource_ids:
             db_api.resource_allocation_create(
-                {'resource_id': resource_id,
-                 'reservation_id': reservation_id})
-            new_resource = db_api.resource_get(resource_id)
-            new_resourcess.append(new_resource['hypervisor_hostname'])
-            # TODO call allocate() here?
+                {'resource_id': resource_id, 'reservation_id': reservation_id})
+            self.allocate(reservation_id, resource_id)
 
     def _convert_int_param(self, param, name):
         """
@@ -426,6 +462,10 @@ class BasePlugin():
         return []
 
     def reallocate(self, allocation):
+        """
+        Reallocate this allocation to a different resource, return if
+        successful.
+        """
         return True
 
     def api_list(self):
@@ -488,7 +528,7 @@ class BasePlugin():
             raise manager_ex.CantDeleteResource(
                 resource=resource_id, msg=msg, resource_type=resource_type)
         try:
-            self.validate_delete()
+            self.validate_delete(resource_id)
             db_api.resource_destroy(self.resource_type(), resource_id)
         except db_ex.BlazarDBException as e:
             raise manager_ex.CantDeleteResource(
@@ -571,6 +611,7 @@ class BasePlugin():
             self.resource_type(), property_name, data)
 
     def create_API(self):
+        """Create the API endpoints for this resource type"""
         rest = api_utils.Rest(f'{self.resource_type()}_v1_0',
                               __name__,
                               url_prefix=f'/v1/{self.resource_type()}')
@@ -667,6 +708,7 @@ class BasePlugin():
         return resource_allocations
 
     def get_policy(self):
+        """Get the policy for this resource"""
         policy_root = f'blazar:{self.resource_type()}:%s'
         resource_policy = [
             DocumentedRuleDefault(
@@ -771,6 +813,7 @@ class BasePlugin():
 
 
 class ResourceMonitorPlugin(monitor.GeneralMonitorPlugin):
+    """Monitor for a resource plugin"""
     def __new__(cls, plugin, *args, **kwargs):
         if not cls._instance:
             cls._instance = \

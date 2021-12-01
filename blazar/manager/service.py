@@ -302,7 +302,7 @@ class ManagerService(service_utils.RPCServer):
 
     def _get_plugin(self, resource_type):
         return self.plugins.get(resource_type,
-            self.third_party_plugins.get(resource_type)
+            self.third_party_plugins.get(resource_type, None)
         )
 
     def validate_params(self, values, required_params):
@@ -744,7 +744,8 @@ class ManagerService(service_utils.RPCServer):
 
     def _create_reservation(self, values):
         resource_type = values['resource_type']
-        if resource_type in self.plugins:
+        plugin = self._get_plugin(resource_type)
+        if plugin:
             reservation_values = {
                 'lease_id': values['lease_id'],
                 'resource_type': resource_type,
@@ -765,7 +766,7 @@ class ManagerService(service_utils.RPCServer):
             }
             reservation = db_api.reservation_create(reservation_values)
             plugin = self.plugin_manager.get(resource_type)
-            resource_id = plugin.allocate(
+            resource_id = plugin.reserve_resource(
                 reservation['id'],
                 values
             )
@@ -963,7 +964,7 @@ def get_plugins():
     return plugins
 
 
-#@lru_cache(maxsize=None)
+@lru_cache(maxsize=None)
 def get_third_party_plugins():
     config_plugins = CONF.manager.third_party_plugins
     plugins = {}
@@ -980,7 +981,8 @@ def get_third_party_plugins():
     if invalid_plugins:
         raise common_ex.BlazarException('Invalid third party plugin names are '
                                         'specified: %s' % invalid_plugins)
-
+    LOG.info("THIRD PARTY PLUGINS")
+    LOG.info(config_plugins)
     for ext in extension_manager.extensions:
         try:
             plugin_obj = ext.plugin()

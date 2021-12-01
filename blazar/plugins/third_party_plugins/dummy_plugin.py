@@ -9,7 +9,6 @@ from oslo_config import cfg
 LOG = logging.getLogger(__name__)
 CONF = cfg.CONF
 
-
 class DummyPlugin(base.BasePlugin):
     def resource_type(self):
         return "dummy"
@@ -39,25 +38,6 @@ class DummyPlugin(base.BasePlugin):
 
     def validate_update_params(self, data):
         self.validate_data(data, "update")
-
-    def allocate(self, reservation_id, values):
-        LOG.info("allocate()")
-        LOG.info(values)
-        self._validate_min_max_range(values, values["min"], values["max"])
-        resource_ids = self.allocation_candidates(values)
-        resource_rsrv_values = {
-            'reservation_id': reservation_id,
-            'values': values['resource_properties'],
-            'status': 'pending',
-            "resource_type": self.resource_type(),
-            'count_range': values['count_range'],
-        }
-        resource_reservation = db_api.resource_reservation_create(
-            resource_rsrv_values)
-        for resource_id in resource_ids:
-            db_api.resource_allocation_create(
-                {'resource_id': resource_id, 'reservation_id': reservation_id})
-        return resource_reservation['id']
 
     def deallocate(self, resources, lease):
         LOG.info("allocating dummy")
