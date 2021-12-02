@@ -77,6 +77,7 @@ class BasePlugin(metaclass=abc.ABCMeta):
         extra_keys = (data_keys - optional_keys) - required_keys
         if extra_keys:
             raise ex_fn(f"Invalid keys in data '{extra_params}'")
+        return data
 
     # TODO what information should they have here?
     def allocate(self, reservation_id, resource_id):
