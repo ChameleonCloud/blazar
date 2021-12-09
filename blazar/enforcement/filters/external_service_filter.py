@@ -99,7 +99,7 @@ class ExternalServiceFilter(base_filter.BaseFilter):
 
     def post(self, url, body):
         body = json.dumps(body, cls=DateTimeEncoder)
-        req = requests.post(url, headers=self.get_headers(), data=body)
+        req = requests.post(url, headers=self.get_headers(), data=body, verify=False)
 
         if req.status_code == 204:
             return True
