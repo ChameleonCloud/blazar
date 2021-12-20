@@ -467,14 +467,13 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                 msg='The host is reserved.'
             )
 
-        inventory = nova.NovaInventory()
-        servers = inventory.get_servers_per_host(
-            host['hypervisor_hostname'])
-        if servers:
-            raise manager_ex.HostHavingServers(
-                host=host['hypervisor_hostname'], servers=servers)
-
         try:
+            inventory = nova.NovaInventory()
+            servers = inventory.get_servers_per_host(
+                host['hypervisor_hostname'])
+            if servers:
+                raise manager_ex.HostHavingServers(
+                    host=host['hypervisor_hostname'], servers=servers)
             pool = nova.ReservationPool()
             # NOTE(jason): CHAMELEON-ONLY
             # changed from 'service_name' to 'hypervisor_hostname'
@@ -482,6 +481,13 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                                     host['hypervisor_hostname'])
             self.placement_client.delete_reservation_provider(
                 host['hypervisor_hostname'])
+        except manager_ex.HostNotFound:
+            LOG.warning(
+                "Host %s not found in Nova and could not be cleaned up. Some manual "
+                "cleanup may be required.", host['hypervisor_hostname']
+            )
+
+        try:
             # NOTE(sbauza): Extracapabilities will be destroyed thanks to
             #  the DB FK.
             db_api.host_destroy(host_id)
