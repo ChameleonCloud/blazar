@@ -527,6 +527,7 @@ class ManagerService(service_utils.RPCServer):
                 'Please enter valid reservation IDs. Invalid reservation '
                 'IDs are: %s' % ','.join([str(id) for id in invalid_ids]))
 
+        # Populate resource_type if missing from data passed by client
         reservations = self._add_resource_type(
             reservations, existing_reservations)
 
