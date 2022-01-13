@@ -433,7 +433,21 @@ class ManagerService(service_utils.RPCServer):
                     return lease
 
     @status.lease.lease_status(
-        transition=status.lease.UPDATING, result_in=status.lease.STABLE)
+        transition=status.lease.UPDATING,
+        result_in=status.lease.STABLE,
+        non_fatal_exceptions=[
+            common_ex.InvalidInput,
+            exceptions.InvalidRange,
+            exceptions.MissingParameter,
+            exceptions.MalformedRequirements,
+            exceptions.MalformedParameter,
+            exceptions.NotEnoughHostsAvailable,
+            exceptions.InvalidDate,
+            exceptions.NotEnoughResourcesDefaultProperties,
+            exceptions.NotEnoughNetworksAvailable,
+            exceptions.NotEnoughDevicesAvailable,
+        ]
+    )
     def update_lease(self, lease_id, values):
         if not values:
             return db_api.lease_get(lease_id)
@@ -487,7 +501,8 @@ class ManagerService(service_utils.RPCServer):
                 self.plugins[r['resource_type']] for r
                 in (reservations + existing_reservations)]
         except KeyError:
-            raise exceptions.CantUpdateParameter(param='resource_type')
+            pass
+            #raise exceptions.CantUpdateParameter(param='resource_type')
 
         existing_allocs = self._existing_allocations(existing_reservations)
 

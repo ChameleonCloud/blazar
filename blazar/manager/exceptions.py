@@ -152,7 +152,6 @@ class NotEnoughHostsAvailable(NotEnoughResourcesAvailable):
 
 
 class NotEnoughResourcesDefaultProperties(exceptions.BlazarException):
-    restore_lease_status = True
     msg_fmt = _("Not enough resources available with query %(params)s")
 
 
@@ -256,7 +255,6 @@ class InvalidNetwork(exceptions.NotAuthorized):
 
 
 class NotEnoughNetworksAvailable(NotEnoughResourcesAvailable):
-    restore_lease_status = True
     msg_fmt = _("Not enough networks available")
 
 
@@ -282,7 +280,6 @@ class DeviceNotFound(exceptions.NotFound):
 
 
 class NotEnoughDevicesAvailable(NotEnoughResourcesAvailable):
-    restore_lease_status = True
     msg_fmt = _("Not enough devices available")
 
 
