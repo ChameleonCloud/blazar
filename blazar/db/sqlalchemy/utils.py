@@ -234,7 +234,6 @@ def get_reservation_allocations_by_host_ids(host_ids, start_date, end_date,
 
     for r in reservations:
         r['host_ids'] = allocations[r['id']]
-
     return reservations
 
 
