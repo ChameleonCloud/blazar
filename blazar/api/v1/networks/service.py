@@ -14,8 +14,8 @@
 # limitations under the License.
 
 from blazar import context
-from blazar import policy
 from blazar.manager.service import get_plugins
+from blazar import policy
 from blazar.utils import trusts
 
 

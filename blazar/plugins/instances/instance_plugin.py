@@ -18,7 +18,6 @@ from novaclient import exceptions as nova_exceptions
 from oslo_config import cfg
 from oslo_utils import strutils
 from oslo_utils.strutils import bool_from_string
-import six
 
 from blazar import context
 from blazar.db import api as db_api
@@ -55,6 +54,9 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
 
     resource_type = plugin.RESOURCE_TYPE
     title = 'Virtual Instance Plugin'
+    query_options = {
+        QUERY_TYPE_ALLOCATION: ['lease_id', 'reservation_id']
+    }
 
     def __init__(self):
         super(VirtualInstancePlugin, self).__init__()
@@ -439,7 +441,7 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
                 values['amount'] = strutils.validate_integer(
                     values['amount'], "amount", 1, db_api.DB_MAX_INT)
             except ValueError as e:
-                raise mgr_exceptions.MalformedParameter(six.text_type(e))
+                raise mgr_exceptions.MalformedParameter(str(e))
 
         if 'affinity' in values:
             if (values['affinity'] not in NONE_VALUES and
@@ -796,6 +798,15 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
                 additional=True)
         LOG.warn('Resource changed for reservation %s (lease: %s).',
                  reservation['id'], lease['name'])
+
+    def _get_extra_capabilities(self, host_id):
+        extra_capabilities = {}
+        raw_extra_capabilities = (
+            db_api.host_extra_capability_get_all_per_host(host_id))
+        for capability in raw_extra_capabilities:
+            key = capability['capability_name']
+            extra_capabilities[key] = capability['capability_value']
+        return extra_capabilities
 
     def get(self, host_id):
         host = db_api.host_get(host_id)

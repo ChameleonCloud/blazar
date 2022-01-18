@@ -15,7 +15,6 @@
 
 
 from oslo_utils import uuidutils
-import six
 
 from blazar.db.sqlalchemy import model_base as mb
 import sqlalchemy as sa
@@ -25,7 +24,7 @@ from sqlalchemy.orm import relationship
 
 # Helpers
 def _generate_unicode_uuid():
-    return six.text_type(uuidutils.generate_uuid())
+    return str(uuidutils.generate_uuid())
 
 
 def MediumText():

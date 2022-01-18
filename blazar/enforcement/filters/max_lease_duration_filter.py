@@ -13,42 +13,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from blazar.enforcement import exceptions as enforcement_ex
+from blazar.enforcement.filters import base_filter
 from datetime import datetime
 from datetime import timedelta
-
-from blazar.enforcement.filters import base_filter
-from blazar import exceptions
-from blazar.i18n import _
-
 from oslo_config import cfg
 from oslo_log import log as logging
 
 
-DEFAULT_MAX_RESERVATION_LENGTH = -1
+DEFAULT_MAX_LEASE_DURATION = -1
 DEFAULT_RESERVATION_EXTENTSION_WINDOW = -1
 
 
 LOG = logging.getLogger(__name__)
 
 
-class MaxReservationLengthException(exceptions.NotAuthorized):
-    code = 400
-    msg_fmt = _('Lease length of %(lease_length)s seconds be less than or '
-                'equal the maximum lease length of %(max_length)s seconds.')
-
-
-class MaxReservationUpdateWindowException(exceptions.NotAuthorized):
-    code = 400
-    msg_fmt = _('Lease can only be extended within %(extension_window)s '
-                'seconds of the leases current end time.')
-
-
-class MaxReservationLengthFilter(base_filter.BaseFilter):
+class MaxLeaseDurationFilter(base_filter.BaseFilter):
 
     enforcement_opts = [
         cfg.IntOpt(
-            'max_reservation_length',
-            default=DEFAULT_MAX_RESERVATION_LENGTH,
+            'max_lease_duration',
+            default=DEFAULT_MAX_LEASE_DURATION,
             help='Maximum lease duration in seconds. If this is set to -1, '
                  'there is not limit. For active leases being updated, '
                  'the limit applies between now and the new end date.'),
@@ -60,37 +45,40 @@ class MaxReservationLengthFilter(base_filter.BaseFilter):
                  'value of -1 will not allow users to extend leases beyond '
                  'the maximum lease length'),
         cfg.ListOpt(
-            'max_reservation_length_exempt_project_ids',
+            'max_lease_duration_exempt_project_ids',
             default=[],
             help='List of project IDs exempt from max length constraint.'),
     ]
 
     def __init__(self, conf=None):
-        super(MaxReservationLengthFilter, self).__init__(conf=conf)
-        self.exempt_projects = self.max_reservation_length_exempt_project_ids
+        super(MaxLeaseDurationFilter, self).__init__(conf=conf)
 
-    def check_for_length_violation(self, start_date, end_date):
-        if not self.max_reservation_length:
+    def _exempt(self, context):
+        return (context['project_id'] in
+                self.conf.enforcement.max_lease_duration_exempt_project_ids)
+
+    def check_for_duration_violation(self, start_date, end_date):
+        if self.conf.enforcement.max_lease_duration == -1:
             return
 
-        lease_length = (end_date - start_date).total_seconds()
+        lease_duration = (end_date - start_date).total_seconds()
 
-        if lease_length > self.max_reservation_length:
-            raise MaxReservationLengthException(
-                lease_length=lease_length,
-                max_length=self.max_reservation_length)
+        if lease_duration > self.conf.enforcement.max_lease_duration:
+            raise enforcement_ex.MaxLeaseDurationException(
+                lease_duration=int(lease_duration),
+                max_duration=self.conf.enforcement.max_lease_duration)
 
     def check_create(self, context, lease_values):
-        if context['project_id'] in self.exempt_projects:
+        if self._exempt(context):
             return
 
         start_date = lease_values['start_date']
         end_date = lease_values['end_date']
 
-        self.check_for_length_violation(start_date, end_date)
+        self.check_for_duration_violation(start_date, end_date)
 
     def check_update(self, context, current_lease_values, new_lease_values):
-        if context['project_id'] in self.exempt_projects:
+        if self._exempt(context):
             return
 
         start_date = current_lease_values['start_date']
@@ -107,12 +95,12 @@ class MaxReservationLengthFilter(base_filter.BaseFilter):
             update_at = datetime.utcnow()
 
             if update_at < min_window:
-                raise MaxReservationUpdateWindowException(
+                raise enforcement_ex.MaxLeaseDurationException(
                     extension_window=(self.reservation_extension_window))
 
             start_date = current_lease_values['end_date']
 
-        self.check_for_length_violation(start_date, end_date)
+        self.check_for_duration_violation(start_date, end_date)
 
     def on_end(self, context, lease_values):
         pass

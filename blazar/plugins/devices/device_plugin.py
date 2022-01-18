@@ -53,6 +53,14 @@ plugin_opts = [
                default='',
                help='Default resource_properties when creating a lease of '
                     'this type.'),
+    cfg.BoolOpt('display_default_resource_properties',
+                default=True,
+                help='Display default resource_properties if allocation fails '
+                     'due to not enough resources'),
+    cfg.BoolOpt('retry_allocation_without_defaults',
+                default=True,
+                help='Whether an allocation should be retried on failure '
+                     'without the default properties'),
 ]
 
 plugin_opts.extend(monitor.monitor_opts)
@@ -529,12 +537,10 @@ class DevicePlugin(base.BasePlugin):
 
         return device_allocations
 
-    def allocation_candidates(self, values):
-        if not values.get('resource_properties', ''):
-            values['resource_properties'] = CONF[
-                plugin.RESOURCE_TYPE
-            ].default_resource_properties
+    def update_default_parameters(self, values):
+        self.add_default_resource_properties(values)
 
+    def allocation_candidates(self, values):
         self._check_params(values)
 
         device_ids = self._matching_devices(

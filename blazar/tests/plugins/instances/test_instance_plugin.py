@@ -14,12 +14,11 @@
 # limitations under the License.
 
 import datetime
+from unittest import mock
 import uuid
 
 import ddt
-import mock
 from novaclient import exceptions as nova_exceptions
-import six
 
 from blazar import context
 from blazar.db import api as db_api
@@ -63,7 +62,7 @@ class TestVirtualInstancePlugin(tests.TestCase):
             }
 
     def get_uuid(self):
-        return six.text_type(str(uuid.uuid4()))
+        return str(uuid.uuid4())
 
     def generate_basic_events(self, lease_id, start, before_end, end):
         return [

@@ -12,11 +12,11 @@
 # implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from unittest import mock
 import uuid as uuidgen
 
 from keystoneauth1 import session
 from keystoneauth1 import token_endpoint
-import mock
 from novaclient import client as nova_client
 from novaclient import exceptions as nova_exceptions
 from novaclient.v2 import availability_zones
@@ -40,11 +40,10 @@ class TestCNClient(tests.TestCase):
 
         self.nova = nova
         self.context = context
-        self.n_client = nova_client
         self.base = base
 
         self.ctx = self.patch(self.context, 'current')
-        self.client = self.patch(self.n_client, 'Client')
+        self.client = self.patch(nova_client, 'Client')
         self.auth = self.patch(token_endpoint, 'Token')
         self.session = self.patch(session, 'Session')
         self.url = 'http://fake.com/'
@@ -99,6 +98,9 @@ class ReservationPoolTestCase(tests.TestCase):
 
         self.patch(self.nova.aggregates, 'set_metadata')
         self.patch(self.nova.aggregates, 'remove_host')
+        self.patch(self.nova, 'BlazarNovaClient')
+
+        self.servers = self.patch(nova, "ServerManager").return_value
 
         self.patch(base, 'url_for').return_value = 'http://foo.bar'
         self.pool = nova.ReservationPool()
@@ -231,6 +233,7 @@ class ReservationPoolTestCase(tests.TestCase):
 
     def test_add_computehost(self):
         self._patch_get_aggregate_from_name_or_id()
+        self.patch(self.nova, "servers")
         self.pool.add_computehost('pool', 'host3')
 
         check0 = self.nova.aggregates.add_host

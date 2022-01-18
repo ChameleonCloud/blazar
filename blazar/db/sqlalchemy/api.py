@@ -1435,16 +1435,14 @@ def network_get_all_by_queries(queries):
 
             networks_query = networks_query.filter(filt)
         else:
-            pass
             # looking for extra capabilities matches
-            extra_filter = model_query(
-                models.NetworkSegmentExtraCapability, get_session()
-            ).filter(models.NetworkSegmentExtraCapability.capability_name ==
-                     key).all()
+            extra_filter = (
+                _network_extra_capability_query(get_session())
+                .filter(models.ExtraCapability.capability_name == key)
+            ).all()
             if not extra_filter:
                 raise db_exc.BlazarDBNotFound(
                     id=key, model='NetworkSegmentExtraCapability')
-
             for network, capability_name in extra_filter:
                 if op in oper and oper[op][1](network.capability_value, value):
                     networks.append(network.network_id)

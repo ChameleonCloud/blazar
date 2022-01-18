@@ -128,10 +128,10 @@ class ZunPlugin(zun.ZunClientWrapper):
             is_reservable = device.get("reservable")
             cs = zun_compute_services.get(device_name)
             if is_reservable and cs and \
-               cs.state == 'down' or cs.disabled:
-                    failed_devices.append(device)
+                    cs.state == 'down' or cs.disabled:
+                failed_devices.append(device)
             if not is_reservable and cs and \
-               cs.state == 'up' and not cs.disabled:
-                    recovered_devices.append(device)
+                    cs.state == 'up' and not cs.disabled:
+                recovered_devices.append(device)
 
         return failed_devices, recovered_devices

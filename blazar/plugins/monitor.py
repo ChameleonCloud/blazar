@@ -17,9 +17,9 @@
 import datetime
 
 from oslo_config import cfg
-import six
 
 import abc
+from blazar.manager import exceptions as manager_ex
 from blazar.plugins import base
 from blazar import status
 from oslo_log import log as logging
@@ -56,8 +56,7 @@ CONF = cfg.CONF
 LOG = logging.getLogger(__name__)
 
 
-@six.add_metaclass(abc.ABCMeta)
-class GeneralMonitorPlugin(base.BaseMonitorPlugin):
+class GeneralMonitorPlugin(base.BaseMonitorPlugin, metaclass=abc.ABCMeta):
     """Monitor plugin for resource."""
 
     # Singleton design pattern
@@ -153,17 +152,23 @@ class GeneralMonitorPlugin(base.BaseMonitorPlugin):
 
             for allocation in self.filter_allocations(reservation,
                                                       resource_ids):
-                if self._reallocate(allocation):
-                    if reservation['status'] == status.reservation.ACTIVE:
+                try:
+                    if self._reallocate(allocation):
+                        if reservation['status'] == status.reservation.ACTIVE:
+                            if reservation_id not in reservation_flags:
+                                reservation_flags[reservation_id] = {}
+                            reservation_flags[reservation_id].update(
+                                {'resources_changed': True})
+                    else:
                         if reservation_id not in reservation_flags:
                             reservation_flags[reservation_id] = {}
                         reservation_flags[reservation_id].update(
-                            {'resources_changed': True})
-                else:
-                    if reservation_id not in reservation_flags:
-                        reservation_flags[reservation_id] = {}
-                    reservation_flags[reservation_id].update(
-                        {'missing_resources': True})
+                            {'missing_resources': True})
+                except manager_ex.ResourceBusy:
+                    LOG.info(
+                        "Cannot heal reservation %s, found servers",
+                        reservation["id"]
+                    )
 
         return reservation_flags
 

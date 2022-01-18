@@ -98,7 +98,6 @@ class ManagerService(service_utils.RPCServer):
         for m in self.monitors:
             m.start_monitoring()
 
-
     def _setup_actions(self):
         """Setup actions for each resource type supported.
 
@@ -449,7 +448,21 @@ class ManagerService(service_utils.RPCServer):
                     return lease
 
     @status.lease.lease_status(
-        transition=status.lease.UPDATING, result_in=status.lease.STABLE)
+        transition=status.lease.UPDATING,
+        result_in=status.lease.STABLE,
+        non_fatal_exceptions=[
+            common_ex.InvalidInput,
+            exceptions.InvalidRange,
+            exceptions.MissingParameter,
+            exceptions.MalformedRequirements,
+            exceptions.MalformedParameter,
+            exceptions.NotEnoughHostsAvailable,
+            exceptions.InvalidDate,
+            exceptions.NotEnoughResourcesDefaultProperties,
+            exceptions.NotEnoughNetworksAvailable,
+            exceptions.NotEnoughDevicesAvailable,
+        ]
+    )
     def update_lease(self, lease_id, values):
         if not values:
             return db_api.lease_get(lease_id)
@@ -502,17 +515,16 @@ class ManagerService(service_utils.RPCServer):
             for r in (reservations + existing_reservations):
                 self._get_plugin(r['resource_type'])
         except KeyError:
-            raise exceptions.CantUpdateParameter(param='resource_type')
+            pass
+            #raise exceptions.CantUpdateParameter(param='resource_type')
 
         existing_allocs = self._existing_allocations(existing_reservations)
 
         if reservations:
             new_reservations = reservations
+            values["project_id"] = lease["project_id"]
             new_allocs = self._allocation_candidates(values,
-                                                     existing_reservations)
-            LOG.info("LOOK HERE")
-            LOG.info(new_reservations)
-            LOG.info(new_allocs)
+                                                     new_reservations)
         else:
             # User is not updating reservation parameters, e.g., is only
             # adjusting lease start/end dates.
@@ -781,17 +793,45 @@ class ManagerService(service_utils.RPCServer):
 
             if resource_type in self.plugins:
                 plugin = self.plugins.get(resource_type)
-                if not plugin:
-                    raise common_ex.BlazarException(
-                        'Invalid plugin names are specified: %s' % resource_type)
+                original_res = res.copy()
+                try:
+                    plugin.update_default_parameters(res)
+                    candidate_ids = plugin.allocation_candidates(res)
+                except exceptions.NotEnoughResourcesAvailable:
+                    candidate_ids = None
+                    # Retry this function if allowed
+                    if hasattr(
+                        CONF[plugin.resource_type],
+                        "retry_allocation_without_defaults"
+                    ) and CONF[plugin.resource_type]\
+                            .retry_allocation_without_defaults:
+                        LOG.info("Not enough resources with default properties. "
+                                 "Retrying with defaults removed.")
+                        try:
+                            candidate_ids = plugin.allocation_candidates(
+                                original_res)
+                        except exceptions.NotEnoughResourcesAvailable:
+                            pass
 
-                candidate_ids = plugin.allocation_candidates(res)
+                    # If the retry didn't get candidate IDs, raise an exception
+                    if candidate_ids is None:
+                        if hasattr(
+                            CONF[plugin.resource_type],
+                            "display_default_resource_properties"
+                        ) and CONF[plugin.resource_type]\
+                                .display_default_resource_properties:
+                            raise exceptions.\
+                                NotEnoughResourcesDefaultProperties(
+                                    params=str(res))
+                        else:
+                            raise
+
             elif resource_type in self.third_party_plugins:
                 plugin = self.third_party_plugins.get(resource_type)
                 if not plugin:
                     raise common_ex.BlazarException(
                         'Invalid plugin names are specified: %s' % resource_type)
-
+                # TODO need to do default for tpp
                 candidate_ids = plugin.allocation_candidates(res)
             else:
                 raise exceptions.UnsupportedResourceType(
@@ -882,6 +922,7 @@ class ManagerService(service_utils.RPCServer):
                 notifications.append('event.before_end_lease.stop')
 
             db_api.event_update(event['id'], update_values)
+
 
 @lru_cache(maxsize=None)
 def get_plugins():

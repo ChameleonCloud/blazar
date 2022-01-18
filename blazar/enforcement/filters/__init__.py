@@ -15,10 +15,10 @@
 
 from blazar.enforcement.filters.external_service_filter import (
     ExternalServiceFilter)
-from blazar.enforcement.filters.max_reservation_length_filter import (
-    MaxReservationLengthFilter)
+from blazar.enforcement.filters.max_lease_duration_filter import (
+    MaxLeaseDurationFilter)
 
 
-__all__ = ['MaxReservationLengthFilter', 'ExternalServiceFilter']
+__all__ = ['MaxLeaseDurationFilter', 'ExternalServiceFilter']
 
 all_filters = __all__

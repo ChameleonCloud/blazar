@@ -25,8 +25,6 @@ from blazar import tests
 
 from oslo_config import cfg
 
-filters.all_filters = ['FakeFilter']
-
 
 def get_fake_host(host_id):
     return {
@@ -45,19 +43,18 @@ def get_fake_host(host_id):
 def get_fake_lease(**kwargs):
     fake_lease = {
         'id': '1',
-        'name': u'lease_test',
+        'name': 'lease_test',
         'start_date': datetime.datetime.utcnow().strftime(
             service.LEASE_DATE_FORMAT),
         'end_date': (
             datetime.datetime.utcnow() + datetime.timedelta(days=1)).strftime(
                 service.LEASE_DATE_FORMAT),
-        'user_id': 111,
-        'project_id': 222,
-        'trust_id': u'35b17138b3644e6aa1318f3099c5be68',
-        'reservations': [{u'resource_id': u'1234',
-                          u'resource_type': u'virtual:instance'}],
+        'user_id': '111',
+        'project_id': '222',
+        'reservations': [{'resource_id': '1234',
+                          'resource_type': 'virtual:instance'}],
         'events': [],
-        'before_end_date': u'2014-02-01 10:37',
+        'before_end_date': '2014-02-01 10:37',
         'action': None,
         'status': None,
         'status_reason': None,
@@ -105,13 +102,13 @@ class EnforcementTestCase(tests.TestCase):
 
         self.cfg = cfg
         self.region = 'RegionOne'
-        self.filters = filters
-        self.filters.FakeFilter = FakeFilter
+        filters.FakeFilter = FakeFilter
+        filters.all_filters = ['FakeFilter']
 
         self.enforcement = enforcement.UsageEnforcement()
 
         cfg.CONF.set_override(
-            'enabled_filters', self.filters.all_filters, group='enforcement')
+            'enabled_filters', filters.all_filters, group='enforcement')
         cfg.CONF.set_override('os_region_name', self.region)
 
         self.enforcement.load_filters()
@@ -126,7 +123,7 @@ class EnforcementTestCase(tests.TestCase):
         ]
 
         self.ctx = context.BlazarContext(
-            user_id=111, project_id=222,
+            user_id='111', project_id='222',
             service_catalog=self.fake_service_catalog)
         self.set_context(self.ctx)
 
@@ -142,6 +139,9 @@ class EnforcementTestCase(tests.TestCase):
             'memory_mb': 8192,
             'local_gb': 10,
         }
+        self.addCleanup(self.cfg.CONF.clear_override, 'enabled_filters',
+                        group='enforcement')
+        self.addCleanup(self.cfg.CONF.clear_override, 'os_region_name')
 
     def tearDown(self):
         super(EnforcementTestCase, self).tearDown()
@@ -169,7 +169,8 @@ class EnforcementTestCase(tests.TestCase):
         formatted_context = self.enforcement.format_context(
             context.current(), get_fake_lease())
 
-        expected = dict(user_id=111, project_id=222, region_name=self.region,
+        expected = dict(user_id='111', project_id='222',
+                        region_name=self.region,
                         auth_url='https://fakeauth.com')
 
         self.assertDictEqual(expected, formatted_context)
@@ -200,7 +201,7 @@ class EnforcementTestCase(tests.TestCase):
         check_create.assert_called_once_with(formatted_context,
                                              formatted_lease)
 
-        expected_context = dict(user_id=111, project_id=222,
+        expected_context = dict(user_id='111', project_id='222',
                                 region_name=self.region,
                                 auth_url='https://fakeauth.com')
 
@@ -226,7 +227,7 @@ class EnforcementTestCase(tests.TestCase):
     def test_check_update(self):
         lease, rsv, allocs = get_lease_rsv_allocs()
 
-        new_lease_values = get_fake_lease(end_date=u'2014-02-07 13:37')
+        new_lease_values = get_fake_lease(end_date='2014-02-07 13:37')
         new_reservations = list(new_lease_values['reservations'])
         allocation_candidates = {'virtual:instance': [get_fake_host('2')]}
 
@@ -245,7 +246,7 @@ class EnforcementTestCase(tests.TestCase):
         new_formatted_lease = self.enforcement.format_lease(
             new_lease_values, new_reservations, allocation_candidates)
 
-        expected_context = dict(user_id=111, project_id=222,
+        expected_context = dict(user_id='111', project_id='222',
                                 region_name=self.region,
                                 auth_url='https://fakeauth.com')
 
@@ -263,7 +264,7 @@ class EnforcementTestCase(tests.TestCase):
     def test_check_update_with_exception(self):
         lease, rsv, allocs = get_lease_rsv_allocs()
 
-        new_lease_values = get_fake_lease(end_date=u'2014-02-07 13:37')
+        new_lease_values = get_fake_lease(end_date='2014-02-07 13:37')
         new_reservations = list(new_lease_values['reservations'])
         allocation_candidates = {'virtual:instance': [get_fake_host('2')]}
 
@@ -295,7 +296,7 @@ class EnforcementTestCase(tests.TestCase):
 
         on_end.assert_called_once_with(formatted_context, formatted_lease)
 
-        expected_context = dict(user_id=111, project_id=222,
+        expected_context = dict(user_id='111', project_id='222',
                                 region_name=self.region,
                                 auth_url='https://fakeauth.com')
 

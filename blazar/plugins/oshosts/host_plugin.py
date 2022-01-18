@@ -51,7 +51,14 @@ plugin_opts = [
                default='',
                help='Default resource_properties when creating a lease of '
                     'this type.'),
-
+    cfg.BoolOpt('display_default_resource_properties',
+                default=True,
+                help='Display default resource_properties if allocation fails '
+                     'due to not enough resources'),
+    cfg.BoolOpt('retry_allocation_without_defaults',
+                default=True,
+                help='Whether an allocation should be retried on failure '
+                     'without the default properties'),
 ]
 
 plugin_opts.extend(monitor.monitor_opts)
@@ -244,6 +251,15 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         # Remove the old host from the aggregate.
         if reservation['status'] == status.reservation.ACTIVE:
             host = db_api.host_get(allocation['compute_host_id'])
+
+            servers = self.nova.servers.list(search_opts={
+                "node": host['hypervisor_hostname'], "all_tenants": 1})
+            if len(servers) != 0:
+                raise manager_ex.HostHavingServers(
+                    servers=[s.name for s in servers],
+                    host=host['hypervisor_hostname']
+                )
+
             pool.remove_computehost(h_reservation['aggregate_id'],
                                     host['hypervisor_hostname'])
 
@@ -458,14 +474,13 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                 msg='The host is reserved.'
             )
 
-        inventory = nova.NovaInventory()
-        servers = inventory.get_servers_per_host(
-            host['hypervisor_hostname'])
-        if servers:
-            raise manager_ex.HostHavingServers(
-                host=host['hypervisor_hostname'], servers=servers)
-
         try:
+            inventory = nova.NovaInventory()
+            servers = inventory.get_servers_per_host(
+                host['hypervisor_hostname'])
+            if servers:
+                raise manager_ex.HostHavingServers(
+                    host=host['hypervisor_hostname'], servers=servers)
             pool = nova.ReservationPool()
             # NOTE(jason): CHAMELEON-ONLY
             # changed from 'service_name' to 'hypervisor_hostname'
@@ -473,6 +488,13 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                                     host['hypervisor_hostname'])
             self.placement_client.delete_reservation_provider(
                 host['hypervisor_hostname'])
+        except manager_ex.HostNotFound:
+            LOG.warning(
+                "Host %s not found in Nova and could not be cleaned up. Some manual "
+                "cleanup may be required.", host['hypervisor_hostname']
+            )
+
+        try:
             # NOTE(sbauza): Extracapabilities will be destroyed thanks to
             #  the DB FK.
             db_api.host_destroy(host_id)
@@ -562,12 +584,10 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
 
         return host_allocations
 
-    def allocation_candidates(self, values):
-        if not values.get('resource_properties', ''):
-            values['resource_properties'] = CONF[
-                plugin.RESOURCE_TYPE
-            ].default_resource_properties
+    def update_default_parameters(self, values):
+        self.add_default_resource_properties(values)
 
+    def allocation_candidates(self, values):
         self._check_params(values)
 
         host_ids = self._matching_hosts(
@@ -646,7 +666,6 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
 
         if 'hypervisor_properties' not in values:
             raise manager_ex.MissingParameter(param='hypervisor_properties')
-
         if 'resource_properties' not in values:
             raise manager_ex.MissingParameter(param='resource_properties')
 
@@ -836,7 +855,8 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                 if failed_hosts:
                     LOG.warn('%s failed.',
                              failed_hosts[0]['hypervisor_hostname'])
-                    reservation_flags = self._handle_failures(failed_hosts)
+                    for host in failed_hosts:
+                        self.set_reservable(host, False)
             else:
                 recovered_hosts = db_api.host_get_all_by_queries(
                     ['reservable == 0',

@@ -21,14 +21,12 @@ from blazar.db import utils as db_utils
 from blazar.utils.openstack import keystone
 from oslo_config import cfg
 from oslo_log import log as logging
-import six
 
 LOG = logging.getLogger(__name__)
 CONF = cfg.CONF
 
 
-@six.add_metaclass(abc.ABCMeta)
-class BasePlugin(object):
+class BasePlugin(object, metaclass=abc.ABCMeta):
 
     resource_type = 'none'
     title = None
@@ -121,6 +119,17 @@ class BasePlugin(object):
         else:
             return [dict(property=k) for k, v in resource_properties.items()]
 
+    def update_default_parameters(self, values):
+        """Update values with any defaults"""
+        pass
+
+    def add_default_resource_properties(self, values):
+        if not values.get('resource_properties', ''):
+            values['resource_properties'] = CONF[
+                self.resource_type
+            ].default_resource_properties
+        return values
+
     def update_resource_property(self, property_name, values):
         return db_api.resource_property_update(
             self.resource_type, property_name, values)
@@ -186,8 +195,7 @@ class BasePlugin(object):
                         lease_to_name[alloc["lease_id"]]
 
 
-@six.add_metaclass(abc.ABCMeta)
-class BaseMonitorPlugin():
+class BaseMonitorPlugin(metaclass=abc.ABCMeta):
     """Base class of monitor plugin."""
     @abc.abstractmethod
     def is_notification_enabled(self):

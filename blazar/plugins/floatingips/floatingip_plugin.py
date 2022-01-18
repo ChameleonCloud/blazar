@@ -31,8 +31,15 @@ from blazar import status
 from blazar.utils.openstack import neutron
 from blazar.utils import plugins as plugins_utils
 
+plugin_opts = [
+    cfg.BoolOpt('retry_allocation_without_defaults',
+                default=False,
+                help='Whether an allocation should be retried on failure '
+                     'without the default properties'),
+]
 
 CONF = cfg.CONF
+CONF.register_opts(plugin_opts, group=plugin.RESOURCE_TYPE)
 LOG = logging.getLogger(__name__)
 
 QUERY_TYPE_ALLOCATION = 'allocation'

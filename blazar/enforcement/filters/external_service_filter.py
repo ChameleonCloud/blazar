@@ -52,9 +52,21 @@ class ExternalServiceFilter(base_filter.BaseFilter):
     enforcement_opts = [
         cfg.StrOpt(
             'external_service_endpoint',
-            default=False,
+            default=None,
             help='The url of the external service API. A value of -1 will '
                  'disabled the service.'),
+        cfg.StrOpt(
+            'external_service_check_create',
+            default=None,
+            help='Overwrite check create endpoint with absolute URL.'),
+        cfg.StrOpt(
+            'external_service_check_update',
+            default=None,
+            help='Overwrite check update endpoint with absolute URL.'),
+        cfg.StrOpt(
+            'external_service_on_end',
+            default=None,
+            help='Overwrite on end endpoint with absolute URL.'),
         cfg.StrOpt(
             'external_service_token',
             default="",
@@ -75,7 +87,7 @@ class ExternalServiceFilter(base_filter.BaseFilter):
 
         return headers
 
-    def post(self, path, body):
+    def _get_absolute_url(self, path):
         url = self.external_service_endpoint
 
         if url[-1] == '/':
@@ -83,6 +95,9 @@ class ExternalServiceFilter(base_filter.BaseFilter):
         else:
             url += path
 
+        return url
+
+    def post(self, url, body):
         body = json.dumps(body, cls=DateTimeEncoder)
         req = requests.post(url, headers=self.get_headers(), data=body)
 
@@ -96,23 +111,35 @@ class ExternalServiceFilter(base_filter.BaseFilter):
                 status=req.status_code)
 
     def check_create(self, context, lease_values):
-        if self.external_service_endpoint:
-            path = '/v1/check-create'
-            body = dict(context=context, lease=lease_values)
+        body = dict(context=context, lease=lease_values)
+        if self.external_service_check_create:
+            self.post(self.external_service_check_create, body)
+            return
 
-            self.post(path, body)
+        if self.external_service_endpoint:
+            path = '/check-create'
+            self.post(self._get_absolute_url(path), body)
+            return
 
     def check_update(self, context, current_lease_values, new_lease_values):
-        if self.external_service_endpoint:
-            path = '/v1/check-update'
-            body = dict(context=context, current_lease=current_lease_values,
-                        lease=new_lease_values)
+        body = dict(context=context, current_lease=current_lease_values,
+                    lease=new_lease_values)
+        if self.external_service_check_update:
+            self.post(self.external_service_check_update, body)
+            return
 
-            self.post(path, body)
+        if self.external_service_endpoint:
+            path = '/check-update'
+            self.post(self._get_absolute_url(path), body)
+            return
 
     def on_end(self, context, lease_values):
-        if self.external_service_endpoint:
-            path = '/v1/on-end'
-            body = dict(context=context, lease=lease_values)
+        body = dict(context=context, lease=lease_values)
+        if self.external_service_on_end:
+            self.post(self.external_service_on_end, body)
+            return
 
-            self.post(path, body)
+        if self.external_service_endpoint:
+            path = '/on-end'
+            self.post(self._get_absolute_url(path), body)
+            return

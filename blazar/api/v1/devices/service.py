@@ -14,8 +14,8 @@
 # limitations under the License.
 
 from blazar import context
-from blazar import policy
 from blazar.manager.service import get_plugins
+from blazar import policy
 from blazar.utils import trusts
 
 
@@ -71,7 +71,7 @@ class API(object):
     @policy.authorize('devices', 'reallocate')
     def reallocate(self, device_id, data):
         """Exchange device from allocations."""
-        return self.plugin.reallocate(device_id, data)
+        return self.plugin.reallocate_device(device_id, data)
 
     @policy.authorize('devices', 'get_allocations')
     def list_allocations(self, query):

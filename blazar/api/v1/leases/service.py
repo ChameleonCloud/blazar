@@ -15,8 +15,8 @@
 
 from oslo_log import log as logging
 
-from blazar import context
 from blazar.cmd.manager import ManagerServiceSingleton
+from blazar import context
 from blazar import policy
 from blazar.utils import trusts
 
@@ -39,7 +39,7 @@ class API(object):
         else:
             project_id = ctx.project_id
         return self.manager_service.list_leases(project_id=project_id,
-                                               query=query)
+                                                query=query)
 
     @policy.authorize('leases', 'post')
     @trusts.use_trust_auth()

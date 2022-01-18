@@ -13,8 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from blazar import policy
 from blazar.manager.service import get_plugins
+from blazar import policy
 from blazar.utils import trusts
 
 
