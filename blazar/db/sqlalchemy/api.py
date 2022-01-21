@@ -18,10 +18,6 @@
 import sys
 
 from oslo_config import cfg
-
-from blazar.db import exceptions as db_exc
-from blazar.db.sqlalchemy import facade_wrapper
-from blazar.db.sqlalchemy import models
 from oslo_db import exception as common_db_exc
 from oslo_db.sqlalchemy import session as db_session
 from oslo_log import log as logging
@@ -29,11 +25,12 @@ import sqlalchemy as sa
 from sqlalchemy.sql.expression import asc
 from sqlalchemy.sql.expression import desc
 
+from blazar.db import exceptions as db_exc
+from blazar.db.sqlalchemy import facade_wrapper
+from blazar.db.sqlalchemy import models
 
-EXTRA_CAPABILITY_MODELS = {
+RESOURCE_PROPERTY_MODELS = {
     'physical:host': models.ComputeHostExtraCapability,
-    'network': models.NetworkSegmentExtraCapability,
-    'device': models.DeviceExtraCapability,
 }
 
 LOG = logging.getLogger(__name__)
@@ -47,33 +44,20 @@ def get_backend():
     return sys.modules[__name__]
 
 
-def _read_deleted_filter(query, db_model, deleted):
-    if 'deleted' not in db_model.__table__.columns:
-        return query
-
-    default_deleted_value = None
-    if not deleted:
-        query = query.filter(db_model.deleted == default_deleted_value)
-    return query
-
-
-def _resource_type_filter(query, db_model, resource_type):
-    return query.filter(db_model.resource_type == resource_type)
-
-
-def model_query(model, session=None, deleted=False):
+def model_query(model, session=None):
     """Query helper.
 
     :param model: base model to query
     """
     session = session or get_session()
 
-    return _read_deleted_filter(session.query(model), model, deleted)
+    return session.query(model)
 
 
 def resource_query(model, resource_type, session=None):
     session = session or get_session()
-    return _resource_type_filter(model_query(model, session), model, resource_type)
+    return model_query(model, session) \
+        .filter(model.resource_type == resource_type)
 
 
 def setup_db():
@@ -157,7 +141,7 @@ def reservation_get_all():
 
 def reservation_get_all_by_lease_id(lease_id):
     reservations = (model_query(models.Reservation,
-                                get_session()).filter_by(lease_id=lease_id))
+                    get_session()).filter_by(lease_id=lease_id))
     return reservations.all()
 
 
@@ -200,34 +184,6 @@ def reservation_update(reservation_id, values):
     return reservation_get(reservation_id)
 
 
-def _reservation_destroy(session, reservation):
-    if reservation.instance_reservation:
-        reservation.instance_reservation.soft_delete(session=session)
-
-    if reservation.computehost_reservation:
-        reservation.computehost_reservation.soft_delete(session=session)
-
-    if reservation.network_reservation:
-        reservation.network_reservation.soft_delete(session=session)
-
-    if reservation.floatingip_reservation:
-        reservation.floatingip_reservation.soft_delete(session=session)
-
-    if reservation.computehost_allocations:
-        for computehost_allocation in reservation.computehost_allocations:
-            computehost_allocation.soft_delete(session=session)
-
-    if reservation.network_allocations:
-        for network_allocation in reservation.network_allocations:
-            network_allocation.soft_delete(session=session)
-
-    if reservation.floatingip_allocations:
-        for floatingip_allocation in reservation.floatingip_allocations:
-            floatingip_allocation.soft_delete(session=session)
-
-    reservation.soft_delete(session=session)
-
-
 def reservation_destroy(reservation_id):
     session = get_session()
     with session.begin():
@@ -238,7 +194,7 @@ def reservation_destroy(reservation_id):
             raise db_exc.BlazarDBNotFound(id=reservation_id,
                                           model='Reservation')
 
-        _reservation_destroy(session, reservation)
+        session.delete(reservation)
 
 
 # Lease
@@ -332,18 +288,12 @@ def lease_destroy(lease_id):
             # raise not found error
             raise db_exc.BlazarDBNotFound(id=lease_id, model='Lease')
 
-        for reservation in lease.reservations:
-            _reservation_destroy(session, reservation)
-
-        for event in lease.events:
-            event.soft_delete(session=session)
-
-        lease.soft_delete(session=session)
+        session.delete(lease)
 
 
 # Event
-def _event_get(session, event_id, deleted=False):
-    query = model_query(models.Event, session, deleted=deleted)
+def _event_get(session, event_id):
+    query = model_query(models.Event, session)
     return query.filter_by(id=event_id).first()
 
 
@@ -433,8 +383,7 @@ def event_update(event_id, values):
     session = get_session()
 
     with session.begin():
-        # NOTE(jason): Allow updating soft-deleted events
-        event = _event_get(session, event_id, deleted=True)
+        event = _event_get(session, event_id)
         event.update(values)
         event.save(session=session)
 
@@ -450,7 +399,7 @@ def event_destroy(event_id):
             # raise not found error
             raise db_exc.BlazarDBNotFound(id=event_id, model='Event')
 
-        event.soft_delete(session=session)
+        session.delete(event)
 
 
 # ComputeHostReservation
@@ -519,7 +468,7 @@ def host_reservation_destroy(host_reservation_id):
             raise db_exc.BlazarDBNotFound(
                 id=host_reservation_id, model='ComputeHostReservation')
 
-        host_reservation.soft_delete(session=session)
+        session.delete(host_reservation)
 
 
 # InstanceReservation
@@ -573,8 +522,7 @@ def instance_reservation_destroy(instance_reservation_id):
         if not instance:
             raise db_exc.BlazarDBNotFound(
                 id=instance_reservation_id, model='InstanceReservations')
-
-        instance.soft_delete(session=session)
+        session.delete(instance)
 
 
 # ComputeHostAllocation
@@ -643,7 +591,7 @@ def host_allocation_destroy(host_allocation_id):
             raise db_exc.BlazarDBNotFound(
                 id=host_allocation_id, model='ComputeHostAllocation')
 
-        host_allocation.soft_delete(session=session)
+        session.delete(host_allocation)
 
 
 # ComputeHost
@@ -724,21 +672,22 @@ def host_get_all_by_queries(queries):
 
             hosts_query = hosts_query.filter(filt)
         else:
-            # looking for extra capabilities matches
+            # looking for resource properties matches
             extra_filter = (
-                _host_extra_capability_query(get_session())
-                .filter(models.ExtraCapability.capability_name == key)
+                _host_resource_property_query(get_session())
+                .filter(models.ResourceProperty.property_name == key)
             ).all()
 
             if not extra_filter:
                 raise db_exc.BlazarDBNotFound(
                     id=key, model='ComputeHostExtraCapability')
 
-            for host, capability_name in extra_filter:
+            for host, property_name in extra_filter:
+                print(dir(host))
                 if op in oper and oper[op][1](host.capability_value, value):
                     hosts.append(host.computehost_id)
                 elif op not in oper:
-                    msg = 'Operator %s for extra capabilities not implemented'
+                    msg = 'Operator %s for resource properties not implemented'
                     raise NotImplementedError(msg % op)
 
             # We must also avoid selecting any host which doesn't have the
@@ -818,15 +767,15 @@ def host_destroy(host_id):
 
 # ComputeHostExtraCapability
 
-def _host_extra_capability_query(session):
+def _host_resource_property_query(session):
     return (
         model_query(models.ComputeHostExtraCapability, session)
-        .join(models.ExtraCapability)
-        .add_column(models.ExtraCapability.capability_name))
+        .join(models.ResourceProperty)
+        .add_column(models.ResourceProperty.property_name))
 
 
 def _host_extra_capability_get(session, host_extra_capability_id):
-    query = _host_extra_capability_query(session).filter(
+    query = _host_resource_property_query(session).filter(
         models.ComputeHostExtraCapability.id == host_extra_capability_id)
 
     return query.first()
@@ -838,7 +787,7 @@ def host_extra_capability_get(host_extra_capability_id):
 
 
 def _host_extra_capability_get_all_per_host(session, host_id):
-    query = _host_extra_capability_query(session).filter(
+    query = _host_resource_property_query(session).filter(
         models.ComputeHostExtraCapability.computehost_id == host_id)
 
     return query
@@ -853,10 +802,10 @@ def host_extra_capability_create(values):
     values = values.copy()
 
     resource_property = resource_property_get_or_create(
-        'physical:host', values.get('capability_name'))
+        'physical:host', values.get('property_name'))
 
-    del values['capability_name']
-    values['capability_id'] = resource_property.id
+    del values['property_name']
+    values['property_id'] = resource_property.id
 
     host_extra_capability = models.ComputeHostExtraCapability()
     host_extra_capability.update(values)
@@ -903,13 +852,13 @@ def host_extra_capability_destroy(host_extra_capability_id):
         session.delete(host_extra_capability[0])
 
 
-def host_extra_capability_get_all_per_name(host_id, capability_name):
+def host_extra_capability_get_all_per_name(host_id, property_name):
     session = get_session()
 
     with session.begin():
         query = _host_extra_capability_get_all_per_host(session, host_id)
         return query.filter(
-            models.ExtraCapability.capability_name == capability_name).all()
+            models.ResourceProperty.property_name == property_name).all()
 
 
 # FloatingIP reservation
@@ -1995,37 +1944,37 @@ def device_extra_capability_get_latest_per_name(device_id, capability_name):
             .order_by(models.DeviceExtraCapability.created_at.desc())
             .first())
 
+
 # Resource Properties
-
-
-def _resource_property_get(session, resource_type, capability_name):
+def _resource_property_get(session, resource_type, property_name):
     query = (
-        model_query(models.ExtraCapability, session)
+        model_query(models.ResourceProperty, session)
         .filter_by(resource_type=resource_type)
-        .filter_by(capability_name=capability_name))
+        .filter_by(property_name=property_name))
 
     return query.first()
 
 
-def resource_property_get(resource_type, capability_name):
-    return _resource_property_get(get_session(), resource_type,
-                                  capability_name)
+def resource_property_get(resource_type, property_name):
+    return _resource_property_get(get_session(), resource_type, property_name)
 
 
 def resource_properties_list(resource_type):
     session = get_session()
 
     with session.begin():
-        resource_model = EXTRA_CAPABILITY_MODELS.get(
+        resource_model = RESOURCE_PROPERTY_MODELS.get(
             resource_type,
-            models.ResourceExtraCapability
+            models.ResourceResourceProperty
         )
+
         query = session.query(
-            models.ExtraCapability.capability_name,
-            models.ExtraCapability.private,
+            models.ResourceProperty.property_name,
+            models.ResourceProperty.private,
             resource_model.capability_value).join(resource_model).distinct()
+
         # Add extra filter if using 3rd party resource type
-        if resource_type not in EXTRA_CAPABILITY_MODELS:
+        if resource_type not in RESOURCE_PROPERTY_MODELS:
             query = query.join(models.Resource).filter_by(
                 resource_type=resource_type)
 
@@ -2035,7 +1984,7 @@ def resource_properties_list(resource_type):
 def _resource_property_create(session, values):
     values = values.copy()
 
-    resource_property = models.ExtraCapability()
+    resource_property = models.ResourceProperty()
     resource_property.update(values)
 
     with session.begin():
@@ -2048,7 +1997,7 @@ def _resource_property_create(session, values):
                 columns=e.columns)
 
     return resource_property_get(values.get('resource_type'),
-                                 values.get('capability_name'))
+                                 values.get('property_name'))
 
 
 def resource_property_create(values):
@@ -2064,7 +2013,7 @@ def resource_property_update(resource_type, property_name, values):
             session, resource_type, property_name)
 
         if not resource_property:
-            raise db_exc.BlazarDBInvalidExtraCapability(
+            raise db_exc.BlazarDBInvalidResourceProperty(
                 property_name=property_name,
                 resource_type=resource_type)
 
@@ -2074,26 +2023,25 @@ def resource_property_update(resource_type, property_name, values):
     return resource_property_get(resource_type, property_name)
 
 
-def _resource_property_get_or_create(session, resource_type, capability_name):
+def _resource_property_get_or_create(session, resource_type, property_name):
     resource_property = _resource_property_get(
-        session, resource_type, capability_name)
+        session, resource_type, property_name)
 
     if resource_property:
         return resource_property
     else:
         rp_values = {
             'resource_type': resource_type,
-            'capability_name': capability_name}
+            'property_name': property_name}
 
         return resource_property_create(rp_values)
 
 
-def resource_property_get_or_create(resource_type, capability_name):
+def resource_property_get_or_create(resource_type, property_name):
     return _resource_property_get_or_create(
-        get_session(), resource_type, capability_name)
+        get_session(), resource_type, property_name)
 
 
-# resource reservation
 def resource_reservation_create(resource_reservation_values):
     values = resource_reservation_values.copy()
     resource_reservation = models.ResourceReservation()
@@ -2146,11 +2094,8 @@ def resource_reservation_destroy(resource_reservation_id):
             raise db_exc.BlazarDBNotFound(
                 id=resource_reservation_id, model='resourceReservation')
 
-        resource_reservation.soft_delete(session=session)
         session.delete(resource_reservation)
 
-
-# resource Allocation
 
 def _resource_allocation_get(session, resource_allocation_id):
     query = model_query(models.ResourceAllocation, session)
@@ -2173,7 +2118,9 @@ def resource_allocation_create(allocation_values):
         except common_db_exc.DBDuplicateEntry as e:
             # raise exception about duplicated columns (e.columns)
             raise db_exc.BlazarDBDuplicateEntry(
-                model=resource_allocation.__class__.__name__, columns=e.columns)
+                model=resource_allocation.__class__.__name__,
+                columns=e.columns
+            )
 
     return resource_allocation_get(resource_allocation.id)
 
@@ -2198,7 +2145,6 @@ def resource_allocation_destroy(allocation_id):
             raise db_exc.BlazarDBNotFound(
                 id=allocation_id, model='ResourceAllocation')
 
-        resource_allocation.soft_delete(session=session)
         session.delete(resource_allocation)
 
 
@@ -2213,7 +2159,6 @@ def resource_allocation_update(allocation_id, allocation_values):
     return resource_allocation_get(allocation_id)
 
 
-# Resource core
 def _resource_get(session, resource_type, resource_id):
     query = resource_query(models.Resource, resource_type, session)
     return query.filter_by(id=resource_id).first()
@@ -2242,16 +2187,41 @@ def resource_get_all_by_queries(resource_type, queries):
             key, op, value = query.split(' ', 2)
         except ValueError:
             raise db_exc.BlazarDBInvalidFilter(query_filter=query)
-        column = models.Resource.data[key]
-        if column is not None:
+
+        # looking for extra capabilities matches
+        # we must do this first, to prioritize it over a JSON match
+        extra_filter = (
+            _resource_resource_property_query(get_session())
+            .filter(models.ResourceProperty.property_name == key)
+        ).all()
+        raw_column = getattr(models.Resource, key, None)
+        if extra_filter:
+            resources = []
+            for resource, capability_name in extra_filter:
+                if op in oper and oper[op][1](
+                        resource.capability_value, value):
+                    resources.append(resource.resource_id)
+                elif op not in oper:
+                    msg = 'Operator %s for extra capabilities not implemented'
+                    raise NotImplementedError(msg % op)
+
+            # We must also avoid selecting any resource which doesn't have the
+            # extra capability present.
+            all_resources = [h.id for h in resources_query.all()]
+            extra_filter_resources = [h.resource_id for h, _ in extra_filter]
+            resources += [
+                h for h in all_resources if h not in extra_filter_resources]
+            resources_query = resources_query.filter(
+                ~models.Resource.id.in_(resources))
+        elif raw_column:
             if op == 'in':
-                filt = column.in_(value.split(','))
+                filt = raw_column.in_(value.split(','))
             else:
                 if op in oper:
                     op = oper[op][0]
                 try:
                     attr = [e for e in ['%s', '%s_', '__%s__']
-                            if hasattr(column, e % op)][0] % op
+                            if hasattr(raw_column, e % op)][0] % op
                 except IndexError:
                     raise db_exc.BlazarDBInvalidFilterOperator(
                         filter_operator=op)
@@ -2259,11 +2229,15 @@ def resource_get_all_by_queries(resource_type, queries):
                 if value == 'null':
                     value = None
 
-                filt = getattr(column, attr)(value)
-
+                filt = getattr(raw_column, attr)(value)
             resources_query = resources_query.filter(filt)
-        else:
-            raise db_exc.BlazarDBInvalidFilter(query_filter=query)
+        else: # JSON column
+            resources = []
+            for resource in resources_query.all():
+                if resource.data[key] == value:
+                    resources.append(resource.id)
+            resources_query = resources_query.filter(
+                models.Resource.id.in_(resources))
 
     return resources_query.all()
 
@@ -2274,7 +2248,6 @@ def reservable_resource_get_all_by_queries(queries):
     :param queries: array of queries "key op value" where op can be
         http://docs.sqlalchemy.org/en/rel_0_7/core/expression_api.html
             #sqlalchemy.sql.operators.ColumnOperators
-
     """
     queries.append('reservable == 1')
     return resource_get_all_by_queries(queries)
@@ -2312,6 +2285,7 @@ def resource_destroy(resource_type, resource_id):
             raise db_exc.BlazarDBNotFound(id=resource_id, model=resource_type)
         session.delete(resource)
 
+
 def resource_update(resource_type, resource_id, data):
     session = get_session()
     with session.begin():
@@ -2320,111 +2294,111 @@ def resource_update(resource_type, resource_id, data):
         resource.save(session=session)
 
 
-def _resource_extra_capability_query(session):
+def _resource_resource_property_query(session):
     return (
-        model_query(models.ResourceExtraCapability, session)
-        .join(models.ExtraCapability)
-        .add_column(models.ExtraCapability.capability_name))
+        model_query(models.ResourceResourceProperty, session)
+        .join(models.ResourceProperty)
+        .add_column(models.ResourceProperty.property_name))
 
 
-def _resource_extra_capability_get(session, resource_extra_capability_id):
-    query = _resource_extra_capability_query(session).filter(
-        models.ResourceExtraCapability.id == resource_extra_capability_id)
+def _resource_resource_property_get(session, resource_resource_property_id):
+    query = _resource_resource_property_query(session).filter(
+        models.ResourceResourceProperty.id == resource_resource_property_id)
 
     return query.first()
 
 
-def resource_extra_capability_get(resource_extra_capability_id):
-    return _resource_extra_capability_get(get_session(),
-                                          resource_extra_capability_id)
+def resource_resource_property_get(resource_resource_property_id):
+    return _resource_resource_property_get(get_session(),
+                                           resource_resource_property_id)
 
 
-def _resource_extra_capability_get_all_per_resource(session, resource_id):
-    query = _resource_extra_capability_query(session).filter(
-        models.ResourceExtraCapability.resource_id == resource_id)
+def _resource_resource_property_get_all_per_resource(session, resource_id):
+    query = _resource_resource_property_query(session).filter(
+        models.ResourceResourceProperty.resource_id == resource_id)
 
     return query
 
 
-def resource_extra_capability_get_all_per_resource(resource_id):
-    return _resource_extra_capability_get_all_per_resource(
-            get_session(), resource_id).all()
+def resource_resource_property_get_all_per_resource(resource_id):
+    return _resource_resource_property_get_all_per_resource(
+        get_session(), resource_id).all()
 
 
-def resource_extra_capability_create(resource_type, values):
+def resource_resource_property_create(resource_type, values):
     values = values.copy()
 
     resource_property = _resource_property_get_or_create(
-        get_session(), resource_type, values.get('capability_name'))
+        get_session(), resource_type, values.get('property_name'))
 
-    del values['capability_name']
-    values['capability_id'] = resource_property.id
+    del values['property_name']
+    values['property_id'] = resource_property.id
 
-    resource_extra_capability = models.ResourceExtraCapability()
-    resource_extra_capability.update(values)
+    resource_resource_property = models.ResourceResourceProperty()
+    resource_resource_property.update(values)
 
     session = get_session()
 
     with session.begin():
         try:
-            resource_extra_capability.save(session=session)
+            resource_resource_property.save(session=session)
         except common_db_exc.DBDuplicateEntry as e:
             # raise exception about duplicated columns (e.columns)
             raise db_exc.BlazarDBDuplicateEntry(
-                model=resource_extra_capability.__class__.__name__,
+                model=resource_resource_property.__class__.__name__,
                 columns=e.columns)
 
-    return resource_extra_capability_get(resource_extra_capability.id)
+    return resource_resource_property_get(resource_resource_property.id)
 
 
-def resource_extra_capability_update(resource_extra_capability_id, values):
+def resource_resource_property_update(resource_resource_property_id, values):
     session = get_session()
 
     with session.begin():
-        resource_extra_capability, _ = (
-            _resource_extra_capability_get(session,
-                                           resource_extra_capability_id))
-        resource_extra_capability.update(values)
-        resource_extra_capability.save(session=session)
+        resource_resource_property, _ = (
+            _resource_resource_property_get(session,
+                                            resource_resource_property_id))
+        resource_resource_property.update(values)
+        resource_resource_property.save(session=session)
 
-    return resource_extra_capability_get(resource_extra_capability_id)
+    return resource_resource_property_get(resource_resource_property_id)
 
 
-def resource_extra_capability_destroy(resource_extra_capability_id):
+def resource_resource_property_destroy(resource_resource_property_id):
     session = get_session()
     with session.begin():
-        resource_extra_capability = _resource_extra_capability_get(
-            session, resource_extra_capability_id)
+        resource_resource_property = _resource_resource_property_get(
+            session, resource_resource_property_id)
 
-        if not resource_extra_capability:
+        if not resource_resource_property:
             # raise not found error
             raise db_exc.BlazarDBNotFound(
-                id=resource_extra_capability_id,
-                model='ResourceExtraCapability')
+                id=resource_resource_property_id,
+                model='ResourceResourceProperty')
 
-        session.delete(resource_extra_capability[0])
+        session.delete(resource_resource_property[0])
 
 
-def resource_extra_capability_get_all_per_name(resource_id, capability_name):
+def resource_resource_property_get_all_per_name(resource_id, property_name):
     session = get_session()
 
     with session.begin():
-        query = _resource_extra_capability_get_all_per_resource(
+        query = _resource_resource_property_get_all_per_resource(
             session, resource_id)
-        return query.filter_by(capability_name=capability_name).all()
+        return query.filter_by(property_name=property_name).all()
 
 
-def resource_extra_capability_get_latest_per_name(
-        resource_id, capability_name):
+def resource_resource_property_get_latest_per_name(
+        resource_id, property_name):
     session = get_session()
 
     with session.begin():
-        query = _resource_extra_capability_get_all_per_resource(session,
-                                                                resource_id)
+        query = _resource_resource_property_get_all_per_resource(session,
+                                                                 resource_id)
         return (
             query
-            .filter(models.ExtraCapability.capability_name == capability_name)
-            .order_by(models.ResourceExtraCapability.created_at.desc())
+            .filter(models.ResourceProperty.property_name == property_name)
+            .order_by(models.ResourceResourceProperty.created_at.desc())
             .first())
 
 
@@ -2435,9 +2409,4 @@ def unreservable_resource_get_all_by_queries(resource_type, queries):
 
 def resource_get_all_by_filters(resource_type, filters):
     resources_query = _resource_get_all(get_session(), resource_type)
-
-    if 'status' in filters:
-        resources_query = resources_query.filter(
-            models.Resource.status == filters['status'])
-
     return resources_query.all()

@@ -896,36 +896,36 @@ def resource_update(resource_type, resource_id, data):
 
 
 # Resource ExtraCapabilities
-def resource_extra_capability_create(resource_type, values):
-    return IMPL.resource_extra_capability_create(resource_type, values)
+def resource_resource_property_create(resource_type, values):
+    return IMPL.resource_resource_property_create(resource_type, values)
 
 
 @to_dict
-def resource_extra_capability_get(resource_extra_capability_id):
-    return IMPL.resource_extra_capability_get(resource_extra_capability_id)
+def resource_resource_property_get(resource_resource_property_id):
+    return IMPL.resource_resource_property_get(resource_resource_property_id)
 
 
-def resource_extra_capability_get_all_per_resource(resource_id):
-    return IMPL.resource_extra_capability_get_all_per_resource(resource_id)
+def resource_resource_property_get_all_per_resource(resource_id):
+    return IMPL.resource_resource_property_get_all_per_resource(resource_id)
 
 
-def resource_extra_capability_destroy(resource_extra_capability_id):
-    IMPL.resource_extra_capability_destroy(resource_extra_capability_id)
+def resource_resource_property_destroy(resource_resource_property_id):
+    IMPL.resource_resource_property_destroy(resource_resource_property_id)
 
 
-def resource_extra_capability_update(resource_extra_capability_id, values):
-    IMPL.resource_extra_capability_update(resource_extra_capability_id, values)
+def resource_resource_property_update(resource_resource_property_id, values):
+    IMPL.resource_resource_property_update(resource_resource_property_id, values)
 
 
-def resource_extra_capability_get_all_per_name(resource_id,
+def resource_resource_property_get_all_per_name(resource_id,
                                                extra_capability_name):
-    return IMPL.resource_extra_capability_get_all_per_name(
+    return IMPL.resource_resource_property_get_all_per_name(
         resource_id, extra_capability_name)
 
 
-def resource_extra_capability_get_latest_per_name(resource_id,
+def resource_resource_property_get_latest_per_name(resource_id,
                                                   extra_capability_name):
-    return IMPL.resource_extra_capability_get_latest_per_name(
+    return IMPL.resource_resource_property_get_latest_per_name(
         resource_id, extra_capability_name
     )
 
@@ -938,4 +938,4 @@ def unreservable_resource_get_all_by_queries(resource_type, queries):
 
 @to_dict
 def resource_get_all_by_filters(resource_type, filters):
-    return IMPL.resource_get_all_by_filters(filters)
+    return IMPL.resource_get_all_by_filters(resource_type, filters)
