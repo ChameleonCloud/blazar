@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import datetime
+import json
 import operator
 
 from oslo_utils import uuidutils
@@ -101,6 +102,18 @@ def _get_fake_host_allocation_values(
     return values
 
 
+def _get_fake_resource_allocation_values(
+        id=None,
+        resource_id=_get_fake_random_uuid(),
+        reservation_id=_get_fake_random_uuid()):
+    values = {'resource_id': resource_id,
+              'reservation_id': reservation_id}
+    if id is not None:
+        values.update({'id': id})
+
+    return values
+
+
 def _create_physical_lease(values=_get_fake_phys_lease_values(),
                            random=False):
     """Creating fake lease having a single physical resource."""
@@ -141,6 +154,17 @@ def _get_fake_host_reservation_values(id=None, reservation_id=None):
             'trust_id': 'exxee111qwwwwe'}
 
 
+def _get_fake_resource_reservation_values(id=None, reservation_id=None):
+    if id is None:
+        id = _get_fake_random_uuid()
+    if reservation_id is None:
+        reservation_id = _get_fake_random_uuid()
+    return {'id': id,
+            'reservation_id': reservation_id,
+            'resource_properties': "fake",
+            'count_range': '1-1'}
+
+
 def _get_fake_instance_values(id=None, reservation_id=None):
     if id is None:
         id = _get_fake_random_uuid()
@@ -158,13 +182,18 @@ def _get_fake_instance_values(id=None, reservation_id=None):
             'server_group_id': 'server_group_id'}
 
 
-def _get_fake_cpu_info():
-    return str({'vendor': 'Intel',
-                'model': 'Westmere',
-                'arch': 'x86_64',
-                'features': ['rdtscp', 'pdpe1gb', 'hypervisor', 'vmx', 'ss',
-                             'vme'],
-                'topology': {'cores': 1, 'threads': 1, 'sockets': 2}})
+def _get_fake_cpu_info(data={}):
+    base = {
+        'vendor': 'Intel',
+        'model': 'Westmere',
+        'arch': 'x86_64',
+        'features': ['rdtscp', 'pdpe1gb', 'hypervisor', 'vmx', 'ss', 'vme'],
+        'topology': {'cores': 1, 'threads': 1, 'sockets': 2},
+        'memory_mb': 2049,
+        'storage_gb': 20
+    }
+    base.update(data)
+    return base
 
 
 def _get_fake_host_values(id=None, mem=8192, disk=10):
@@ -173,7 +202,7 @@ def _get_fake_host_values(id=None, mem=8192, disk=10):
     return {'id': id,
             'availability_zone': 'az1',
             'vcpus': 1,
-            'cpu_info': _get_fake_cpu_info(),
+            'cpu_info': str(_get_fake_cpu_info()),
             'hypervisor_type': 'QEMU',
             'hypervisor_version': 1000,
             'memory_mb': mem,
@@ -193,6 +222,20 @@ def _get_fake_host_extra_capabilities(id=None,
         computehost_id = _get_fake_random_uuid()
     return {'id': id,
             'computehost_id': computehost_id,
+            'property_name': name,
+            'capability_value': value}
+
+
+def _get_fake_resource_extra_capabilities(id=None,
+                                          resource_id=None,
+                                          name='vgpu',
+                                          value='2'):
+    if id is None:
+        id = _get_fake_random_uuid()
+    if resource_id is None:
+        resource_id = _get_fake_random_uuid()
+    return {'id': id,
+            'resource_id': resource_id,
             'capability_name': name,
             'capability_value': value}
 
@@ -509,10 +552,10 @@ class SQLAlchemyDBApiTestCase(tests.DBTestCase):
         db_api.host_create(_get_fake_host_values(id=1))
         db_api.resource_property_create(dict(
             id='a', resource_type='physical:host', private=False,
-            capability_name='vgpu'))
+            property_name='vgpu'))
         db_api.resource_property_create(dict(
             id='b', resource_type='physical:host', private=False,
-            capability_name='nic_model'))
+            property_name='nic_model'))
         db_api.host_extra_capability_create(
             _get_fake_host_extra_capabilities(computehost_id=1))
         db_api.host_extra_capability_create(_get_fake_host_extra_capabilities(
@@ -545,7 +588,7 @@ class SQLAlchemyDBApiTestCase(tests.DBTestCase):
         db_api.host_create(_get_fake_host_values(id=1))
         db_api.resource_property_create(dict(
             id='a', resource_type='physical:host', private=False,
-            capability_name='vgpu'))
+            property_name='vgpu'))
         db_api.host_extra_capability_create(
             _get_fake_host_extra_capabilities(computehost_id=1))
 
@@ -602,7 +645,7 @@ class SQLAlchemyDBApiTestCase(tests.DBTestCase):
     def test_create_host_extra_capability(self):
         db_api.resource_property_create(dict(
             id='id', resource_type='physical:host', private=False,
-            capability_name='vgpu'))
+            property_name='vgpu'))
         result, _ = db_api.host_extra_capability_create(
             _get_fake_host_extra_capabilities(id=1, name='vgpu'))
 
@@ -1104,3 +1147,271 @@ class SQLAlchemyDBApiTestCase(tests.DBTestCase):
         check_query('2030-01-01 02:00', 'gt', ['3'])
         check_query('2030-01-01 02:00', 'ge', ['3', '2'])
         check_query('2030-01-01 02:00', 'eq', ['2'])
+
+    # Resource reservations
+
+    def test_create_resource_reservation(self):
+        """Create resource reservation
+
+        Create a resource reservation and verify that all tables
+        have been populated.
+        """
+
+        result = db_api.resource_reservation_create(
+            _get_fake_resource_reservation_values(id='1'))
+        self.assertEqual(result['id'],
+                         _get_fake_resource_reservation_values(id='1')
+                         ['id'])
+
+    def test_create_duplicate_resource_reservation(self):
+        """Create duplicated resource reservation
+
+        Create a duplicated resource reservation and verify that an exception
+        is raised.
+        """
+
+        db_api.resource_reservation_create(
+            _get_fake_resource_reservation_values(id='1'))
+        self.assertRaises(db_exceptions.BlazarDBDuplicateEntry,
+                          db_api.resource_reservation_create,
+                          _get_fake_resource_reservation_values(id='1'))
+
+    def test_delete_resource_reservation(self):
+        """Check deletion for resource reservation
+
+        Check all deletion cases for resource reservation,
+        including cascade deletion from reservations table.
+        """
+
+        self.assertRaises(db_exceptions.BlazarDBNotFound,
+                          db_api.resource_reservation_destroy, 'fake_id')
+
+        result = db_api.resource_reservation_create(
+            _get_fake_resource_reservation_values())
+        db_api.resource_reservation_destroy(result['id'])
+        self.assertIsNone(db_api.resource_reservation_get(result['id']))
+        reserv = db_api.reservation_create(_get_fake_phys_reservation_values())
+        result = db_api.resource_reservation_create(
+            _get_fake_resource_reservation_values(reservation_id=reserv['id']))
+        db_api.reservation_destroy(reserv['id'])
+        self.assertIsNone(db_api.resource_reservation_get(result['id']))
+
+    def test_update_resource_reservation(self):
+        db_api.resource_reservation_create(
+            _get_fake_resource_reservation_values(id=1))
+        db_api.resource_reservation_update(
+            1, {'resource_properties': 'updated'})
+        res = db_api.resource_reservation_get(1)
+        self.assertEqual('updated', res['resource_properties'])
+
+    def test_create_resource(self):
+        """Create a resource and verify that all tables have been populated."""
+        result = db_api.resource_create(
+            "compute_host", str(_get_fake_cpu_info({"id": "123"})))
+        data = json.loads(result.data.replace("'", '"'))
+        self.assertEqual(data["id"], "123")
+
+    def test_search_for_resources_by_ram(self):
+        """Check RAM info search
+
+        Create two resources and check that we can find a resource per its RAM
+        info.
+        """
+        db_api.resource_create("compute_host", str(_get_fake_cpu_info()))
+        db_api.resource_create("compute_host", str(_get_fake_cpu_info()))
+        self.assertEqual(2, len(
+            db_api.resource_get_all_by_queries(
+                "compute_host", ['memory_mb >= 2048'])))
+        self.assertEqual(0, len(
+            db_api.resource_get_all_by_queries(
+                "compute_host", ['memory_mb lt 2048'])))
+
+    def test_search_for_resources_by_cpu_info(self):
+        """Create one resource and search within cpu_info."""
+
+        db_api.resource_create("compute_host", str(_get_fake_cpu_info()))
+        self.assertEqual(1, len(db_api.resource_get_all_by_queries(
+            "compute_host", ['model == Westmere'])))
+
+    def test_search_for_resources_by_extra_capability(self):
+        """Create one resource and test extra capability queries."""
+        # We create a first resource, with extra capabilities
+        resource = db_api.resource_create(
+            "compute_host", str(_get_fake_cpu_info()))
+        db_api.resource_property_create(dict(
+            id='a', resource_type='compute_host', private=False,
+            capability_name='vgpu'))
+        db_api.resource_property_create(dict(
+            id='b', resource_type='compute_host', private=False,
+            capability_name='nic_model'))
+        db_api.resource_resource_property_create(
+            "compute_host",
+            _get_fake_resource_extra_capabilities(resource_id=resource.id))
+        db_api.resource_resource_property_create(
+            "compute_host",
+            _get_fake_resource_extra_capabilities(
+                resource_id=resource.id,
+                name='nic_model',
+                value='ACME Model A',
+            )
+        )
+        # We create a second resource, without any extra capabilities
+        db_api.resource_create("compute_host", str(_get_fake_cpu_info()))
+
+        self.assertEqual(1, len(
+            db_api.resource_get_all_by_queries("compute_host", ['vgpu == 2'])))
+        self.assertEqual(0, len(
+            db_api.resource_get_all_by_queries("compute_host", ['vgpu != 2'])))
+        self.assertEqual(1, len(
+            db_api.resource_get_all_by_queries(
+                "compute_host", ['memory_mb < 3000', 'vgpu == 2'])))
+        self.assertEqual(0, len(
+            db_api.resource_get_all_by_queries(
+                "compute_host", ['model ==  wrongcpu', 'vgpu == 2'])))
+        self.assertRaises(db_exceptions.BlazarDBNotFound,
+                          db_api.resource_get_all_by_queries,
+                          "compute_host",
+                          ['apples < 2048'])
+        self.assertEqual(1, len(
+            db_api.resource_get_all_by_queries(
+                ['nic_model == ACME Model A'])
+        ))
+
+    def test_resource_resource_properties_list(self):
+        """Create one resource and test extra capability queries."""
+        # We create a first resource, with extra capabilities
+        db_api.resource_create("compute_host", str(_get_fake_cpu_info()))
+        db_api.resource_property_create(dict(
+            id='a', resource_type='compute_host', private=False,
+            capability_name='vgpu'))
+        db_api.resource_resource_property_create(
+            "compute_host",
+            _get_fake_resource_extra_capabilities(resource_id=1))
+
+        result = db_api.resource_properties_list('compute_host')
+
+        self.assertListEqual(result, [('vgpu', False, '2')])
+
+    def test_search_for_resources_by_composed_queries(self):
+        """Create one resource and test composed queries."""
+
+        db_api.resource_create("compute_host", str(_get_fake_cpu_info()))
+        print(db_api.resource_list("compute_host")[0].data)
+        self.assertEqual(1, len(
+            db_api.resource_get_all_by_queries(
+                "compute_host", ['memory_mb > 2048', 'storage_gb < 50'])))
+        self.assertEqual(0, len(
+            db_api.resource_get_all_by_queries(
+                "compute_host", ['memory_mb < 2048', 'cpu_info == Westmere'])))
+        self.assertRaises(db_exceptions.BlazarDBInvalidFilter,
+                          db_api.resource_get_all_by_queries,
+                          "compute_host", ['memory_mb <'])
+        self.assertRaises(db_exceptions.BlazarDBNotFound,
+                          db_api.resource_get_all_by_queries,
+                          "compute_host", ['apples < 2048'])
+        self.assertRaises(db_exceptions.BlazarDBInvalidFilterOperator,
+                          db_api.resource_get_all_by_queries,
+                          "compute_host",
+                          ['memory_mb wrongop 2048'])
+        self.assertEqual(1, len(
+            db_api.resource_get_all_by_queries(
+                "compute_host", ['memory_mb in 4096,8192'])))
+        self.assertEqual(1, len(
+            db_api.resource_get_all_by_queries(
+                "compute_host", ['memory_mb != null'])))
+
+    def test_list_resources(self):
+        db_api.resource_create("compute_host", str(_get_fake_cpu_info()))
+        db_api.resource_create("compute_host", str(_get_fake_cpu_info()))
+        self.assertEqual(2, len(db_api.resource_list("compute_host")))
+
+    def test_get_resources_per_filter(self):
+        db_api.resource_create("compute_host", str(_get_fake_cpu_info()))
+        db_api.resource_create("compute_host", str(_get_fake_cpu_info()))
+        filters = {}
+        self.assertEqual(2, len(
+            db_api.resource_get_all_by_filters("compute_host", filters)))
+
+    def test_update_resource(self):
+        resource = db_api.resource_create(
+            "compute_host", str(_get_fake_cpu_info()))
+        db_api.resource_update(
+            "compute_host", resource.id, {'status': 'updated'})
+        self.assertEqual(
+            'updated',
+            db_api.resource_get("compute_host", resource.id).data["status"]
+        )
+
+    def test_delete_resource(self):
+        resource = db_api.resource_create(
+            "compute_host", str(_get_fake_cpu_info()))
+        db_api.resource_destroy("compute_host", resource.id)
+        self.assertIsNone(db_api.resource_get("compute_host", 1))
+        self.assertRaises(db_exceptions.BlazarDBNotFound,
+                          db_api.resource_destroy, "compute_host", 2)
+
+    def test_create_resource_resource_property(self):
+        db_api.resource_property_create(dict(
+            id='id',
+            private=False,
+            resource_type="compute_host",
+            capability_name='vgpu'))
+        result, _ = db_api.resource_resource_property_create(
+            "compute_host",
+            _get_fake_resource_extra_capabilities(id='1'))
+
+        self.assertEqual(result.id, '1')
+
+    def test_create_duplicated_resource_resource_property(self):
+        db_api.resource_resource_property_create(
+            "compute_host",
+            _get_fake_resource_extra_capabilities(id=1))
+        self.assertRaises(db_exceptions.BlazarDBDuplicateEntry,
+                          db_api.resource_resource_property_create,
+                          "compute_host",
+                          _get_fake_resource_extra_capabilities(id='1'))
+
+    def test_get_resource_resource_property_per_id(self):
+        db_api.resource_resource_property_create(
+            "compute_host",
+            _get_fake_resource_extra_capabilities(id='1'))
+        result, _ = db_api.resource_resource_property_get('1')
+        self.assertEqual('1', result.id)
+
+    def test_resource_resource_property_get_all_per_resource(self):
+        db_api.resource_resource_property_create(
+            "compute_host",
+            _get_fake_resource_extra_capabilities(id='1', resource_id='1'))
+        db_api.resource_resource_property_create(
+            "compute_host",
+            _get_fake_resource_extra_capabilities(id='2', resource_id='1'))
+        res = db_api.resource_resource_property_get_all_per_resource('1')
+        self.assertEqual(2, len(res))
+
+    def test_update_resource_resource_property(self):
+        db_api.resource_resource_property_create(
+            "compute_host",
+            _get_fake_resource_extra_capabilities(id='1'))
+        db_api.resource_resource_property_update(
+            '1', {'capability_value': '2'})
+        res, _ = db_api.resource_resource_property_get('1')
+        self.assertEqual('2', res.capability_value)
+
+    def test_delete_resource_resource_property(self):
+        db_api.resource_resource_property_create(
+            "compute_host",
+            _get_fake_resource_extra_capabilities(id='1'))
+        db_api.resource_resource_property_destroy('1')
+        self.assertIsNone(db_api.resource_resource_property_get('1'))
+        self.assertRaises(db_exceptions.BlazarDBNotFound,
+                          db_api.resource_resource_property_destroy, '1')
+
+    def test_resource_resource_property_get_all_per_name(self):
+        db_api.resource_resource_property_create(
+            "compute_host",
+            _get_fake_resource_extra_capabilities(id='1', resource_id='1'))
+        res = db_api.resource_resource_property_get_all_per_name('1', 'vgpu')
+        self.assertEqual(1, len(res))
+        self.assertEqual([],
+                         db_api.resource_resource_property_get_all_per_name(
+                             '1', 'bad'))

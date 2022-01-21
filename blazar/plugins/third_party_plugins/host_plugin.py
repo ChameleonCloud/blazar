@@ -1,23 +1,33 @@
-from . import base
+# Copyright (c) 2020 University of Chicago.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from blazar import context
-from blazar import status
 from blazar.db import api as db_api
 from blazar.db import exceptions as db_ex
-from blazar.db import utils as db_utils
 from blazar.manager import exceptions as manager_ex
-from blazar.plugins.third_party_plugins import exceptions
-from blazar.utils.openstack import heat
-from blazar.utils.openstack import placement
+from blazar.plugins.third_party_plugins import base
+from blazar import policy
 from blazar.utils.openstack import nova
-from blazar.utils.openstack import ironic
-from blazar.utils import plugins as plugins_utils
-from oslo_log import log as logging
+from blazar.utils.openstack import placement
+from blazar.utils import trusts
+
+from novaclient import exceptions as nova_exceptions
+
 from oslo_config import cfg
+from oslo_log import log as logging
 
-import datetime
-
-LOG = logging.getLogger(__name__)
-CONF = cfg.CONF
 
 plugin_opts = [
     cfg.StrOpt('blazar_az_prefix',
@@ -27,14 +37,12 @@ plugin_opts = [
                default='',
                help='Actions which we will be taken before the end of '
                     'the lease'),
-    cfg.StrOpt('default_resource_properties',
-               default='',
-               help='Default resource_properties when creating a lease of '
-                    'this type.'),
 ]
 
-before_end_options = ['', 'snapshot', 'default', 'email']
-on_start_options = ['', 'default', 'orchestration']
+CONF = cfg.CONF
+LOG = logging.getLogger(__name__)
+
+before_end_options = ['', 'snapshot', 'default']
 
 
 class HostPlugin(base.BasePlugin, nova.NovaClientWrapper):
@@ -68,10 +76,10 @@ class HostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         host_details = inventory.get_host_details(host_ref)
         # NOTE(sbauza): Only last duplicate name for same extra capability
         # will be stored
-        to_store = set(data.keys()) - set(host_details.keys())
+        to_store = set(host_details.keys()) - set(host_details.keys())
         extra_capabilities_keys = to_store
         extra_capabilities = dict(
-            (key, data[key]) for key in extra_capabilities_keys
+            (key, host_details[key]) for key in extra_capabilities_keys
         )
 
         if any([len(key) > 64 for key in extra_capabilities_keys]):
@@ -81,54 +89,39 @@ class HostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             host_details['hypervisor_hostname'])
 
         pool = nova.ReservationPool()
-        # NOTE(jason): CHAMELEON-ONLY
-        # changed from 'service_name' to 'hypervisor_hostname'
         pool.add_computehost(self.freepool_name,
                              host_details['hypervisor_hostname'])
 
         host = None
         cantaddextracapability = []
-        if trust_id:
-            host_details.update({'trust_id': trust_id})
+        try:
+            if trust_id:
+                host_details.update({'trust_id': trust_id})
+            host = db_api.host_create(host_details)
+        except db_ex.BlazarDBException as e:
+            # We need to rollback
+            # TODO(sbauza): Investigate use of Taskflow for atomic
+            # transactions
+            pool.remove_computehost(self.freepool_name,
+                                    host_details['hypervisor_hostname'])
+            self.placement_client.delete_reservation_provider(
+                host_details['hypervisor_hostname'])
+            raise e
+        for key in extra_capabilities:
+            values = {'computehost_id': host['id'],
+                      'capability_name': key,
+                      'capability_value': extra_capabilities[key],
+                      }
+            try:
+                db_api.host_extra_capability_create(values)
+            except db_ex.BlazarDBException:
+                cantaddextracapability.append(key)
+        if cantaddextracapability:
+            raise manager_ex.CantAddExtraCapability(
+                keys=cantaddextracapability,
+                host=host['id'])
 
         return host_details
-
-    def reallocate(self, allocation):
-        reservation = db_api.reservation_get(allocation['reservation_id'])
-        h_reservation = db_api.resource_reservation_get(
-            reservation['resource_id'])
-        lease = db_api.lease_get(reservation['lease_id'])
-        pool = nova.ReservationPool()
-
-        # Remove the old host from the aggregate.
-        if reservation['status'] == status.reservation.ACTIVE:
-            host = db_api.resource_get(self.resource_type(), allocation['resource_id'])
-            pool.remove_computehost(h_reservation['aggregate_id'],
-                                    host["data"]['hypervisor_hostname'])
-
-        # Allocate an alternative host.
-        start_date = max(datetime.datetime.utcnow(), lease['start_date'])
-        new_hostids = self.matching_resources(
-            h_reservation["values"]['resource_properties'],
-            start_date, lease['end_date'], 1, 1
-        )
-        if not new_hostids:
-            db_api.resource_allocation_destroy(allocation['id'])
-            LOG.warn('Could not find alternative host for reservation %s '
-                     '(lease: %s).', reservation['id'], lease['name'])
-            return False
-        else:
-            new_hostid = new_hostids.pop()
-            db_api.resource_allocation_update(allocation['id'],
-                                          {'resource_id': new_hostid})
-            LOG.warn('Resource changed for reservation %s (lease: %s).',
-                     reservation['id'], lease['name'])
-            if reservation['status'] == status.reservation.ACTIVE:
-                # Add the alternative host into the aggregate.
-                new_host = db_api.resource_get(self.resource_type(), new_hostid)
-                pool.add_computehost(h_reservation['aggregate_id'],
-                                     new_host['hypervisor_hostname'])
-            return True
 
     def rollback_create(self, data):
         pool = nova.ReservationPool()
@@ -137,47 +130,38 @@ class HostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         self.placement_client.delete_reservation_provider(
             data['hypervisor_hostname'])
 
-    def validate_update_params(self, data):
+    def validate_update_params(self, resource_id, data):
         return data
 
     def validate_delete(self, resource_id):
-        inventory = nova.NovaInventory()
-        servers = inventory.get_servers_per_host(
-            host['hypervisor_hostname'])
-        if servers:
-            raise manager_ex.HostHavingServers(
-                host=host['hypervisor_hostname'], servers=servers)
-        pool = nova.ReservationPool()
-        # NOTE(jason): CHAMELEON-ONLY
-        # changed from 'service_name' to 'hypervisor_hostname'
-        pool.remove_computehost(self.freepool_name,
-                                host['hypervisor_hostname'])
-        self.placement_client.delete_reservation_provider(
-            host['hypervisor_hostname'])
+        host = db_api.resource_get(self.resource_type(), resource_id)
+        if not host:
+            raise manager_ex.HostNotFound(host=resource_id)
+        with trusts.create_ctx_from_trust(host["data"]['trust_id']):
+            inventory = nova.NovaInventory()
+            servers = inventory.get_servers_per_host(
+                host["data"]['hypervisor_hostname'])
+            if servers:
+                raise manager_ex.HostHavingServers(
+                    host=host["data"]['hypervisor_hostname'], servers=servers)
 
-    def _is_valid_on_start_option(self, value):
-
-        if 'orchestration' in value:
-            stack = value.split(':')[-1]
             try:
-                UUID(stack)
-                return True
-            except Exception:
-                return False
-        else:
-            return value in on_start_options
+                pool = nova.ReservationPool()
+                pool.remove_computehost(self.freepool_name,
+                                        host["data"]['hypervisor_hostname'])
+                self.placement_client.delete_reservation_provider(
+                    host["data"]['hypervisor_hostname'])
+            except db_ex.BlazarDBException as e:
+                raise manager_ex.CantDeleteHost(host=resource_id, msg=str(e))
 
     def allocation_candidates(self, values):
+        if 'resource_properties' not in values:
+            raise manager_ex.MissingParameter(param='resource_properties')
+
         if 'before_end' not in values:
             values['before_end'] = 'default'
         if values['before_end'] not in before_end_options:
             raise manager_ex.MalformedParameter(param='before_end')
-
-        if 'on_start' not in values:
-            values['on_start'] = 'default'
-        if not self._is_valid_on_start_option(values['on_start']):
-            raise manager_ex.MalformedParameter(param='on_start')
-
         return super(HostPlugin, self).allocation_candidates(values)
 
     def reservation_values(self, reservation_id, values):
@@ -191,74 +175,33 @@ class HostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         return {
             "resource_properties": values["resource_properties"],
             "before_end": values['before_end'],
-            "on_start": values['on_start'],
             "aggregate_id": pool_instance.id,
         }
 
-    def reserve_new_resources(self, reservation_id, reservation_status, resource_ids):
-        super(HostPlugin, self).reserve_new_resources(
-            reservation_id, reservation_status, resource_ids)
-        new_hosts = []
-        for resource_id in resource_ids:
-            new_host = db_api.resource_get(self.resource_type(), resource_id)
-            new_hosts.append(new_host["data"]['hypervisor_hostname'])
-        if reservation_status == status.reservation.ACTIVE:
-            pool = nova.ReservationPool()
-            pool.add_computehost(resource_reservation["values"]['aggregate_id'], new_hosts)
+    @trusts.use_trust_auth()
+    def api_create(self, data):
+        policy.check_enforcement(self.resource_type(), "post")
+        create_data = data["data"]
+        trust_id = data["trust_id"]
+        create_data["trust_id"] = trust_id
+        data = self.validate_create_params(create_data)
+        try:
+            resource = db_api.resource_create(self.resource_type(), data)
+        except db_ex.BlazarDBException as e:
+            self.rollback_create(data["data"])
+            raise e
+        return resource
 
-    def on_start(self, resource_id, lease=None):
-        """Add the hosts in the pool."""
-        host_reservation = db_api.resource_reservation_get(resource_id)
+    def allocate(self, resource_reservation, resources):
+        """Take action after an allocation is made"""
+        hosts = [resource["data"]["hypervisor_hostname"] for resource in resources]
         pool = nova.ReservationPool()
-        hosts = []
-        for allocation in db_api.resource_allocation_get_all_by_values(
-                reservation_id=host_reservation['reservation_id']):
-            host = db_api.resource_get(
-                self.resource_type(), allocation['resource_id'])
-            hosts.append(host['data']['hypervisor_hostname'])
-        pool.add_computehost(host_reservation["values"]['aggregate_id'], hosts)
+        pool.add_computehost(
+            resource_reservation["values"]['aggregate_id'], hosts)
 
-        action = host_reservation["values"].get('on_start', 'default')
+    def deallocate(self, resource_reservation, resources):
+        """Take action after an allocation is deleted"""
 
-        if 'orchestration' in action:
-            stack_id = action.split(':')[-1]
-            heat_client = heat.BlazarHeatClient()
-            heat_client.heat.stacks.update(
-                stack_id=stack_id,
-                existing=True,
-                converge=True,
-                parameters=dict(
-                    reservation_id=host_reservation['reservation_id']))
-
-    def before_end(self, resource_id, lease=None):
-        """Take an action before the end of a lease."""
-        host_reservation = db_api.resource_reservation_get(resource_id)
-
-        action = host_reservation["values"]['before_end']
-        if action == 'default':
-            action = CONF[self.resource_type()].before_end
-
-        if action == 'snapshot':
-            pool = nova.ReservationPool()
-            client = nova.BlazarNovaClient()
-            for host in pool.get_computehosts(
-                    host_reservation["values"]['aggregate_id']):
-                for server in client.servers.list(
-                    search_opts={"node": host, "all_tenants": 1,
-                                 "project_id": lease['project_id']}):
-                    # TODO(jason): Unclear if this even works! What happens
-                    # when you try to createImage on a server not owned by the
-                    # authentication context (admin context in this case.) Is
-                    # the snapshot owned by the admin, or the original
-                    client.servers.create_image(server=server)
-        elif action == 'email':
-            plugins_utils.send_lease_extension_reminder(
-                lease, CONF.os_region_name)
-
-    def on_end(self, resource_id, lease=None):
-        """Remove the hosts from the pool."""
-        super(HostPlugin, self).on_end(resource_id, lease)
-        resource_reservation = db_api.resource_reservation_get(resource_id)
         pool = nova.ReservationPool()
         for host in pool.get_computehosts(
                 resource_reservation["values"]['aggregate_id']):
@@ -275,6 +218,21 @@ class HostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             pool.delete(resource_reservation["values"]['aggregate_id'])
         except manager_ex.AggregateNotFound:
             pass
+
+    def before_end(self, reservation_id):
+        """Take an action before the end of a lease."""
+        host_reservation = db_api.resource_reservation_get(reservation_id)
+        action = host_reservation["values"]['before_end']
+        if action == 'default':
+            action = CONF[self.resource_type()].before_end
+        if action == 'snapshot':
+            pool = nova.ReservationPool()
+            client = nova.BlazarNovaClient()
+            for host in pool.get_computehosts(
+                    host_reservation['aggregate_id']):
+                for server in client.servers.list(
+                        search_opts={"host": host, "all_tenants": 1}):
+                    client.servers.create_image(server=server)
 
     def notification_callback(self, event_type, payload):
         LOG.trace('Handling a notification...')
@@ -310,65 +268,22 @@ class HostPlugin(base.BasePlugin, nova.NovaClientWrapper):
 
         :return: a list of failed hosts, a list of recovered hosts.
         """
-        hosts = db_api.resource_get_all_by_filters({})
+        hosts = db_api.resource_get_all_by_filters(self.resource_type(), {})
+        reservable_hosts = [h for h in hosts if h['reservable'] is True]
+        unreservable_hosts = [h for h in hosts if h['reservable'] is False]
 
-        ironic_hosts = []
-        nova_hosts = []
-        for h in hosts:
-            if 'hypervisor_type' in h and h['hypervisor_type'] == 'ironic':
-                ironic_hosts.append(h)
-            else:
-                nova_hosts.append(h)
-
-        failed_hosts = []
-        recovered_hosts = []
         try:
-            if ironic_hosts:
-                invalid_power_states = ['error']
-                invalid_provision_states = ['error', 'clean failed',
-                                            'manageable', 'deploy failed']
-                reservable_hosts = [h for h in ironic_hosts
-                                    if h['reservable'] is True]
-                unreservable_hosts = [h for h in ironic_hosts
-                                      if h['reservable'] is False]
+            hvs = self.nova.hypervisors.list()
 
-                ironic_client = ironic.BlazarIronicClient()
-                nodes = ironic_client.ironic.node.list()
-                failed_bm_ids = [n.uuid for n in nodes
-                                 if n.maintenance
-                                 or n.power_state in invalid_power_states
-                                 or n.provision_state
-                                 in invalid_provision_states]
-                failed_hosts.extend([host for host in reservable_hosts
-                                     if host['hypervisor_hostname']
-                                     in failed_bm_ids])
-                active_bm_ids = [n.uuid for n in nodes
-                                 if not n.maintenance
-                                 and n.provision_state in ['available']]
-                recovered_hosts.extend([host for host in unreservable_hosts
-                                        if host['hypervisor_hostname']
-                                        in active_bm_ids])
+            failed_hv_ids = [str(hv.id) for hv in hvs
+                             if hv.state == 'down' or hv.status == 'disabled']
+            failed_hosts = [host for host in reservable_hosts
+                            if host['id'] in failed_hv_ids]
 
-            if nova_hosts:
-                reservable_hosts = [h for h in nova_hosts
-                                    if h['reservable'] is True]
-                unreservable_hosts = [h for h in nova_hosts
-                                      if h['reservable'] is False]
-
-                hvs = self.nova.hypervisors.list()
-
-                failed_hv_ids = [str(hv.id) for hv in hvs
-                                 if hv.state == 'down'
-                                 or hv.status == 'disabled']
-                failed_hosts.extend([host for host in reservable_hosts
-                                     if host['id'] in failed_hv_ids])
-
-                active_hv_ids = [str(hv.id) for hv in hvs
-                                 if hv.state == 'up'
-                                 and hv.status == 'enabled']
-                recovered_hosts.extend([host for host in unreservable_hosts
-                                        if host['id'] in active_hv_ids])
-
+            active_hv_ids = [str(hv.id) for hv in hvs
+                             if hv.state == 'up' and hv.status == 'enabled']
+            recovered_hosts = [host for host in unreservable_hosts
+                               if host['id'] in active_hv_ids]
         except Exception as e:
             LOG.exception('Skipping health check. %s', str(e))
 

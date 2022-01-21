@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 import datetime
 from unittest import mock
 
@@ -73,10 +72,10 @@ class FakePlugin(base.BasePlugin):
     def update_reservation(self, reservation_id, values):
         return None
 
-    def on_start(self, resource_id, lease=None):
+    def on_start(self, resource_id):
         return 'Resource %s should be started this moment.' % resource_id
 
-    def on_end(self, resource_id, lease=None):
+    def on_end(self, resource_id):
         return 'Resource %s should be deleted this moment.' % resource_id
 
 
@@ -88,10 +87,16 @@ class FakePluginRaisesException(base.BasePlugin):
     def __init__(self):
         raise Exception
 
-    def on_start(self, resource_id, lease=None):
+    def reserve_resource(self, reservation_id, values):
+        return None
+
+    def update_reservation(self, reservation_id, values):
+        return None
+
+    def on_start(self, resource_id):
         return 'Resource %s should be started this moment.' % resource_id
 
-    def on_end(self, resource_id, lease=None):
+    def on_end(self, resource_id):
         return 'Resource %s should be deleted this moment.' % resource_id
 
 
@@ -132,7 +137,7 @@ class ServiceTestCase(tests.TestCase):
         self.ext_manager = self.patch(self.enabled, 'EnabledExtensionManager')
         self.ext_manager.return_value.extensions = [
             FakeExtension('dummy.vm.plugin', FakePlugin),
-            ]
+        ]
         self.fake_notifier = self.patch(self.notifier_api,
                                         'send_lease_notification')
 
@@ -145,6 +150,9 @@ class ServiceTestCase(tests.TestCase):
                         FakeLeaseStatus.lease_status):
             importlib.reload(service)
         self.service = service
+        self.third_party_plugins = self.patch(
+            self.service, "get_third_party_plugins")
+        self.third_party_plugins.return_value = {}
         self.manager = self.service.ManagerService()
         self.get_plugins = self.service.get_plugins
         self.get_plugins.cache_clear()
@@ -266,104 +274,36 @@ class ServiceTestCase(tests.TestCase):
         event_update = self.patch(self.db_api, 'event_update')
         events.return_value = None
 
-        self.manager._process_events()
+        self.manager._event()
 
         self.assertFalse(event_update.called)
 
     def test_event_success(self):
         events = self.patch(self.db_api, 'event_get_all_sorted_by_filters')
         event_update = self.patch(self.db_api, 'event_update')
-        events.return_value = [{'id': '111-222-333', 'time': self.good_date,
-                                'lease_id': 'aaa-bbb-ccc',
-                                'event_type': 'start_lease'},
-                               {'id': '444-555-666', 'time': self.good_date,
-                                'lease_id': 'bbb-ccc-ddd',
-                                'event_type': 'start_lease'}]
-        self.patch(eventlet, 'spawn')
+        events.return_value = [{'id': '111-222-333',
+                                'lease_id': 'lease_id1',
+                                'time': self.good_date},
+                               {'id': '444-555-666',
+                                'lease_id': 'lease_id2',
+                                'time': self.good_date}]
+        self.patch(eventlet, 'spawn_n')
 
-        self.manager._process_events()
+        self.manager._event()
 
         event_update.assert_has_calls([
             mock.call('111-222-333', {'status': status.event.IN_PROGRESS}),
             mock.call('444-555-666', {'status': status.event.IN_PROGRESS})])
 
-    def test_concurrent_events(self):
-        events = self.patch(self.db_api, 'event_get_all_sorted_by_filters')
-        self.patch(self.db_api, 'event_update')
-        events.return_value = [{'id': '111-222-333', 'time': self.good_date,
-                                'lease_id': 'aaa-bbb-ccc',
-                                'event_type': 'start_lease'},
-                               {'id': '222-333-444', 'time': self.good_date,
-                                'lease_id': 'bbb-ccc-ddd',
-                                'event_type': 'end_lease'},
-                               {'id': '333-444-555', 'time': self.good_date,
-                                'lease_id': 'bbb-ccc-ddd',
-                                'event_type': 'before_end_lease'},
-                               {'id': '444-555-666', 'time': self.good_date,
-                                # Same lease as start_lease event above
-                                'lease_id': 'aaa-bbb-ccc',
-                                'event_type': 'before_end_lease'},
-                               {'id': '444-555-666', 'time': self.good_date,
-                                # Same lease as start_lease event above
-                                'lease_id': 'aaa-bbb-ccc',
-                                'event_type': 'end_lease'},
-                               {'id': '555-666-777', 'time': self.good_date,
-                                'lease_id': 'ccc-ddd-eee',
-                                'event_type': 'end_lease'},
-                               {'id': '666-777-888',
-                                'time': self.good_date + datetime.timedelta(
-                                    minutes=1),
-                                'lease_id': 'ddd-eee-fff',
-                                'event_type': 'end_lease'}]
-        events_values = copy.copy(events.return_value)
-        _process_events_concurrently = self.patch(
-            self.manager, '_process_events_concurrently')
-
-        self.manager._process_events()
-        _process_events_concurrently.assert_has_calls([
-            # First execute the before_end_lease event which doesn't have a
-            # corresponding start_lease
-            mock.call([events_values[2]]),
-            # Then end_lease events
-            mock.call([events_values[1], events_values[5]]),
-            # Then the start_lease event
-            mock.call([events_values[0]]),
-            # Then the before_end_lease which is for the same lease as the
-            # previous start_lease event
-            mock.call([events_values[3]]),
-            # Then the end_lease which is for the same lease as the previous
-            # start_lease event
-            mock.call([events_values[4]]),
-            # Finally the event scheduled at the next minute
-            mock.call([events_values[6]])])
-
-    def test_process_events_concurrently(self):
-        events = [{'id': '111-222-333', 'time': self.good_date,
-                   'lease_id': 'aaa-bbb-ccc',
-                   'event_type': 'start_lease'},
-                  {'id': '222-333-444', 'time': self.good_date,
-                   'lease_id': 'bbb-ccc-ddd',
-                   'event_type': 'start_lease'},
-                  {'id': '333-444-555', 'time': self.good_date,
-                   'lease_id': 'ccc-ddd-eee',
-                   'event_type': 'start_lease'}]
-        spawn = self.patch(eventlet, 'spawn')
-
-        self.manager._process_events_concurrently(events)
-        spawn.assert_has_calls([
-            mock.call(mock.ANY, events[0]),
-            mock.call(mock.ANY, events[1]),
-            mock.call(mock.ANY, events[2])])
-
     def test_event_spawn_fail(self):
         events = self.patch(self.db_api, 'event_get_all_sorted_by_filters')
         event_update = self.patch(self.db_api, 'event_update')
-        self.patch(eventlet, 'spawn').side_effect = Exception
-        events.return_value = [{'id': '111-222-333', 'time': self.good_date,
-                                'lease_id': 'aaa-bbb-ccc',
-                                'event_type': 'start_lease'}]
+        self.patch(eventlet, 'spawn_n').side_effect = Exception
+        events.return_value = [{'id': '111-222-333',
+                                'lease_id': self.lease_id,
+                                'time': self.good_date}]
 
-        self.manager._process_events()
+        self.manager._event()
 
         event_update.assert_has_calls([
             mock.call('111-222-333', {'status': status.event.IN_PROGRESS}),
@@ -373,8 +313,7 @@ class ServiceTestCase(tests.TestCase):
         events = self.patch(self.db_api, 'event_get_all_sorted_by_filters')
         events.return_value = [{'id': '111-222-333',
                                 'lease_id': self.lease_id,
-                                'time': self.good_date,
-                                'event_type': 'start_lease'}]
+                                'time': self.good_date}]
 
         self.lease_get = self.patch(self.db_api, 'lease_get')
         lease = self.lease.copy()
@@ -383,7 +322,7 @@ class ServiceTestCase(tests.TestCase):
 
         event_update = self.patch(self.db_api, 'event_update')
 
-        self.manager._process_events()
+        self.manager._event()
 
         event_update.assert_not_called()
 
@@ -398,8 +337,10 @@ class ServiceTestCase(tests.TestCase):
         start_lease.assert_called_once_with(lease_id=event['lease_id'],
                                             event_id=event['id'])
         self.lease_get.assert_called_once_with(event['lease_id'])
+        expected_context = self.trust_ctx.return_value
         self.fake_notifier.assert_called_once_with(
-            {}, notifier_api.format_lease_payload(self.lease),
+            expected_context.__enter__.return_value,
+            notifier_api.format_lease_payload(self.lease),
             'lease.event.start_lease')
 
     def test_exec_event_invalid_event_type(self):
@@ -493,8 +434,11 @@ class ServiceTestCase(tests.TestCase):
         self.trust_ctx.assert_called_once_with(lease_values['trust_id'])
         self.lease_create.assert_called_once_with(lease_values)
         self.assertEqual(lease, self.lease)
+        expected_context = self.trust_ctx.return_value
+
         self.fake_notifier.assert_called_once_with(
-            {}, notifier_api.format_lease_payload(lease),
+            expected_context.__enter__.return_value,
+            notifier_api.format_lease_payload(lease),
             'lease.create')
 
     def test_create_lease_some_time(self):
@@ -855,8 +799,7 @@ class ServiceTestCase(tests.TestCase):
                     'max': 3,
                     'resource_type': 'virtual:instance'
                 }
-            ],
-            'project_id': u'e33c952e-6321-4ce6-93e3-c58d4925c5f8'
+            ]
         }
         reservation_get_all = (
             self.patch(self.db_api, 'reservation_get_all_by_lease_id'))
@@ -912,7 +855,7 @@ class ServiceTestCase(tests.TestCase):
         reservation_get_all.return_value = [
             {
                 'id': '593e7028-c0d1-4d76-8642-2ffd890b324c',
-                'resource_type': 'virtual:instance',
+                'resource_type': 'fake:instance',
             }
         ]
         target = datetime.datetime(2013, 12, 15)
@@ -1070,9 +1013,12 @@ class ServiceTestCase(tests.TestCase):
                 'end_date': datetime.datetime(2013, 12, 20, 16, 00)
             }
         )
-        calls = [mock.call({}, notifier_api.format_lease_payload(self.lease),
+        expected_context = self.trust_ctx.return_value
+        calls = [mock.call(expected_context.__enter__.return_value,
+                           notifier_api.format_lease_payload(self.lease),
                            'lease.update'),
-                 mock.call({}, notifier_api.format_lease_payload(self.lease),
+                 mock.call(expected_context.__enter__.return_value,
+                           notifier_api.format_lease_payload(self.lease),
                            'lease.event.before_end_lease.stop'),
                  ]
         self.fake_notifier.assert_has_calls(calls)
@@ -1132,9 +1078,12 @@ class ServiceTestCase(tests.TestCase):
                 'end_date': datetime.datetime(2013, 12, 20, 16, 00)
             }
         )
-        calls = [mock.call({}, notifier_api.format_lease_payload(self.lease),
+        expected_context = self.trust_ctx.return_value
+        calls = [mock.call(expected_context.__enter__.return_value,
+                           notifier_api.format_lease_payload(self.lease),
                            'lease.update'),
-                 mock.call({}, notifier_api.format_lease_payload(self.lease),
+                 mock.call(expected_context.__enter__.return_value,
+                           notifier_api.format_lease_payload(self.lease),
                            'lease.event.before_end_lease.stop'),
                  ]
         self.fake_notifier.assert_has_calls(calls)
@@ -1401,8 +1350,7 @@ class ServiceTestCase(tests.TestCase):
                     'max': 3,
                     'resource_type': 'virtual:instance'
                 }
-            ],
-            'project_id': u'e33c952e-6321-4ce6-93e3-c58d4925c5f8'
+            ]
         }
         reservation_get_all = (
             self.patch(self.db_api, 'reservation_get_all_by_lease_id'))
@@ -1443,8 +1391,9 @@ class ServiceTestCase(tests.TestCase):
 
         self.manager.delete_lease(self.lease_id)
 
+        self.trust_ctx.assert_called_once_with(self.lease['trust_id'])
         self.lease_destroy.assert_called_once_with(self.lease_id)
-        self.fake_plugin.on_end.assert_called_with('111', lease=self.lease)
+        self.fake_plugin.on_end.assert_called_with('111')
         enforcement_on_end.assert_called_once()
 
     def test_delete_lease_after_ending(self):
@@ -1465,9 +1414,11 @@ class ServiceTestCase(tests.TestCase):
 
         self.manager.delete_lease(self.lease_id)
 
+        expected_context = self.trust_ctx.return_value
         self.lease_destroy.assert_called_once_with(self.lease_id)
         self.fake_notifier.assert_called_once_with(
-            {}, self.notifier_api.format_lease_payload(self.lease),
+            expected_context.__enter__.return_value,
+            self.notifier_api.format_lease_payload(self.lease),
             'lease.delete')
         self.fake_plugin.on_end.assert_not_called()
         enforcement_on_end.assert_not_called()
@@ -1489,11 +1440,9 @@ class ServiceTestCase(tests.TestCase):
 
         self.manager.delete_lease(self.lease_id)
 
-        self.event_update.assert_has_calls([
-            mock.call('fake', {'status': 'IN_PROGRESS'}),
-            mock.call('fake', {'status': 'DONE'}),
-        ])
-        self.fake_plugin.on_end.assert_called_with('111', lease=self.lease)
+        self.event_update.assert_called_once_with('fake',
+                                                  {'status': 'IN_PROGRESS'})
+        self.fake_plugin.on_end.assert_called_with('111')
         self.lease_destroy.assert_called_once_with(self.lease_id)
         enforcement_on_end.assert_called_once()
 
@@ -1514,12 +1463,10 @@ class ServiceTestCase(tests.TestCase):
 
         self.manager.delete_lease(self.lease_id)
 
-        self.event_update.assert_has_calls([
-            mock.call('fake', {'status': 'IN_PROGRESS'}),
-            mock.call('fake', {'status': 'DONE'}),
-        ])
+        self.event_update.assert_called_once_with('fake',
+                                                  {'status': 'IN_PROGRESS'})
 
-        self.fake_plugin.on_end.assert_called_with('111', lease=self.lease)
+        self.fake_plugin.on_end.assert_called_with('111')
         self.lease_destroy.assert_called_once_with(self.lease_id)
         enforcement_on_end.assert_called_once()
 
@@ -1543,11 +1490,9 @@ class ServiceTestCase(tests.TestCase):
 
         self.manager.delete_lease(self.lease_id)
 
-        self.event_update.assert_has_calls([
-            mock.call('fake', {'status': 'IN_PROGRESS'}),
-            mock.call('fake', {'status': 'DONE'}),
-        ])
-        self.fake_plugin.on_end.assert_called_with('111', lease=self.lease)
+        self.event_update.assert_called_once_with('fake',
+                                                  {'status': 'IN_PROGRESS'})
+        self.fake_plugin.on_end.assert_called_with('111')
         self.lease_destroy.assert_called_once_with(self.lease_id)
         enforcement_on_end.assert_called_once()
 
@@ -1556,6 +1501,7 @@ class ServiceTestCase(tests.TestCase):
 
         self.manager.start_lease(self.lease_id, '1')
 
+        self.trust_ctx.assert_called_once_with(self.lease['trust_id'])
         basic_action.assert_called_once_with(self.lease_id, '1', 'on_start',
                                              'active')
 
@@ -1565,6 +1511,7 @@ class ServiceTestCase(tests.TestCase):
 
         self.manager.end_lease(self.lease_id, '1')
 
+        self.trust_ctx.assert_called_once_with(self.lease['trust_id'])
         basic_action.assert_called_once_with(self.lease_id, '1', 'on_end',
                                              'deleted')
         enforcement_on_end.assert_called_once()
