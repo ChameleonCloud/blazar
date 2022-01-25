@@ -680,6 +680,36 @@ resource_id:
   in: body
   required: true
   type: string
+resource_reservable:
+  description: |
+    The flag which represents whether the resource is reservable or not.
+  in: body
+  required: true
+  type: boolean
+resource_type:
+  description: |
+    The type of the resource.
+  in: body
+  required: true
+  type: string
+resources:
+  description: |
+    A list of ``resource`` objects.
+  in: body
+  required: true
+  type: array
+resources_name:
+  description: |
+    The name of the resource type.
+  in: body
+  required: true
+  type: string
+resources_prefix:
+  description: |
+    The API prefix base for the prefix type.
+  in: body
+  required: true
+  type: string
 resource_properties:
   description: |
     A list of ``resource_property`` objects.
@@ -740,39 +770,6 @@ resource_property_resource_type:
   description: |
     The updated ``resource_property`` resource type.
 
-  in: body
-  required: true
-  type: string
-resource_reservable:
-  description: |
-    The flag which represents whether the resource is reservable or not.
-  in: body
-  required: true
-  type: boolean
-resource_type:
-  description: |
-    The type of the resource.
-  in: body
-  required: true
-  type: string
-resources:
-  description: |
-    A list of ``resource`` objects.
-  in: body
-  required: true
-  type: array
-resources_name:
-  description: |
-    The name of the resource type.
-  in: body
-  required: true
-  type: string
-resources_prefix:
-  description: |
-    The API prefix base for the prefix type.
-  in: body
-  required: true
-  type: string
 updated_at:
   description: |
     The date and time when the object was updated.

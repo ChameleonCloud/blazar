@@ -791,46 +791,6 @@ class ManagerService(service_utils.RPCServer):
             else:
                 raise exceptions.UnsupportedResourceType(
                     resource_type=resource_type)
-
-            plugin = self.plugins.get(resource_type)
-
-            if not plugin:
-                raise common_ex.BlazarException(
-                    'Invalid plugin names are specified: %s' % resource_type)
-
-            original_res = res.copy()
-            try:
-                plugin.update_default_parameters(res)
-                candidate_ids = plugin.allocation_candidates(res)
-            except exceptions.NotEnoughResourcesAvailable:
-                candidate_ids = None
-                # Retry this function if allowed
-                if hasattr(
-                    CONF[plugin.resource_type],
-                    "retry_allocation_without_defaults"
-                ) and CONF[plugin.resource_type]\
-                        .retry_allocation_without_defaults:
-                    LOG.info("Not enough resources with default properties. "
-                             "Retrying with defaults removed.")
-                    try:
-                        candidate_ids = plugin.allocation_candidates(
-                            original_res)
-                    except exceptions.NotEnoughResourcesAvailable:
-                        pass
-
-                # If the retry didn't get candidate IDs, raise an exception
-                if candidate_ids is None:
-                    if hasattr(
-                        CONF[plugin.resource_type],
-                        "display_default_resource_properties"
-                    ) and CONF[plugin.resource_type]\
-                            .display_default_resource_properties:
-                        raise exceptions.\
-                            NotEnoughResourcesDefaultProperties(
-                                params=str(res))
-                    else:
-                        raise
-
             allocations[resource_type] = [
                 plugin.get(cid) for cid in candidate_ids]
 

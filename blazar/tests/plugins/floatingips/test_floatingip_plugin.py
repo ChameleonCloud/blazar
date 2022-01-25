@@ -386,6 +386,7 @@ class FloatingIpPluginTest(tests.TestCase):
         lease_get = self.patch(self.db_api, 'lease_get')
         lease_get.return_value = {
             'id': '018c1b43-e69e-4aef-a543-09681539cf4c',
+            'project_id': 'fake-project-id',
             'start_date': datetime.datetime(2013, 12, 19, 20, 0),
             'end_date': datetime.datetime(2013, 12, 19, 21, 0),
         }
@@ -421,7 +422,6 @@ class FloatingIpPluginTest(tests.TestCase):
             'subnet_id': 'subnet-id',
             'floating_ip_address': '172.2.24.100'
         }
-        self.set_context(context.BlazarContext(project_id='fake-project-id'))
         m = mock.MagicMock()
         self.fip_pool.return_value = m
         fip_allocation_create = self.patch(
@@ -460,6 +460,7 @@ class FloatingIpPluginTest(tests.TestCase):
         lease_get = self.patch(self.db_api, 'lease_get')
         lease_get.return_value = {
             'id': '018c1b43-e69e-4aef-a543-09681539cf4c',
+            'project_id': 'fake-project-id',
             'start_date': datetime.datetime(2013, 12, 19, 20, 0),
             'end_date': datetime.datetime(2013, 12, 19, 21, 0),
         }
@@ -500,7 +501,6 @@ class FloatingIpPluginTest(tests.TestCase):
                 'floating_ip_address': '172.2.24.101'
             }
         )
-        self.set_context(context.BlazarContext(project_id='fake-project-id'))
         m = mock.MagicMock()
         m.create_reserved_floatingip.side_effect = (None, Exception())
         self.fip_pool.return_value = m
@@ -749,12 +749,11 @@ class FloatingIpPluginTest(tests.TestCase):
             'subnet_id': 'subnet-id',
             'floating_ip_address': '172.2.24.100'
         }
-        self.set_context(context.BlazarContext(project_id='fake-project-id'))
         m = mock.MagicMock()
         self.fip_pool.return_value = m
-
+        fake_lease = {'project_id': 'fake-project-id'}
         fip_plugin = floatingip_plugin.FloatingIpPlugin()
-        fip_plugin.on_start('resource-id1')
+        fip_plugin.on_start('resource-id1', lease=fake_lease)
 
         self.fip_pool.assert_called_once_with('network-id1')
         m.create_reserved_floatingip.assert_called_once_with('subnet-id',
@@ -772,6 +771,7 @@ class FloatingIpPluginTest(tests.TestCase):
             self.db_api, 'fip_allocation_get_all_by_values'
         )
         fip_allocation_get_all_by_values.return_value = [{
+            'id': 'alloc-id1',
             'floatingip_id': 'fip-id',
         }]
         fip_get = self.patch(self.db_api, 'floatingip_get')
@@ -783,12 +783,15 @@ class FloatingIpPluginTest(tests.TestCase):
         self.set_context(context.BlazarContext(project_id='fake-project-id'))
         m = mock.MagicMock()
         self.fip_pool.return_value = m
+        patch_fip_allocation_destroy = self.patch(
+            db_api, 'fip_allocation_destroy')
 
         fip_plugin = floatingip_plugin.FloatingIpPlugin()
         fip_plugin.on_end('resource-id1')
 
         self.fip_pool.assert_called_once_with('network-id1')
         m.delete_reserved_floatingip.assert_called_once_with('172.2.24.100')
+        patch_fip_allocation_destroy.assert_called_once_with('alloc-id1')
 
     def test_matching_fips_not_allocated_fips(self):
         def fip_allocation_get_all_by_values(**kwargs):

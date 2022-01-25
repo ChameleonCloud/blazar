@@ -1979,6 +1979,11 @@ def resource_properties_list(resource_type):
                 .join(models.ResourceResourceProperty)\
                 .distinct()
 
+        # Add extra filter if using 3rd party resource type
+        if resource_type not in RESOURCE_PROPERTY_MODELS:
+            query = query.join(models.Resource).filter_by(
+                resource_type=resource_type)
+
         return query.all()
 
 

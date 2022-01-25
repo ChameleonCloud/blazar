@@ -30,7 +30,6 @@ from blazar.plugins import oshosts
 from blazar import tests
 from blazar.utils.openstack import nova
 from oslo_config import cfg
-from oslo_config import fixture as conf_fixture
 
 CONF = cfg.CONF
 
@@ -40,20 +39,6 @@ class TestVirtualInstancePlugin(tests.TestCase):
 
     def setUp(self):
         super(TestVirtualInstancePlugin, self).setUp()
-
-    def test_configuration(self):
-        self.cfg = self.useFixture(conf_fixture.Config(CONF))
-        self.cfg.config(os_admin_username='fake-user')
-        self.cfg.config(os_admin_password='fake-passwd')
-        self.cfg.config(os_admin_user_domain_name='fake-user-domain')
-        self.cfg.config(os_admin_project_name='fake-pj-name')
-        self.cfg.config(os_admin_project_domain_name='fake-pj-domain')
-        plugin = instance_plugin.VirtualInstancePlugin()
-        self.assertEqual("fake-user", plugin.username)
-        self.assertEqual("fake-passwd", plugin.password)
-        self.assertEqual("fake-user-domain", plugin.user_domain_name)
-        self.assertEqual("fake-pj-name", plugin.project_name)
-        self.assertEqual("fake-pj-domain", plugin.project_domain_name)
 
     def get_input_values(self, vcpus, memory, disk, amount, affinity,
                          start, end, lease_id, resource_properties):
@@ -119,6 +104,8 @@ class TestVirtualInstancePlugin(tests.TestCase):
 
         expected_ret = 'instance-reservation-id1'
 
+        ctx = context.BlazarContext(project_id='fake-project')
+        self.set_context(ctx)
         ret = plugin.reserve_resource('res_id1', inputs)
 
         self.assertEqual(expected_ret, ret)
@@ -135,7 +122,7 @@ class TestVirtualInstancePlugin(tests.TestCase):
         mock_alloc_create.assert_any_call({'compute_host_id': 'host2',
                                            'reservation_id': 'res_id1'})
         mock_create_resources.assert_called_once_with(
-            fake_instance_reservation)
+            ctx, fake_instance_reservation)
         mock_inst_update.assert_called_once_with('instance-reservation-id1',
                                                  {'flavor_id': 1,
                                                   'server_group_id': 2,
@@ -147,6 +134,7 @@ class TestVirtualInstancePlugin(tests.TestCase):
         inputs = self.get_input_values(2, 4018, 10, 1, value,
                                        '2030-01-01 08:00', '2030-01-01 08:00',
                                        'lease-1', '')
+        self.set_context(context.BlazarContext(project_id='fake-project'))
         self.assertRaises(mgr_exceptions.MalformedParameter,
                           plugin.reserve_resource, 'reservation_id', inputs)
         self.assertRaises(mgr_exceptions.MalformedParameter,
@@ -158,6 +146,7 @@ class TestVirtualInstancePlugin(tests.TestCase):
         inputs = self.get_input_values(2, 4018, 10, value, False,
                                        '2030-01-01 08:00', '2030-01-01 08:00',
                                        'lease-1', '')
+        self.set_context(context.BlazarContext(project_id='fake-project'))
         self.assertRaises(mgr_exceptions.MalformedParameter,
                           plugin.reserve_resource, 'reservation_id', inputs)
         self.assertRaises(mgr_exceptions.MalformedParameter,
@@ -171,6 +160,7 @@ class TestVirtualInstancePlugin(tests.TestCase):
                                        '2030-01-01 08:00', '2030-01-01 08:00',
                                        'lease-1', '')
         del inputs[missing_param]
+        self.set_context(context.BlazarContext(project_id='fake-project'))
         self.assertRaises(mgr_exceptions.MissingParameter,
                           plugin.reserve_resource, 'reservation_id', inputs)
 
@@ -681,8 +671,9 @@ class TestVirtualInstancePlugin(tests.TestCase):
         fake_client.nova.server_groups.create.return_value = \
             fake_server_group
 
-        self.set_context(context.BlazarContext(project_id='fake-project',
-                                               auth_token='fake-token'))
+        ctx = context.BlazarContext(project_id='fake-project',
+                                    auth_token='fake-token')
+        self.set_context(ctx)
         fake_flavor = mock.MagicMock(method='set_keys',
                                      flavorid='reservation-id1')
         mock_nova = mock.MagicMock()
@@ -700,7 +691,7 @@ class TestVirtualInstancePlugin(tests.TestCase):
 
         expected = (fake_flavor, fake_server_group, fake_agg)
 
-        ret = plugin._create_resources(instance_reservation)
+        ret = plugin._create_resources(ctx, instance_reservation)
 
         self.assertEqual(expected, ret)
 
@@ -718,7 +709,8 @@ class TestVirtualInstancePlugin(tests.TestCase):
             name='reservation-id1',
             metadata={'reservation': 'reservation-id1',
                       'filter_tenant_id': 'fake-project',
-                      'affinity_id': 'server_group_id1'})
+                      'affinity_id': 'server_group_id1'},
+            project_id='fake-project')
         mock_create_reservation_class.assert_called_once_with(
             'reservation-id1')
 

@@ -94,7 +94,10 @@ class StitchportPlugin(base.BasePlugin):
         for stitchport in resources:
             try:
                 self.neutron_client.add_tag(
-                    "ports", stitchport["data"]["port_id"], f"reservation_id={res_id}")
+                    "ports",
+                    stitchport["data"]["port_id"],
+                    f"reservation_id={res_id}"
+                )
             except neutron_ex.NotFound:
                 LOG.info("Could not find resource to deallocate")
 
@@ -127,14 +130,20 @@ class StitchportPlugin(base.BasePlugin):
                 LOG.info("Could not delete port %s", port["id"])
 
     def poll_resource_failures(self):
-        stitchports = db_api.resource_get_all_by_filters(self.resource_type(), {})
-        reservable_stitchports = [s for s in stitchports if h['reservable'] is True]
-        unreservable_stitchports = [s for s in stitchports if h['reservable'] is False]
+        stitchports = db_api.resource_get_all_by_filters(
+            self.resource_type(), {})
+        reservable_stitchports = [
+            s for s in stitchports if h['reservable'] is True]
+        unreservable_stitchports = [
+            s for s in stitchports if h['reservable'] is False]
 
         try:
-            neutron_ports = self.neutron_client.list_ports(retrieve_all=True, tags=["shadow"])
-            failed_port_ids = [str(p.id) for p in neutron_ports if p.admin_state_up == "DOWN"]
-            active_port_ids = [str(p.id) for p in neutron_ports if p.admin_state_up == "UP"]
+            neutron_ports = self.neutron_client.list_ports(
+                retrieve_all=True, tags=["shadow"])
+            failed_port_ids = [
+                str(p.id) for p in neutron_ports if p.admin_state_up == "DOWN"]
+            active_port_ids = [
+                str(p.id) for p in neutron_ports if p.admin_state_up == "UP"]
 
             failed_ports = [port for port in reservable_stitchports
                 if port["data"]["port_id"] in failed_port_ids]
