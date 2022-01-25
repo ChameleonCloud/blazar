@@ -58,7 +58,7 @@ def upgrade():
                     sa.Column('capability_value', sa.Text().with_variant(
                         mysql.MEDIUMTEXT(), 'mysql'), nullable=False),
                     sa.ForeignKeyConstraint(
-                        ['capability_id'], ['extra_capabilities.id'], ),
+                        ['capability_id'], ['resource_properties.id'], ),
                     sa.ForeignKeyConstraint(['device_id'], ['devices.id'], ),
                     sa.PrimaryKeyConstraint('id')
                     )

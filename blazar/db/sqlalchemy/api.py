@@ -1963,20 +1963,21 @@ def resource_properties_list(resource_type):
     session = get_session()
 
     with session.begin():
-        resource_model = RESOURCE_PROPERTY_MODELS.get(
-            resource_type,
-            models.ResourceResourceProperty
-        )
-
-        query = session.query(
-            models.ResourceProperty.property_name,
-            models.ResourceProperty.private,
-            resource_model.capability_value).join(resource_model).distinct()
-
-        # Add extra filter if using 3rd party resource type
-        if resource_type not in RESOURCE_PROPERTY_MODELS:
-            query = query.join(models.Resource).filter_by(
-                resource_type=resource_type)
+        if resource_type in RESOURCE_PROPERTY_MODELS:
+            resource_model = RESOURCE_PROPERTY_MODELS[resource_type]
+            query = session.query(
+                models.ResourceProperty.property_name,
+                models.ResourceProperty.private,
+                resource_model.capability_value)\
+                .join(resource_model).distinct()
+        else:
+            query = session.query(
+                models.ResourceProperty.property_name,
+                models.ResourceProperty.private,
+                models.ResourceResourceProperty.property_value)\
+                .filter_by(resource_type=resource_type)\
+                .join(models.ResourceResourceProperty)\
+                .distinct()
 
         return query.all()
 
@@ -2169,15 +2170,26 @@ def _resource_get_all(session, resource_type):
     return query
 
 
+def convert_param(a):
+    '''convert a param to a numeric type, date, or string if possible'''
+    try:
+        return float(a)
+    except ValueError:
+        try:
+            return datetime.strptime(a, r'%Y-%m-%d %H:%M')
+        except ValueError:
+            return a
+
+
 def resource_get_all_by_queries(resource_type, queries):
     resources_query = resource_query(
         models.Resource, resource_type, get_session())
 
     oper = {
-        '<': ['lt', lambda a, b: a >= b],
-        '>': ['gt', lambda a, b: a <= b],
-        '<=': ['le', lambda a, b: a > b],
-        '>=': ['ge', lambda a, b: a < b],
+        '<': ['lt', lambda a, b: convert_param(a) >= convert_param(b)],
+        '>': ['gt', lambda a, b: convert_param(a) <= convert_param(b)],
+        '<=': ['le', lambda a, b: convert_param(a) > convert_param(b)],
+        '>=': ['ge', lambda a, b: convert_param(a) < convert_param(b)],
         '==': ['eq', lambda a, b: a != b],
         '!=': ['ne', lambda a, b: a == b],
     }
@@ -2231,11 +2243,21 @@ def resource_get_all_by_queries(resource_type, queries):
 
                 filt = getattr(raw_column, attr)(value)
             resources_query = resources_query.filter(filt)
-        else: # JSON column
+        else:  # JSON column
             resources = []
             for resource in resources_query.all():
-                if resource.data[key] == value:
-                    resources.append(resource.id)
+                if resource.data.get(key, None):
+                    if op == "in":
+                        values = value.split(",")
+                        if str(resource.data[key]) in values:
+                            resources.append(resource.id)
+                    elif op in oper and not oper[op][1](
+                            resource.data[key], value):
+                        resources.append(resource.id)
+                    elif op not in oper:
+                        msg = 'Operator %s not implemented'
+                        raise NotImplementedError(msg % op)
+
             resources_query = resources_query.filter(
                 models.Resource.id.in_(resources))
 

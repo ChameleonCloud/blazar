@@ -16,14 +16,14 @@
 """extra property
 
 Revision ID: 02e2f2186d98
-Revises: f4084140f608
+Revises: 520c9976941c
 Create Date: 2020-04-17 15:51:40.542459
 
 """
 
 # revision identifiers, used by Alembic.
 revision = '02e2f2186d98'
-down_revision = 'f4084140f608'
+down_revision = '520c9976941c'
 
 import uuid
 

@@ -45,6 +45,9 @@ lease_id_path:
 property_name:
   description: |
     The name of the property.
+  in: path
+  required: true
+  type: string
 resource_id_path:
   description: |
     The ID of the resource.
@@ -650,7 +653,33 @@ reservations_optional:
   in: body
   required: false
   type: array
-<<<<<<< HEAD
+resource:
+  description: |
+    A ``resource`` object.
+  in: body
+  required: true
+  type: object
+resource_data:
+  description: |
+    The data of the resource.
+  in: body
+  required: true
+  type: json
+resource_extra_capability:
+  description: |
+    The extra capability of the resource.
+
+    .. note:: Any key-value pair can be stored as one of extra capabilities of
+              the resource.
+  in: body
+  required: false
+  type: any
+resource_id:
+  description: |
+    The ID of the resource.
+  in: body
+  required: true
+  type: string
 resource_properties:
   description: |
     A list of ``resource_property`` objects.
@@ -711,31 +740,6 @@ resource_property_resource_type:
   description: |
     The updated ``resource_property`` resource type.
 
-=======
-resource:
-  description: |
-    A ``resource`` object.
-  in: body
-  required: true
-  type: object
-resource_data:
-  description: |
-    The data of the resource.
-  in: body
-  required: true
-  type: json
-resource_extra_capability:
-  description: |
-    The extra capability of the resource.
-
-    .. note:: Any key-value pair can be stored as one of extra capabilities of
-              the resource.
-  in: body
-  required: false
-  type: any
-resource_id:
-  description: |
-    The ID of the resource.
   in: body
   required: true
   type: string
@@ -766,7 +770,6 @@ resources_name:
 resources_prefix:
   description: |
     The API prefix base for the prefix type.
->>>>>>> 10ef038... Add support for third party resource plugins
   in: body
   required: true
   type: string

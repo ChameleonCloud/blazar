@@ -42,6 +42,9 @@ manager_opts = [
                 default=['dummy.vm.plugin'],
                 help='All plugins to use (one for every resource type to '
                      'support.)'),
+    cfg.ListOpt('third_party_plugins',
+                default=[],
+                help='All third party plugins to use'),
     cfg.IntOpt('minutes_before_end_lease',
                default=60,
                min=0,
@@ -52,7 +55,7 @@ manager_opts = [
                default=1,
                min=0,
                max=50,
-               help='Number of times to retry an event action.'),
+               help='Number of times to retry an event action.')
 ]
 
 CONF = cfg.CONF
@@ -76,6 +79,11 @@ class ManagerService(service_utils.RPCServer):
         super(ManagerService, self).__init__(target)
         self.plugins = get_plugins()
         self.third_party_plugins = get_third_party_plugins()
+        if self.plugins.keys() & self.third_party_plugins.keys():
+            msg = ("You have provided several plugins for "
+                   "one resource type in configuration file. "
+                   "Please set one plugin per resource type.")
+            raise exceptions.PluginConfigurationError(error=msg)
         self.resource_actions = self._setup_actions()
         self.monitors = monitor.load_monitors(self.plugins) \
             + monitor.load_monitors(self.third_party_plugins)
@@ -443,18 +451,6 @@ class ManagerService(service_utils.RPCServer):
     @status.lease.lease_status(
         transition=status.lease.UPDATING,
         result_in=status.lease.STABLE,
-        non_fatal_exceptions=[
-            common_ex.InvalidInput,
-            exceptions.InvalidRange,
-            exceptions.MissingParameter,
-            exceptions.MalformedRequirements,
-            exceptions.MalformedParameter,
-            exceptions.NotEnoughHostsAvailable,
-            exceptions.InvalidDate,
-            exceptions.NotEnoughResourcesDefaultProperties,
-            exceptions.NotEnoughNetworksAvailable,
-            exceptions.NotEnoughDevicesAvailable,
-        ]
     )
 
     def update_lease(self, lease_id, values):

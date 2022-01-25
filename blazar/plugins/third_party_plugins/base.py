@@ -34,11 +34,11 @@ from . import exceptions as plugin_ex
 import abc
 import collections
 import datetime
-from oslo_serialization import jsonutils
 from random import shuffle
 
 LOG = logging.getLogger(__name__)
 CONF = cfg.CONF
+QUERY_TYPE_ALLOCATION = 'allocation'
 
 plugin_opts = [
     cfg.StrOpt('before_end',
@@ -228,9 +228,7 @@ class BasePlugin(metaclass=abc.ABCMeta):
         """List all allocations"""
         resource_id_list = [
             r['id']
-            for r in db_api.resource_list(
-                self.resource_type(), self.resource_type()
-            )
+            for r in db_api.resource_list(self.resource_type())
         ]
         options = self.get_query_options(query, QUERY_TYPE_ALLOCATION)
         resource_allocations = self.query_resource_allocations(
@@ -238,8 +236,6 @@ class BasePlugin(metaclass=abc.ABCMeta):
         return [{"resource_id": resource, "reservations": allocs}
                 for resource, allocs in resource_allocations.items()]
 
-<<<<<<< HEAD
-=======
     def get_allocations(self, resource_id, query, detail=False):
         options = self.get_query_options(query, QUERY_TYPE_ALLOCATION)
         resource_allocations = self.query_resource_allocations(
@@ -247,7 +243,6 @@ class BasePlugin(metaclass=abc.ABCMeta):
         allocs = resource_allocations.get(resource_id, [])
         return {"resource_id": resource_id, "reservations": allocs}
 
->>>>>>> 3d1c210... Update third party plugins with docs, tests
     def get_query_options(self, params, index_type):
         options = {k: params[k] for k in params
                    if k in self.query_options[index_type]}
@@ -605,7 +600,6 @@ class BasePlugin(metaclass=abc.ABCMeta):
             return None
         else:
             if data:
-                data = jsonutils.loads(data)
                 data = self.validate_update_params(resource_id, data)
                 db_api.resource_update(
                     self.resource_type(), resource_id, data)
