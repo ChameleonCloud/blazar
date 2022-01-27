@@ -748,7 +748,7 @@ class ManagerService(service_utils.RPCServer):
                 'status': status.reservation.PENDING
             }
             reservation = db_api.reservation_create(reservation_values)
-            resource_id = self.plugins[resource_type].reserve_resource(
+            resource_id = plugin.reserve_resource(
                 reservation['id'],
                 values
             )

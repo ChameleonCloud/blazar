@@ -91,6 +91,9 @@ class StitchportPlugin(base.BasePlugin):
 
     def allocate(self, resource_reservation, resources):
         res_id = resource_reservation["reservation_id"]
+        reservation = db_api.reservation_get(res_id)
+        lease = db_api.lease_get(reservation["lease_id"])
+        project_id = lease["project_id"]
         for stitchport in resources:
             try:
                 self.neutron_client.add_tag(
@@ -98,11 +101,19 @@ class StitchportPlugin(base.BasePlugin):
                     stitchport["data"]["port_id"],
                     f"reservation_id={res_id}"
                 )
+                self.neutron_client.add_tag(
+                    "ports",
+                    stitchport["data"]["port_id"],
+                    f"project_id={project_id}"
+                )
             except neutron_ex.NotFound:
                 LOG.info("Could not find resource to deallocate")
 
     def deallocate(self, resource_reservation, resources):
         res_id = resource_reservation["reservation_id"]
+        reservation = db_api.reservation_get(res_id)
+        lease = db_api.lease_get(reservation["lease_id"])
+        project_id = lease["project_id"]
         for stitchport in resources:
             try:
                 LOG.info(
@@ -114,6 +125,11 @@ class StitchportPlugin(base.BasePlugin):
                     "ports",
                     stitchport["data"]["port_id"],
                     f"reservation_id={res_id}"
+                )
+                self.neutron_client.remove_tag(
+                    "ports",
+                    stitchport["data"]["port_id"],
+                    f"project_id={project_id}"
                 )
             except neutron_ex.NotFound:
                 LOG.info("Could not find resource to deallocate")
