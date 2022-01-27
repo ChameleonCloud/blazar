@@ -618,7 +618,7 @@ class DevicePlugin(base.BasePlugin):
                     new_device = db_api.device_get(device_id)
                     if reservation_status == status.reservation.ACTIVE:
                         # Add new device into the trait.
-                        self.plugins[device["device_driver"]].\
+                        self.plugins[new_device["device_driver"]].\
                             add_active_device(
                                 new_device, device_reservation, lease)
             else:

@@ -37,6 +37,7 @@ LABELS = {
     "device": f"{LABEL_NAMESPACE}/device",
 }
 
+
 class K3sPlugin():
     device_driver = 'k3s'
 
