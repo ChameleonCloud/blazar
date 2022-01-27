@@ -452,7 +452,6 @@ class ManagerService(service_utils.RPCServer):
         transition=status.lease.UPDATING,
         result_in=status.lease.STABLE,
     )
-
     def update_lease(self, lease_id, values):
         if not values:
             return db_api.lease_get(lease_id)

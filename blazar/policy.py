@@ -55,10 +55,12 @@ def init():
         _ENFORCER = policy.Enforcer(CONF)
         _ENFORCER.register_defaults(policies.list_rules())
 
+
 def register_plugin_opts(rules):
     global _ENFORCER
     init()
     _ENFORCER.register_defaults(rules)
+
 
 def set_rules(data, default_rule=None):
     default_rule = default_rule or CONF.policy_default_rule
@@ -109,6 +111,7 @@ def enforce(context, action, target, do_raise=True):
     return _ENFORCER.enforce(action, target, credentials, do_raise=do_raise,
                              **extra)
 
+
 def check_enforcement(
         extension, action=None, api='blazar', ctx=None, target=None):
     cur_ctx = ctx or context.current()
@@ -124,6 +127,7 @@ def check_enforcement(
     else:
         act = '%s:%s:%s' % (api, extension, action)
     enforce(cur_ctx, act, tgt)
+
 
 def authorize(extension, action=None, api='blazar', ctx=None,
               target=None):

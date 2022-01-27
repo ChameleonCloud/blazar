@@ -836,8 +836,7 @@ def resource_reservation_update(
 
 def resource_reservation_destroy(resource_reservation_id):
     """Delete specific floating ip reservation."""
-    return IMPL.resource_reservation_destroy(
-        resource_type, resource_reservation_id)
+    return IMPL.resource_reservation_destroy(resource_reservation_id)
 
 
 # resource Allocation
@@ -914,17 +913,18 @@ def resource_resource_property_destroy(resource_resource_property_id):
 
 
 def resource_resource_property_update(resource_resource_property_id, values):
-    IMPL.resource_resource_property_update(resource_resource_property_id, values)
+    IMPL.resource_resource_property_update(
+        resource_resource_property_id, values)
 
 
 def resource_resource_property_get_all_per_name(resource_id,
-                                               extra_capability_name):
+                                                extra_capability_name):
     return IMPL.resource_resource_property_get_all_per_name(
         resource_id, extra_capability_name)
 
 
 def resource_resource_property_get_latest_per_name(resource_id,
-                                                  extra_capability_name):
+                                                   extra_capability_name):
     return IMPL.resource_resource_property_get_latest_per_name(
         resource_id, extra_capability_name
     )

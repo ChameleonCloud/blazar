@@ -42,7 +42,7 @@ def upgrade():
         sa.Column('id', sa.String(length=36), nullable=False),
         sa.Column('resource_type', sa.String(length=255), nullable=False),
         sa.Column('reservable', sa.Boolean(),
-            server_default=sa.text('true'), nullable=False),
+                  server_default=sa.text('true'), nullable=False),
         sa.Column('data', sa.JSON, nullable=True),
         sa.PrimaryKeyConstraint('id'),
     )

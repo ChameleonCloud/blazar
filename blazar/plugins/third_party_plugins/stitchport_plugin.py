@@ -13,16 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from blazar import context
 from blazar.db import api as db_api
-from blazar.db import exceptions as db_ex
 from blazar.manager import exceptions as manager_ex
 from blazar.plugins.third_party_plugins import base
 from blazar.plugins.third_party_plugins import exceptions as plugin_ex
-from blazar import policy
 from blazar.utils.openstack import neutron
-from blazar.utils import trusts
-from . import exceptions as plugin_ex
 
 from neutronclient.common import exceptions as neutron_ex
 
@@ -32,11 +27,12 @@ from oslo_log import log as logging
 
 plugin_opts = [
     cfg.StrOpt('network_id', default='',
-        help='Network ID to create shadow ports under'),
+               help='Network ID to create shadow ports under'),
 ]
 
 CONF = cfg.CONF
 LOG = logging.getLogger(__name__)
+
 
 class StitchportPlugin(base.BasePlugin):
 
@@ -133,7 +129,7 @@ class StitchportPlugin(base.BasePlugin):
                 )
             except neutron_ex.NotFound:
                 LOG.info("Could not find resource to deallocate")
-        tags=[f"reservation_id={res_id}", "stitchport"]
+        tags = [f"reservation_id={res_id}", "stitchport"]
         ports_to_del = self.neutron_client.list_ports(
             retrieve_all=True, tags=tags)
         if not ports_to_del:
@@ -149,9 +145,9 @@ class StitchportPlugin(base.BasePlugin):
         stitchports = db_api.resource_get_all_by_filters(
             self.resource_type(), {})
         reservable_stitchports = [
-            s for s in stitchports if h['reservable'] is True]
+            s for s in stitchports if s['reservable'] is True]
         unreservable_stitchports = [
-            s for s in stitchports if h['reservable'] is False]
+            s for s in stitchports if s['reservable'] is False]
 
         try:
             neutron_ports = self.neutron_client.list_ports(
@@ -161,10 +157,14 @@ class StitchportPlugin(base.BasePlugin):
             active_port_ids = [
                 str(p.id) for p in neutron_ports if p.admin_state_up == "UP"]
 
-            failed_ports = [port for port in reservable_stitchports
-                if port["data"]["port_id"] in failed_port_ids]
-            recovered_ports = [port for port in unreservable_stitchports
-                if port["data"]["port_id"] in active_port_ids]
+            failed_ports = [
+                port for port in reservable_stitchports
+                if port["data"]["port_id"] in failed_port_ids
+            ]
+            recovered_ports = [
+                port for port in unreservable_stitchports
+                if port["data"]["port_id"] in active_port_ids
+            ]
         except Exception as e:
             LOG.exception('Skipping health check. %s', str(e))
 

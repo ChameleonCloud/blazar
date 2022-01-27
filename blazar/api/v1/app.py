@@ -25,11 +25,11 @@ from oslo_middleware import debug
 from stevedore import enabled
 from werkzeug import exceptions as werkzeug_exceptions
 
-from blazar import policy
 from blazar.api.v1 import api_version_request
 from blazar.api.v1 import request_id
 from blazar.api.v1 import request_log
 from blazar.api.v1 import utils as api_utils
+from blazar import policy
 
 
 LOG = logging.getLogger(__name__)

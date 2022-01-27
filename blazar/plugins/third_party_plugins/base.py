@@ -137,7 +137,8 @@ class BasePlugin(metaclass=abc.ABCMeta):
         """Wake up resource"""
         resource_reservation = db_api.resource_reservation_get(reservation_id)
         self.allocate(
-            resource_reservation, self._get_resources(resource_reservation["reservation_id"]))
+            resource_reservation, self._get_resources(
+                resource_reservation["reservation_id"]))
 
     def before_end(self, reservation_id, lease=None):
         """Take actions before the end of a lease"""
@@ -147,7 +148,8 @@ class BasePlugin(metaclass=abc.ABCMeta):
         """Delete resource."""
         resource_reservation = db_api.resource_reservation_get(reservation_id)
         self.deallocate(
-            resource_reservation, self._get_resources(resource_reservation["reservation_id"]))
+            resource_reservation, self._get_resources(
+                resource_reservation["reservation_id"]))
         db_api.resource_reservation_update(resource_reservation['id'],
                                            {'status': 'completed'})
         allocations = db_api.resource_allocation_get_all_by_values(

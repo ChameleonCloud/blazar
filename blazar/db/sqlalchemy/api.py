@@ -15,6 +15,7 @@
 
 """Implementation of SQLAlchemy backend."""
 
+from datetime import datetime
 import sys
 
 from oslo_config import cfg

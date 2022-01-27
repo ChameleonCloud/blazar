@@ -467,6 +467,7 @@ class NetworkSegmentExtraCapability(mb.BlazarBase):
     def to_dict(self):
         return super(NetworkSegmentExtraCapability, self).to_dict()
 
+
 class Device(mb.BlazarBase):
     """Description
 
@@ -511,6 +512,7 @@ class DeviceReservation(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     count_range = sa.Column(sa.String(36))
     resource_properties = sa.Column(MediumText())
     before_end = sa.Column(sa.String(36))
+
     def to_dict(self, include=None):
         return super(DeviceReservation, self).to_dict(include=include)
 
@@ -549,6 +551,7 @@ class DeviceExtraCapability(mb.BlazarBase):
 
     def to_dict(self):
         return super(DeviceExtraCapability, self).to_dict()
+
 
 class Resource(mb.BlazarBase):
     """Description

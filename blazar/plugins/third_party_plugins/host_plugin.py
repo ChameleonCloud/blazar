@@ -194,7 +194,8 @@ class HostPlugin(base.BasePlugin, nova.NovaClientWrapper):
 
     def allocate(self, resource_reservation, resources):
         """Take action after an allocation is made"""
-        hosts = [resource["data"]["hypervisor_hostname"] for resource in resources]
+        hosts = [
+            resource["data"]["hypervisor_hostname"] for resource in resources]
         pool = nova.ReservationPool()
         pool.add_computehost(
             resource_reservation["values"]['aggregate_id'], hosts)

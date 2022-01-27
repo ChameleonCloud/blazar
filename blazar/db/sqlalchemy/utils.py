@@ -198,30 +198,6 @@ def get_reservations_by_resource_ids(
     return query.all()
 
 
-def get_reservations_by_resource_id(resource_id, start_date, end_date):
-    session = get_session()
-    border0 = start_date <= models.Lease.end_date
-    border1 = models.Lease.start_date <= end_date
-    query = (session.query(models.Reservation).join(models.Lease)
-             .join(models.ResourceAllocation)
-             .filter(models.ResourceAllocation.resource_id == resource_id)
-             .filter(sa.and_(border0, border1)))
-    return query.all()
-
-
-def get_reservations_by_resource_ids(
-        resource_ids, resource_type, start_date, end_date):
-    session = get_session()
-    border0 = start_date <= models.Lease.end_date
-    border1 = models.Lease.start_date <= end_date
-    query = (session.query(models.Reservation).join(models.Lease)
-             .join(models.ResourceAllocation)
-             .filter(models.ResourceAllocation.resource_id
-                     .in_(resource_ids))
-             .filter(sa.and_(border0, border1)))
-    return query.all()
-
-
 def get_reservations_for_allocations(session, start_date, end_date,
                                      lease_id=None, reservation_id=None):
     fields = ['id', 'status', 'lease_id', 'start_date',
@@ -359,34 +335,6 @@ def get_reservation_allocations_by_device_ids(device_ids, start_date, end_date,
     return reservations
 
 
-def get_reservation_allocations_by_resource_ids(resource_ids,
-                                                start_date,
-                                                end_date,
-                                                lease_id=None,
-                                                reservation_id=None):
-    session = get_session()
-    reservations = get_reservations_for_allocations(
-        session, start_date, end_date, lease_id, reservation_id)
-
-    allocations_query = (session.query(
-        models.ResourceAllocation.reservation_id,
-        models.ResourceAllocation.resource_id)
-        .filter(models.ResourceAllocation.deleted.is_(None))
-        .filter(models.ResourceAllocation.resource_id.in_(resource_ids))
-        .filter(models.ResourceAllocation.reservation_id.in_(
-            list(set([x['id'] for x in reservations])))))
-
-    allocations = defaultdict(list)
-
-    for row in allocations_query.all():
-        allocations[row[0]].append(row[1])
-
-    for r in reservations:
-        r['resource_ids'] = allocations[r['id']]
-
-    return reservations
-
-
 def get_user_ids_for_lease_ids(lease_ids):
     session = get_session()
 
@@ -470,7 +418,6 @@ def _get_events(resource_id, start_date, end_date, resource_type):
     else:
         leases = _get_leases_from_resource_id(
             resource_id, start_date, end_date)
-
 
     for lease in leases:
         if lease.start_date < start_date:
