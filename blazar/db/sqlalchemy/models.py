@@ -469,7 +469,7 @@ class Device(mb.BlazarBase):
     device_type = sa.Column(sa.Enum('container', 'vm', 'shell',
                                     name='allowed_device_types'),
                             nullable=False)
-    device_driver = sa.Column(sa.Enum('zun', name='allowed_device_drivers'),
+    device_driver = sa.Column(sa.Enum('zun', 'k3s', name='allowed_device_drivers'),
                               nullable=False)
     reservable = sa.Column(sa.Boolean, nullable=False,
                            server_default=sa.true())

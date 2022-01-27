@@ -31,6 +31,26 @@ class ZunPlugin(zun.ZunClientWrapper):
     """Plugin for zun device driver."""
     device_driver = 'zun'
 
+    def __init__(self):
+        self.placement_client = placement.BlazarPlacementClient()
+        for blazar_device in db_api.device_list():
+            if not blazar_device['reservable']:
+                continue
+            name = blazar_device['name']
+            parent_rp = self.placement_client.get_resource_provider(
+                name)
+            reservation_rp = self.placement_client.get_reservation_provider(
+                name)
+            if not parent_rp:
+                LOG.warning("No resource provider found "
+                            "for blazar device {}".format(name))
+            elif not reservation_rp:
+                LOG.warning("No reservation provider found for blazar "
+                            "device {}. Auto-creating one. ".format(name))
+                rrp = self.placement_client.create_reservation_provider(name)
+                LOG.info(
+                    "Reservation provider {} has created.".format(rrp['name']))
+
     def create_device(self, device_values):
         device_id = device_values.get('id')
         device_name = device_values.get('name')
@@ -58,8 +78,7 @@ class ZunPlugin(zun.ZunClientWrapper):
         if any([len(key) > 64 for key in extra_capabilities_keys]):
             raise manager_ex.ExtraCapabilityTooLong()
 
-        placement_client = placement.BlazarPlacementClient()
-        placement_client.create_reservation_provider(
+        self.placement_client.create_reservation_provider(
             host_name=zun_compute_node['name'])
 
         device = None
@@ -67,7 +86,7 @@ class ZunPlugin(zun.ZunClientWrapper):
         try:
             device = db_api.device_create(device_properties)
         except db_ex.BlazarDBException:
-            placement_client.delete_reservation_provider(
+            self.placement_client.delete_reservation_provider(
                 host_name=zun_compute_node['name'])
             raise
         for key in extra_capabilities:
@@ -135,3 +154,70 @@ class ZunPlugin(zun.ZunClientWrapper):
                 recovered_devices.append(device)
 
         return failed_devices, recovered_devices
+
+    def allocate(self, device_reservation, lease, devices):
+        self.placement_client.create_reservation_trait(
+            device_reservation['reservation_id'], lease['project_id'])
+        for device in devices:
+            rp = self.placement_client.get_reservation_provider(device['name'])
+            self.placement_client. \
+                associate_reservation_trait_with_resource_provider(
+                    rp['uuid'],
+                    device_reservation['reservation_id'],
+                    lease['project_id'])
+
+    def remove_active_device(self, device, device_reservation, lease):
+        rp = self.placement_client.get_reservation_provider(device['name'])
+        self.placement_client. \
+            dissociate_reservation_trait_with_resource_provider(
+                rp['uuid'],
+                device_reservation['reservation_id'],
+                lease['project_id'])
+
+    def add_active_device(self, device, device_reservation, lease):
+        rp = self.placement_client.get_reservation_provider(
+            device['name'])
+        self.placement_client. \
+            associate_reservation_trait_with_resource_provider(
+                rp['uuid'],
+                device_reservation['reservation_id'],
+                lease['project_id'])
+
+    def deallocate(self, device_reservation, lease, devices):
+        # If a device lease fails to start, the reservation trait is never
+        # added to the parent resource provider. If that lease is deleted,
+        # deleting the trait fails because it does not exist. This case
+        # will be handled by logging a message rather than failing.
+        reservation_id = device_reservation['reservation_id']
+        project_id = lease['project_id']
+        if not self.placement_client.reservation_trait_exists(
+                reservation_id, project_id):
+            LOG.warning("Reservation trait doesn't exist for reservation {0} "
+                        "and project {1}".format(reservation_id, project_id))
+            return
+        resource_providers = self.placement_client. \
+            get_reservation_trait_resource_providers(reservation_id,
+                                                     project_id)
+        for rp in resource_providers:
+            self.placement_client. \
+                dissociate_reservation_trait_with_resource_provider(
+                    rp['uuid'],
+                    reservation_id,
+                    project_id)
+            device = None
+            for d in devices:
+                if d["id"] == rp['parent_provider_uuid']:
+                    device = d
+                    break
+            if device:
+                self.cleanup_device(device)
+            else:
+                LOG.warning(
+                    'Failed to retrieve device from resource provider %s',
+                    rp['parent_provider_uuid']
+                )
+        self.placement_client.delete_reservation_trait(
+            reservation_id, project_id)
+
+    def after_destroy(self, device):
+        self.placement_client.delete_reservation_provider(device['name'])
