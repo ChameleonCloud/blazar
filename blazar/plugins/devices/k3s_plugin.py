@@ -34,6 +34,7 @@ LOG = logging.getLogger(__name__)
 LABEL_NAMESPACE = "blazar.openstack.org"
 LABELS = {
     "reservation_id": f"{LABEL_NAMESPACE}/reservation_id",
+    "project_id": f"{LABEL_NAMESPACE}/project_id",
     "device": f"{LABEL_NAMESPACE}/device",
 }
 
@@ -64,6 +65,10 @@ class K3sPlugin():
     def set_res_id_label(self, name, reservation_id):
         return self.set_label(
             name, LABELS["reservation_id"], reservation_id)
+
+    def set_project_id_label(self, name, project_id):
+        return self.set_label(
+            name, LABELS["project_id"], project_id)
 
     def set_device(self, name, value):
         return self.set_label(name, LABELS["device"], value)
@@ -148,14 +153,20 @@ class K3sPlugin():
         return failed_devices, recovered_devices
 
     def allocate(self, device_reservation, lease, devices):
+        reservation = db_api.reservation_get(
+            device_reservation["reservation_id"])
+        lease = db_api.lease_get(reservation["lease_id"])
+        project_id = lease["project_id"]
         for device in devices:
             self.set_res_id_label(
                 device["name"], device_reservation["reservation_id"])
+            self.set_project_id_label(device["name"], project_id)
 
     def deallocate(self, device_reservation, lease, devices):
         namespace = lease["project_id"]
         for device in devices:
             self.set_res_id_label(device["name"], None)
+            self.set_project_id_label(device["name"], None)
 
         for deployment in self.apps_v1.list_namespaced_deployment(
                 namespace).items:
@@ -171,7 +182,13 @@ class K3sPlugin():
 
     def remove_active_device(self, device, device_reservation, lease):
         self.set_res_id_label(device["name"], None)
+        self.set_project_id_label(device["name"], None)
 
     def add_active_device(self, device, device_reservation, lease):
+        reservation = db_api.reservation_get(
+            device_reservation["reservation_id"])
+        lease = db_api.lease_get(reservation["lease_id"])
+        project_id = lease["project_id"]
         self.set_res_id_label(
             device["name"], device_reservation["reservation_id"])
+        self.set_project_id_label(device["name"], project_id)
