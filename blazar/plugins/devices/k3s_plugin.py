@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Author: Pierre Riteau <pierre@stackhpc.com>
+# Author: Chameleon Cloud
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -68,13 +68,6 @@ class K3sPlugin():
     def set_device(self, name, value):
         return self.set_label(name, LABELS["device"], value)
 
-    def get_node_by_name(self, name):
-        node_list = self.core_v1.list_node()
-        for node in node_list.items:
-            if node.metadata.name == name:
-                return node
-        return node
-
     def get_nodes_by_label(self, label, value):
         return [
             node for node in self.core_v1.list_node().items
@@ -87,7 +80,7 @@ class K3sPlugin():
         if device_name is None:
             raise manager_ex.InvalidHost(host=device_values)
 
-        node = self.get_node_by_name(device_name)
+        node = self.core_v1.read_node(device_name)
         if not node:
             raise manager_ex.DeviceNotFound(device=device_name)
 

@@ -90,7 +90,6 @@ def _get_plugins():
         try:
             plugin_obj = ext.plugin()
         except Exception as e:
-            raise e
             LOG.warning("Could not load {0} plugin "
                         "for resource type {1} '{2}'".format(
                             ext.name, ext.plugin.resource_type, e))
