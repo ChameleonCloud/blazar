@@ -92,7 +92,7 @@ def _get_plugins():
         except Exception as e:
             LOG.warning("Could not load {0} plugin "
                         "for resource type {1} '{2}'".format(
-                            ext.name, ext.plugin.resource_type, e))
+                            ext.name, ext.plugin.device_driver, e))
         else:
             if plugin_obj.device_driver in plugins:
                 msg = ("You have provided several plugins for "

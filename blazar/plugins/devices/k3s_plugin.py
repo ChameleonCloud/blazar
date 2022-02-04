@@ -153,9 +153,6 @@ class K3sPlugin():
         return failed_devices, recovered_devices
 
     def allocate(self, device_reservation, lease, devices):
-        reservation = db_api.reservation_get(
-            device_reservation["reservation_id"])
-        lease = db_api.lease_get(reservation["lease_id"])
         project_id = lease["project_id"]
         for device in devices:
             self.set_res_id_label(
@@ -185,9 +182,6 @@ class K3sPlugin():
         self.set_project_id_label(device["name"], None)
 
     def add_active_device(self, device, device_reservation, lease):
-        reservation = db_api.reservation_get(
-            device_reservation["reservation_id"])
-        lease = db_api.lease_get(reservation["lease_id"])
         project_id = lease["project_id"]
         self.set_res_id_label(
             device["name"], device_reservation["reservation_id"])
