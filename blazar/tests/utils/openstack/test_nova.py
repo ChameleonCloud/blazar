@@ -50,6 +50,7 @@ class TestCNClient(tests.TestCase):
         self.patch(self.base, 'url_for').return_value = self.url
 
         self.version = '2'
+        self.endpoint_type = 'internalURL'
 
     def test_getattr(self):
         # TODO(n.s.): Will be done as soon as pypi package will be updated
