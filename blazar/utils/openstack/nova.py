@@ -27,6 +27,12 @@ from blazar.utils.openstack import base
 
 
 nova_opts = [
+    cfg.StrOpt('endpoint_type',
+               default='internal',
+               choices=['public', 'admin', 'internal'],
+               help='Type of the nova endpoint to use. This endpoint will be '
+                    'looked up in the keystone catalog and should be one of '
+                    'public, internal or admin.'),
     cfg.StrOpt('nova_client_version',
                default='2',
                deprecated_group='DEFAULT',
