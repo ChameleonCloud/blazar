@@ -38,7 +38,7 @@ Possible values:
 
 keystone_opts = [
     cfg.StrOpt('endpoint_type',
-               default='admin',
+               default='internal',
                choices=['public', 'admin', 'internal'],
                help='Type of the keystone endpoint to use. This endpoint will '
                     'be looked up in the keystone catalog and should be one '
