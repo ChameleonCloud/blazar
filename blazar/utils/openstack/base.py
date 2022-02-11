@@ -27,6 +27,9 @@ from blazar.manager import exceptions
 CONF = cfg.CONF
 
 
+CONF = cfg.CONF
+
+
 def get_os_auth_host(conf):
     """Description
 
@@ -133,9 +136,12 @@ def url_for(service_catalog, service_type, admin=False,
     service_type - OpenStack service type specification
     """
     if not endpoint_interface:
-        endpoint_interface = 'public'
-    if admin:
-        endpoint_interface = 'admin'
+        if service_type == 'identity':
+            endpoint_interface = CONF.endpoint_type
+        elif service_type == 'compute':
+            endpoint_interface = CONF.nova.endpoint_type
+        else:
+            endpoint_interface = 'public'
 
     service = None
     for srv in service_catalog:
