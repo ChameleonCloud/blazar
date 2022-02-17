@@ -290,3 +290,7 @@ class InvalidDevice(exceptions.NotAuthorized):
 class HostHavingContainers(exceptions.BlazarException):
     code = 409
     msg_fmt = _("Containers found for host %(host)s")
+
+
+class ReservationNotFound(exceptions.NotFound):
+    msg_fmt = _("Reservation '%(id)s' not found!")

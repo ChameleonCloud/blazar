@@ -68,6 +68,13 @@ def leases_delete(req, lease_id):
     return api_utils.render(status=200)
 
 
+@rest.delete('/leases/reservation/<reservation_id>')
+def leases_reservation_delete(req, reservation_id):
+    """Delete specified reservation."""
+    _api.delete_reservation(reservation_id)
+    return api_utils.render(status=200)
+
+
 # Plugins operations
 
 @rest.get('/plugins')

@@ -64,7 +64,18 @@ leases_policies = [
                 'method': 'DELETE'
             }
         ]
-    )
+    ),
+    policy.DocumentedRuleDefault(
+        name='blazar:reserations:delete',
+        check_str=base.RULE_ADMIN,
+        description='Policy rule for Delete Lease Reservation API.',
+        operations=[
+            {
+                'path': '/{api_version}/leases/reservation/{reservation_id}',
+                'method': 'DELETE'
+            }
+        ]
+    ),
 ]
 
 

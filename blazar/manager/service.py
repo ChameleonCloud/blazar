@@ -654,14 +654,8 @@ class ManagerService(service_utils.RPCServer):
 
         unclean_end = False
         for reservation in self._reservations_execution_ordered(lease):
-            if reservation['status'] != status.reservation.DELETED:
-                plugin = self.plugins[reservation['resource_type']]
-                try:
-                    plugin.on_end(reservation['resource_id'], lease=lease)
-                except (db_ex.BlazarDBException, RuntimeError):
-                    LOG.exception("Failed to delete reservation %s",
-                                  reservation['id'])
-                    unclean_end = True
+            if not self.delete_reservation(reservation, lease):
+                unclean_end = True
         if unclean_end:
             raise exceptions.EventError(
                 error="Failed to cleanly end lease %(lease_id)s",
@@ -672,6 +666,33 @@ class ManagerService(service_utils.RPCServer):
                                 {'status': status.event.DONE})
         db_api.lease_destroy(lease_id)
         self._send_notification(lease, events=['delete'])
+
+    def delete_reservation_by_id(self, reservation_id):
+        reservation = db_api.reservation_get(reservation_id)
+        if not reservation:
+            raise exceptions.ReservationNotFound(id=reservation_id)
+        if not status.reservation.is_valid_transition(
+                reservation['status'], status.reservation.DELETED):
+            raise common_ex.InvalidStatus
+        lease = self.get_lease(reservation["lease_id"])
+        if not self.delete_reservation(reservation, lease):
+            raise exceptions.EventError(
+                error="Failed to cleanly end lease %(lease_id)s",
+                lease_id=lease['id'])
+        db_api.reservation_update(reservation_id,
+                                  {'status': status.reservation.DELETED})
+
+    def delete_reservation(self, reservation, lease):
+        """Returns if the reservation was successfully deleted """
+        if reservation['status'] != status.reservation.DELETED:
+            plugin = self.plugins[reservation['resource_type']]
+            try:
+                plugin.on_end(reservation['resource_id'], lease=lease)
+            except (db_ex.BlazarDBException, RuntimeError):
+                LOG.exception("Failed to delete reservation %s",
+                              reservation['id'])
+                return False
+        return True
 
     @status.lease.lease_status(
         transition=status.lease.STARTING,

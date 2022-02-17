@@ -17,6 +17,7 @@ from oslo_log import log as logging
 
 from blazar.cmd.manager import ManagerServiceSingleton
 from blazar import context
+from blazar import exceptions
 from blazar import policy
 from blazar.utils import trusts
 
@@ -84,6 +85,18 @@ class API(object):
         :type lease_id: str
         """
         self.manager_service.delete_lease(lease_id)
+
+    def delete_reservation(self, reservation_id):
+        """Delete specified reservation.
+
+        :param reservation_id: ID of the reservation in Blazar DB.
+        :type reservation_id: str
+        """
+        ctx = context.current()
+        if policy.enforce(ctx, 'admin', {}, do_raise=False):
+            self.manager_service.delete_reservation_by_id(reservation_id)
+        else:
+            raise exceptions.NotAuthorized()
 
     # Plugins operations
 
