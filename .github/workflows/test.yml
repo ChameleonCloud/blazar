@@ -27,4 +27,4 @@ jobs:
         run: pip install poetry
 
       - name: Run tests
-        run: tox -e ${{ env.PYTHON_VERSION }}
+        run: tox -e ${{ env.TOX_ENV }}
