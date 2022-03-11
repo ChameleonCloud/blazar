@@ -73,12 +73,6 @@ class K8sPlugin():
     def set_device(self, name, value):
         return self.set_label(name, LABELS["device"], value)
 
-    def get_nodes_by_label(self, label, value):
-        return [
-            node for node in self.core_v1.list_node().items
-            if self.has_label(node, label, value)
-        ]
-
     def create_device(self, device_values):
         device_name = device_values.get('name')
 
@@ -142,17 +136,21 @@ class K8sPlugin():
         failed_devices = []
         recovered_devices = []
 
+        all_nodes = self.core_v1.list_node().items
         for device in devices:
-            found_node = False
-            for node in self.get_nodes_by_label(LABELS["device"], None):
-                if device["name"] == node.metadata.name:
-                    found_node = True
+            for node in all_nodes:
+                if node.metadata.name == device["name"]:
                     if not self.is_active(node) and device["reservable"]:
                         failed_devices.append(device)
                     elif self.is_active(node) and not device["reservable"]:
                         recovered_devices.append(device)
+                        # Handle case when node is rebuilt; it will not have the
+                        # "device" label anymore.
+                        if node.metadata.labels.get(LABELS["device"]) != device["id"]:
+                            self.set_device(device["name"], device["id"])
                     break
-            if not found_node:
+            else:
+                # Node is completely missing from k8s
                 failed_devices.append(device)
 
         return failed_devices, recovered_devices
