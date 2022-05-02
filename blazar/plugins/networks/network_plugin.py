@@ -17,9 +17,11 @@
 import datetime
 from random import shuffle
 
+from keystoneauth1 import exceptions as keystone_excptions
 from neutronclient.common import exceptions as neutron_ex
 from oslo_config import cfg
 from oslo_log import log as logging
+from stevedore import named
 
 from blazar.db import api as db_api
 from blazar.db import exceptions as db_ex
@@ -46,7 +48,9 @@ plugin_opts = [
                 default=True,
                 help='Whether an allocation should be retried on failure '
                      'without the default properties'),
-
+    cfg.ListOpt('usage_type_plugins',
+                default=[],
+                help='All plugins to use'),
 ]
 
 
@@ -57,6 +61,34 @@ LOG = logging.getLogger(__name__)
 before_end_options = ['', 'snapshot', 'default', 'email']
 
 QUERY_TYPE_ALLOCATION = 'allocation'
+
+
+def _get_plugins():
+    """Return dict of resource-plugin class pairs."""
+    plugins = {}
+
+    extension_manager = named.NamedExtensionManager(
+        namespace='blazar.network.usage.type.plugins',
+        names=CONF.network.usage_type_plugins,
+        invoke_on_load=False
+    )
+
+    for ext in extension_manager.extensions:
+        try:
+            plugin_obj = ext.plugin()
+        except Exception as e:
+            LOG.warning("Could not load {0} plugin "
+                        "for resource type {1} '{2}'".format(
+                            ext.name, ext.plugin.usage_type, e))
+        else:
+            if plugin_obj.usage_type in plugins:
+                msg = ("You have provided several plugins for "
+                       "one usage type in configuration file. "
+                       "Please set one plugin per usage type.")
+                raise manager_ex.PluginConfigurationError(error=msg)
+
+        plugins[plugin_obj.usage_type] = plugin_obj
+    return plugins
 
 
 class NetworkPlugin(base.BasePlugin):
@@ -70,6 +102,11 @@ class NetworkPlugin(base.BasePlugin):
 
     def __init__(self):
         super(NetworkPlugin, self).__init__()
+        self.plugins = _get_plugins()
+        self.periodic_tasks = []
+        for plugin in self.plugins.values():
+            if hasattr(plugin, "periodic_tasks"):
+                self.periodic_tasks.extend(plugin.periodic_tasks)
 
     def filter_networks_by_reservation(self, networks, start_date, end_date):
         free = []
@@ -166,7 +203,7 @@ class NetworkPlugin(base.BasePlugin):
 
         for allocation in db_api.network_allocation_get_all_by_values(
                 reservation_id=reservation_id):
-            network_segment = db_api.network_get(allocation['network_id'])
+            network_segment = self.get_network(allocation['network_id'])
             network_type = network_segment['network_type']
             physical_network = network_segment['physical_network']
             segment_id = network_segment['segment_id']
@@ -199,6 +236,20 @@ class NetworkPlugin(base.BasePlugin):
                                                        id=reservation_id,
                                                        msg=str(e))
 
+            # extra steps for the usage type
+            usage_type = network_segment.get("usage_type", None)
+            if usage_type:
+                try:
+                    self.plugins[usage_type].perform_extra_on_start_steps(
+                        network_segment, network
+                    )
+                except Exception as e:
+                    LOG.error("Extra on start steps failed: %s", e)
+                    raise manager_ex.NetworkExtraOnStartFailed(
+                        id=reservation_id,
+                        msg=str(e)
+                    )
+
     def delete_port(self, neutron_client, ironic_client, port):
         if port['binding:vnic_type'] == 'baremetal':
             node = port.get('binding:host_id')
@@ -228,7 +279,11 @@ class NetworkPlugin(base.BasePlugin):
             return
 
         neutron_client = neutron.BlazarNeutronClient(trust_id=trust_id)
-        ironic_client = ironic.BlazarIronicClient()
+        ironic_client = None
+        try:
+            ironic_client = ironic.BlazarIronicClient()
+        except keystone_excptions.catalog.EndpointNotFound:
+            LOG.exception("The endpoint for Ironic not found")
 
         try:
             neutron_client.show_network(network_id)

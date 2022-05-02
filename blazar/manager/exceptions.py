@@ -267,6 +267,11 @@ class NetworkCreationFailed(exceptions.BlazarException):
                 "%(msg)s")
 
 
+class NetworkExtraOnStartFailed(exceptions.BlazarException):
+    msg_fmt = _("Failed on extra on start steps for reservation %(id)s. "
+                "%(msg)s")
+
+
 class NetworkDeletionFailed(exceptions.BlazarException):
     msg_fmt = _("Failed to delete network %(network_id)s for reservation "
                 "%(reservation_id)s")
