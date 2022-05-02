@@ -254,6 +254,14 @@ class NetworkNotFound(exceptions.NotFound):
     msg_fmt = _("Network '%(network)s' not found!")
 
 
+class SubnetpoolNotFound(exceptions.NotFound):
+    msg_fmt = _("Subnetpool '%(subnetpool)s' not found!")
+
+
+class RouterNotFound(exceptions.NotFound):
+    msg_fmt = _("Router '%(router)s' not found!")
+
+
 class InvalidNetwork(exceptions.NotAuthorized):
     msg_fmt = _("Invalid values for network %(network)s")
 
@@ -264,6 +272,11 @@ class NotEnoughNetworksAvailable(NotEnoughResourcesAvailable):
 
 class NetworkCreationFailed(exceptions.BlazarException):
     msg_fmt = _("Failed to create network %(name)s for reservation %(id)s. "
+                "%(msg)s")
+
+
+class NetworkExtraOnStartFailed(exceptions.BlazarException):
+    msg_fmt = _("Failed on extra on start steps for reservation %(id)s. "
                 "%(msg)s")
 
 
