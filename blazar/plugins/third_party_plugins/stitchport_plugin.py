@@ -45,7 +45,8 @@ class StitchportPlugin(base.BasePlugin):
         return "stitchport"
 
     def validate_create_params(self, data):
-        self.validate_data(data, ["provider", "name"], [], "create")
+        self.validate_data(
+            data, ["provider", "vlan_tag", "name"], [], "create")
         existing = db_api.resource_get_all_by_queries(
             self.resource_type(), [f"name == {data['name']}"])
         if existing:
@@ -54,24 +55,40 @@ class StitchportPlugin(base.BasePlugin):
         port = self.neutron_client.create_port({
             "port": {
                 "network_id": CONF[self.resource_type()].network_id,
+                "device_owner": "reservation:blazar",
                 "admin_state_up": True,
                 "name": data["name"],
+                "binding:profile": {
+                    "vlan_tag": data["vlan_tag"],
+                    "provider": data["provider"],
+                    "shadow": True,
+                }
             }
         })["port"]
-        self.neutron_client.add_tag(
-            "ports", port["id"], f"shadow")
         data["port_id"] = port["id"]
         return data
 
     def validate_update_params(self, resource_id, data):
-        self.validate_data(data, [], ["name", "provider"], "update")
+        self.validate_data(
+            data, [], ["name", "provider", "vlan_tag"], "update")
         stitchport = db_api.resource_get(self.resource_type(), resource_id)
         data_copy = stitchport["data"].copy()
         data_copy.update(data)
+        port_data = {}
         if "name" in data:
+            port_data["name"] = data["name"]
+        if "vlan_tag" in data or "provider" in data:
+            binding_profile = self.neutron_client.get_port(
+                stitchport["data"]["port_id"])["binding:profile"]
+            if "vlan_tag" in data:
+                binding_profile["vlan_tag"] = data["vlan_tag"]
+            if "provider" in data:
+                binding_profile["provider"] = data["provider"]
+            port_data["binding:profile"] = binding_profile
+        if port_data:
             self.neutron_client.update_port(
                 stitchport["data"]["port_id"],
-                {"port": {"name": data["name"]}}
+                {"port": port_data}
             )
         return data_copy
 
@@ -92,24 +109,23 @@ class StitchportPlugin(base.BasePlugin):
         project_id = lease["project_id"]
         for stitchport in resources:
             try:
-                self.neutron_client.add_tag(
-                    "ports",
-                    stitchport["data"]["port_id"],
-                    f"reservation_id={res_id}"
-                )
-                self.neutron_client.add_tag(
-                    "ports",
-                    stitchport["data"]["port_id"],
-                    f"project_id={project_id}"
-                )
+                neutron_port = self.neutron_client.get_port(
+                    stitchport["data"]["port_id"])
+                binding_profile = neutron_port["binding:profile"]
+                binding_profile["project_id"] = project_id
+                binding_profile["reservation_id"] = res_id
+                port_data = {
+                    "port": {
+                        "binding:profile": binding_profile,
+                    }
+                }
+                self.neutron_client.update_port(
+                    stitchport["data"]["port_id"], port_data)
             except neutron_ex.NotFound:
                 LOG.info("Could not find resource to deallocate")
 
     def deallocate(self, resource_reservation, resources):
         res_id = resource_reservation["reservation_id"]
-        reservation = db_api.reservation_get(res_id)
-        lease = db_api.lease_get(reservation["lease_id"])
-        project_id = lease["project_id"]
         for stitchport in resources:
             try:
                 LOG.info(
@@ -117,29 +133,28 @@ class StitchportPlugin(base.BasePlugin):
                     res_id,
                     stitchport["data"]["port_id"]
                 )
-                self.neutron_client.remove_tag(
-                    "ports",
-                    stitchport["data"]["port_id"],
-                    f"reservation_id={res_id}"
-                )
-                self.neutron_client.remove_tag(
-                    "ports",
-                    stitchport["data"]["port_id"],
-                    f"project_id={project_id}"
-                )
+                neutron_port = self.neutron_client.get_port(
+                    stitchport["data"]["port_id"])
+                binding_profile = neutron_port["binding:profile"]
+                port_to_del = binding_profile.pop("patch_id", None)
+                if port_to_del:
+                    try:
+                        LOG.info("Cleaning up port %s", port_to_del)
+                        self.neutron_client.delete_port(port_to_del)
+                    except neutron_ex.NotFound:
+                        LOG.info("Could not delete port %s", port_to_del)
+                # Remove blazar keys
+                binding_profile.pop("reservation_id", None)
+                binding_profile.pop("project_id", None)
+                port_data = {
+                    "port": {
+                        "binding:profile": binding_profile,
+                    }
+                }
+                self.neutron_client.update_port(
+                    stitchport["data"]["port_id"], port_data)
             except neutron_ex.NotFound:
                 LOG.info("Could not find resource to deallocate")
-        tags = [f"reservation_id={res_id}", "stitchport"]
-        ports_to_del = self.neutron_client.list_ports(
-            retrieve_all=True, tags=tags)
-        if not ports_to_del:
-            LOG.info("No ports to clean up")
-        for port in ports_to_del["ports"]:
-            try:
-                LOG.info("Cleaning up port %s", port["id"])
-                self.neutron_client.delete_port(port["id"])
-            except neutron_ex.NotFound:
-                LOG.info("Could not delete port %s", port["id"])
 
     def poll_resource_failures(self):
         stitchports = db_api.resource_get_all_by_filters(
@@ -150,8 +165,11 @@ class StitchportPlugin(base.BasePlugin):
             s for s in stitchports if s['reservable'] is False]
 
         try:
-            neutron_ports = self.neutron_client.list_ports(
-                retrieve_all=True, tags=["shadow"])
+            neutron_ports = [
+                port for port in
+                self.neutron_client.list_ports(retrieve_all=True)
+                if port["binding:profile"].get("shadow", None)
+            ]
             failed_port_ids = [
                 str(p.id) for p in neutron_ports if p.admin_state_up == "DOWN"]
             active_port_ids = [
