@@ -806,6 +806,9 @@ def host_destroy(host_id):
             raise db_exc.BlazarDBNotFound(id=host_id, model='Host')
 
         host.soft_delete(session=session)
+        # Also delete this host's extra capabilities
+        for capability in host.computehost_extra_capabilities:
+            capability.soft_delete(session=session)
 
 
 # ComputeHostExtraCapability
@@ -1254,6 +1257,10 @@ def network_destroy(network_id):
 
         network.soft_delete(session=session)
 
+        # Also delete this network's extra capabilities
+        for capability in network_extra_capability_get_all_per_network(network_id):
+            capability.soft_delete(session=session)
+
 
 # NetworkAllocation
 
@@ -1643,6 +1650,10 @@ def device_destroy(device_id):
                 id=device_id, model='Device')
 
         device.soft_delete(session=session)
+
+        # Also delete this device's extra capabilities
+        for capability in device_extra_capability_get_all_per_device(device_id):
+            capability.soft_delete(session=session)
 
 
 # DeviceAllocation
