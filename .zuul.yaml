@@ -29,8 +29,7 @@
     check:
       jobs:
         - blazar-tempest-plugin-base
-        - blazar-tempest-py3
-        - blazar-tempest-ipv6-only-py3
+        - blazar-tempest-plugin-ipv6-only
         - openstack-tox-pylint:
             voting: false
     gate:
