@@ -2028,7 +2028,8 @@ def resource_properties_list(resource_type):
         query = session.query(
             models.ExtraCapability.capability_name,
             models.ExtraCapability.private,
-            resource_model.capability_value).join(resource_model).distinct()
+            resource_model.capability_value,
+        ).filter(resource_model.deleted.is_(None)).join(resource_model).distinct()
 
         return query.all()
 
