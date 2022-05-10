@@ -2025,11 +2025,11 @@ def resource_properties_list(resource_type):
     with session.begin():
 
         resource_model = EXTRA_CAPABILITY_MODELS[resource_type]
-        query = session.query(
+        query = _read_deleted_filter(session.query(
             models.ExtraCapability.capability_name,
             models.ExtraCapability.private,
             resource_model.capability_value,
-        ).filter(resource_model.deleted.is_(None)).join(resource_model).distinct()
+        ).join(resource_model), resource_model, deleted=False).distinct()
 
         return query.all()
 
