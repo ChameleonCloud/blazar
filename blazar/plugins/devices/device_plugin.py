@@ -303,7 +303,7 @@ class DevicePlugin(base.BasePlugin):
 
             if self.is_updatable_extra_capability(raw_capability, cap_name):
                 try:
-                    if values[key] is not None:
+                    if values[key] != 'null':
                         capability = {'capability_value': values[key]}
                         db_api.device_extra_capability_update(
                             raw_capability['id'], capability)
