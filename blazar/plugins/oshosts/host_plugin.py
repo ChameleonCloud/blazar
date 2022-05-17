@@ -428,7 +428,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
 
             if self.is_updatable_extra_capability(raw_capability, cap_name):
                 try:
-                    if values[key] is not None:
+                    if values[key] != 'null':
                         capability = {'capability_value': values[key]}
                         db_api.host_extra_capability_update(
                             raw_capability['id'], capability)
