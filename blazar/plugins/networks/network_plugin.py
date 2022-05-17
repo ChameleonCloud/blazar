@@ -450,8 +450,12 @@ class NetworkPlugin(base.BasePlugin):
             }
             if self.is_updatable_extra_capability(raw_capability, cap_name):
                 try:
-                    db_api.network_extra_capability_update(
-                        raw_capability['id'], capability)
+                    if values[key] != 'null':
+                        db_api.network_extra_capability_update(
+                            raw_capability['id'], capability)
+                    else:
+                        db_api.network_extra_capability_destroy(
+                            raw_capability['id'])
                 except (db_ex.BlazarDBException, RuntimeError):
                     cant_update_extra_capability.append(cap_name)
             else:
