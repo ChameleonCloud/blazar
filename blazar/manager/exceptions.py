@@ -118,6 +118,10 @@ class CantAddExtraCapability(exceptions.BlazarException):
     code = 409
     msg_fmt = _("Can't add extracapabilities %(keys)s to Host %(host)s")
 
+class ExtraCapabilityNotFound(exceptions.BlazarException):
+    code = 404
+    msg_fmt = _("Capability %(keys)s not found on resource %(resource)s")
+
 
 class EndpointsNotFound(exceptions.NotFound):
     code = 404
