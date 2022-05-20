@@ -450,7 +450,7 @@ class NetworkPlugin(base.BasePlugin):
             }
             if self.is_updatable_extra_capability(raw_capability, cap_name):
                 try:
-                    if values[key] != 'null':
+                    if values[key] is not None:
                         db_api.network_extra_capability_update(
                             raw_capability['id'], capability)
                     else:
