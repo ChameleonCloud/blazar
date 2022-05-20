@@ -339,6 +339,10 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             raise manager_ex.HostHavingServers(host=host_ref,
                                                servers=servers)
         host_details = inventory.get_host_details(host_ref)
+        if 'id' in host_details:
+            # Do not use nova's primary key for this host.
+            # Instead, generate a new one.
+            del host_details['id']
         # NOTE(sbauza): Only last duplicate name for same extra capability
         # will be stored
         to_store = set(host_values.keys()) - set(host_details.keys())
