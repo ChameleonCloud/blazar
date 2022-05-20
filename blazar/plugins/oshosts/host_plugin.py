@@ -268,7 +268,8 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         new_hostids = self._matching_hosts(
             reservation['hypervisor_properties'],
             reservation['resource_properties'],
-            '1-1', start_date, lease['end_date']
+            '1-1', start_date, lease['end_date'],
+            lease['project_id'],
         )
         if not new_hostids:
             db_api.host_allocation_destroy(allocation['id'])
@@ -602,7 +603,9 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             values['resource_properties'],
             values['count_range'],
             values['start_date'],
-            values['end_date'])
+            values['end_date'],
+            values['project_id'],
+        )
 
         min_hosts, _ = [int(n) for n in values['count_range'].split('-')]
 
@@ -612,7 +615,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         return host_ids
 
     def _matching_hosts(self, hypervisor_properties, resource_properties,
-                        count_range, start_date, end_date):
+                        count_range, start_date, end_date, project_id):
         """Return the matching hosts (preferably not allocated)
 
         """
@@ -635,6 +638,8 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             filter_array += plugins_utils.convert_requirements(
                 resource_properties)
         for host in db_api.reservable_host_get_all_by_queries(filter_array):
+            if not self.is_project_allowed(project_id, host):
+                continue
             if not db_api.host_allocation_get_all_by_values(
                     compute_host_id=host['id']):
                 not_allocated_host_ids.append(host['id'])
@@ -740,7 +745,9 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             host_ids = self._matching_hosts(
                 hypervisor_properties, resource_properties,
                 str(min_hosts) + '-' + str(max_hosts),
-                dates_after['start_date'], dates_after['end_date'])
+                dates_after['start_date'], dates_after['end_date'],
+                values['project_id']
+            )
             if len(host_ids) >= min_hosts:
                 new_hosts = []
                 pool = nova.ReservationPool()
