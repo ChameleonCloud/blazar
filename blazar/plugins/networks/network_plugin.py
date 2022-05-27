@@ -436,6 +436,7 @@ class NetworkPlugin(base.BasePlugin):
         db_api.network_update(network_id, new_values)
 
         cant_update_extra_capability = []
+        cant_delete_extra_capability = []
         previous_capabilities = self._get_extra_capabilities(network_id)
         updated_keys = set(values.keys()) & set(previous_capabilities.keys())
         new_keys = set(values.keys()) - set(previous_capabilities.keys())
@@ -449,11 +450,18 @@ class NetworkPlugin(base.BasePlugin):
                 'capability_value': values[key],
             }
             if self.is_updatable_extra_capability(raw_capability, cap_name):
-                try:
-                    db_api.network_extra_capability_update(
-                        raw_capability['id'], capability)
-                except (db_ex.BlazarDBException, RuntimeError):
-                    cant_update_extra_capability.append(cap_name)
+                if values[key] is not None:
+                    try:
+                        db_api.network_extra_capability_update(
+                            raw_capability['id'], capability)
+                    except (db_ex.BlazarDBException, RuntimeError):
+                        cant_update_extra_capability.append(cap_name)
+                else:
+                    try:
+                        db_api.network_extra_capability_destroy(
+                            raw_capability['id'])
+                    except db_ex.BlazarDBException:
+                        cant_delete_extra_capability.append(cap_name)
             else:
                 LOG.info("Capability %s can't be updated because "
                          "existing reservations require it.",
@@ -474,6 +482,10 @@ class NetworkPlugin(base.BasePlugin):
         if cant_update_extra_capability:
             raise manager_ex.CantAddExtraCapability(
                 network=network_id, keys=cant_update_extra_capability)
+
+        if cant_delete_extra_capability:
+            raise manager_ex.ExtraCapabilityNotFound(
+                resource=network_id, keys=cant_delete_extra_capability)
 
         LOG.info('Extra capabilities on network %s updated with %s',
                  network_id, values)

@@ -417,6 +417,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             return self.get_computehost(host_id)
 
         cant_update_extra_capability = []
+        cant_delete_extra_capability = []
         previous_capabilities = self._get_extra_capabilities(host_id)
         updated_keys = set(values.keys()) & set(previous_capabilities.keys())
         new_keys = set(values.keys()) - set(previous_capabilities.keys())
@@ -424,19 +425,21 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         for key in updated_keys:
             raw_capability, cap_name = next(iter(
                 db_api.host_extra_capability_get_all_per_name(host_id, key)))
-            capability = {'capability_value': values[key]}
 
             if self.is_updatable_extra_capability(raw_capability, cap_name):
-                try:
-                    if values[key] is not None:
+                if values[key] is not None:
+                    try:
                         capability = {'capability_value': values[key]}
                         db_api.host_extra_capability_update(
                             raw_capability['id'], capability)
-                    else:
+                    except (db_ex.BlazarDBException, RuntimeError):
+                        cant_update_extra_capability.append(cap_name)
+                else:
+                    try:
                         db_api.host_extra_capability_destroy(
                             raw_capability['id'])
-                except (db_ex.BlazarDBException, RuntimeError):
-                    cant_update_extra_capability.append(cap_name)
+                    except db_ex.BlazarDBException:
+                        cant_delete_extra_capability.append(cap_name)
             else:
                 LOG.info("Capability %s can't be updated because "
                          "existing reservations require it.",
@@ -457,6 +460,10 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         if cant_update_extra_capability:
             raise manager_ex.CantAddExtraCapability(
                 host=host_id, keys=cant_update_extra_capability)
+
+        if cant_delete_extra_capability:
+            raise manager_ex.ExtraCapabilityNotFound(
+                resource=host_id, keys=cant_delete_extra_capability)
 
         LOG.info('Extra capabilities on compute host %s updated with %s',
                  host_id, values)

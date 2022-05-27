@@ -291,6 +291,7 @@ class DevicePlugin(base.BasePlugin):
             db_api.device_update(device_id, device_properties)
 
         cant_update_extra_capability = []
+        cant_delete_extra_capability = []
         previous_capabilities = self._get_extra_capabilities(device_id)
         updated_keys = set(values.keys()) & set(previous_capabilities.keys())
         new_keys = set(values.keys()) - set(previous_capabilities.keys())
@@ -299,19 +300,21 @@ class DevicePlugin(base.BasePlugin):
             raw_capability, cap_name = next(iter(
                 db_api.device_extra_capability_get_all_per_name(
                     device_id, key)))
-            capability = {'capability_value': values[key]}
 
             if self.is_updatable_extra_capability(raw_capability, cap_name):
-                try:
-                    if values[key] is not None:
+                if values[key] is not None:
+                    try:
                         capability = {'capability_value': values[key]}
                         db_api.device_extra_capability_update(
                             raw_capability['id'], capability)
-                    else:
+                    except (db_ex.BlazarDBException, RuntimeError):
+                        cant_update_extra_capability.append(cap_name)
+                else:
+                    try:
                         db_api.device_extra_capability_destroy(
                             raw_capability['id'])
-                except (db_ex.BlazarDBException, RuntimeError):
-                    cant_update_extra_capability.append(cap_name)
+                    except db_ex.BlazarDBException:
+                        cant_delete_extra_capability.append(cap_name)
             else:
                 LOG.info("Capability %s can't be updated because "
                          "existing reservations require it.",
@@ -332,6 +335,10 @@ class DevicePlugin(base.BasePlugin):
         if cant_update_extra_capability:
             raise manager_ex.CantAddExtraCapability(
                 host=device_id, keys=cant_update_extra_capability)
+
+        if cant_delete_extra_capability:
+            raise manager_ex.ExtraCapabilityNotFound(
+                resource=device_id, keys=cant_delete_extra_capability)
 
         LOG.info('Extra capabilities on device %s updated with %s',
                  device_id, values)
