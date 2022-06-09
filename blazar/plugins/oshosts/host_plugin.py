@@ -529,21 +529,23 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         return {"resource_id": host_id, "reservations": allocs}
 
     def reallocate_computehost(self, host_id, data):
-        lease_id = data.get("lease-id")
+        lease_id = data.get('lease_id')
         if lease_id:
             # If we're only reallocating a host for a single lease,
             # then we allow non-admin users to perform this action,
             # but only on leases they own
             lease = db_api.lease_get(lease_id)
             ctx = context.current()
+            prid = lease['project_id']
             policy.check_enforcement('leases', action='put', ctx=ctx, target={
-                'project': lease.project_id,
+                'project': prid,
                 'user': ctx.user_id,
-                'project_id': lease.project_id,
+                'project_id': prid,
                 'user_id': ctx.user_id,
             })
         else:
             policy.check_enforcement('oshosts', action='reallocate')
+
         allocations = self.get_allocations(host_id, data, detail=True)
 
         for alloc in allocations['reservations']:
