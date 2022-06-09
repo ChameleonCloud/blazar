@@ -94,7 +94,6 @@ class API(object):
         """
         return self.plugin.get_allocations(host_id, query)
 
-    @policy.authorize('oshosts', 'reallocate')
     def reallocate(self, host_id, data):
         """Exchange host from allocations."""
         return self.plugin.reallocate_computehost(host_id, data)

@@ -20,7 +20,7 @@ from novaclient import exceptions as nova_exceptions
 from oslo_config import cfg
 from oslo_utils import strutils
 
-from blazar import context
+from blazar import context, policy
 from blazar.db import api as db_api
 from blazar.db import exceptions as db_ex
 from blazar.db import utils as db_utils
@@ -123,6 +123,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                                           'reservation_id': reservation_id})
         return host_reservation['id']
 
+    @policy.authorize('oshosts', 'put')
     def update_reservation(self, reservation_id, values):
         """Update reservation."""
         reservation = db_api.reservation_get(reservation_id)
@@ -411,6 +412,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                     return False
         return True
 
+    @policy.authorize('oshosts', 'put')
     def update_computehost(self, host_id, values):
         # nothing to update
         if not values:
@@ -528,6 +530,8 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         return {"resource_id": host_id, "reservations": allocs}
 
     def reallocate_computehost(self, host_id, data):
+        LOG.debug(data)
+        policy.check_enforcement("oshosts", action="reallocate")
         allocations = self.get_allocations(host_id, data, detail=True)
 
         for alloc in allocations['reservations']:
@@ -591,6 +595,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
 
         return host_allocations
 
+    @policy.authorize('oshosts', 'put')
     def update_default_parameters(self, values):
         self.add_default_resource_properties(values)
 
