@@ -412,7 +412,6 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                     return False
         return True
 
-    @policy.authorize('oshosts', 'put')
     def update_computehost(self, host_id, values):
         # nothing to update
         if not values:
@@ -595,7 +594,6 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
 
         return host_allocations
 
-    @policy.authorize('oshosts', 'put')
     def update_default_parameters(self, values):
         self.add_default_resource_properties(values)
 
