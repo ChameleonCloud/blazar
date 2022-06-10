@@ -123,7 +123,6 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                                           'reservation_id': reservation_id})
         return host_reservation['id']
 
-    @policy.authorize('oshosts', 'put')
     def update_reservation(self, reservation_id, values):
         """Update reservation."""
         reservation = db_api.reservation_get(reservation_id)
