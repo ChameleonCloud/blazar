@@ -536,7 +536,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             lease = db_api.lease_get(lease_id)
             ctx = context.current()
             prid = lease['project_id']
-            policy.check_enforcement('leases', action='put', ctx=ctx, target={
+            policy.check_enforcement('leases', action='reallocate', ctx=ctx, target={
                 'project': prid,
                 'user': ctx.user_id,
                 'project_id': prid,
