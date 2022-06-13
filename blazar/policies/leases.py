@@ -55,6 +55,18 @@ leases_policies = [
         ]
     ),
     policy.DocumentedRuleDefault(
+        name=POLICY_ROOT % 'reallocate',
+        check_str=base.RULE_ADMIN_OR_OWNER,
+        description="Policy rule which allows owners to reallocate "
+                    "the host(s) for their lease",
+        operations=[
+            {
+                'path': '/{api_version}/os-hosts/{host_id}/allocation',
+                'method': 'PUT'
+            }
+        ]
+    ),
+    policy.DocumentedRuleDefault(
         name=POLICY_ROOT % 'delete',
         check_str=base.RULE_ADMIN_OR_OWNER,
         description='Policy rule for Delete Lease API.',
