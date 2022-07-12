@@ -146,7 +146,8 @@ class GeneralMonitorPlugin(base.BaseMonitorPlugin, metaclass=abc.ABCMeta):
                                                              interval_end)
 
         for reservation in reservations:
-            if reservation['resource_type'] != self.resource_type:
+            active_reservation = reservation['status'] == status.reservation.ACTIVE
+            if reservation['resource_type'] != self.resource_type or active_reservation:
                 continue
 
             reservation_id = reservation["id"]
@@ -155,7 +156,7 @@ class GeneralMonitorPlugin(base.BaseMonitorPlugin, metaclass=abc.ABCMeta):
                                                       resource_ids):
                 try:
                     if self._reallocate(allocation):
-                        if reservation['status'] == status.reservation.ACTIVE:
+                        if active_reservation:
                             if reservation_id not in reservation_flags:
                                 reservation_flags[reservation_id] = {}
                             reservation_flags[reservation_id].update(
