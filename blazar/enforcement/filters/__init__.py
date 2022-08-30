@@ -18,7 +18,6 @@ from blazar.enforcement.filters.external_service_filter import (
 from blazar.enforcement.filters.max_lease_duration_filter import (
     MaxLeaseDurationFilter)
 
-
-__all__ = ['MaxLeaseDurationFilter', 'ExternalServiceFilter']
+__all__ = ['ExternalServiceFilter', 'MaxLeaseDurationFilter']
 
 all_filters = __all__

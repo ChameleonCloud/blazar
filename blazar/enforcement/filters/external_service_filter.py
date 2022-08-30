@@ -1,4 +1,4 @@
-# Copyright (c) 2020 University of Chicago.
+# Copyright (c) 2022 University of Chicago.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -38,8 +38,15 @@ class DateTimeEncoder(json.JSONEncoder):
 
 class ExternalServiceUnsupportedHTTPResponse(exceptions.BlazarException):
     code = 400
-    msg_fmt = _('External Service Filter returned a %(status)s http response. '
-                'Only 204 and 403 responses are supported.')
+    msg_fmt = _('External service enforcement filter returned a %(status)s '
+                'HTTP response. Only 204 and 403 responses are supported.')
+
+
+class ExternalServiceUnsupportedDeniedResponse(exceptions.BlazarException):
+    code = 400
+    msg_fmt = _('External service enforcement filter returned a 403 HTTP '
+                'response %(response)s without a valid JSON dictionary '
+                'containing a "message" key.')
 
 
 class ExternalServiceFilterException(exceptions.NotAuthorized):
@@ -53,24 +60,23 @@ class ExternalServiceFilter(base_filter.BaseFilter):
         cfg.StrOpt(
             'external_service_endpoint',
             default=None,
-            help='The url of the external service API. A value of -1 will '
-                 'disabled the service.'),
+            help='The URL of the external service API.'),
         cfg.StrOpt(
             'external_service_check_create',
             default=None,
-            help='Overwrite check create endpoint with absolute URL.'),
+            help='Overwrite check-create endpoint with absolute URL.'),
         cfg.StrOpt(
             'external_service_check_update',
             default=None,
-            help='Overwrite check update endpoint with absolute URL.'),
+            help='Overwrite check-update endpoint with absolute URL.'),
         cfg.StrOpt(
             'external_service_on_end',
             default=None,
-            help='Overwrite on end endpoint with absolute URL.'),
+            help='Overwrite on-end endpoint with absolute URL.'),
         cfg.StrOpt(
             'external_service_token',
             default="",
-            help='Authentication token for token based authentication.')
+            help='Token used for authentication with the external service.')
     ]
 
     def __init__(self, conf=None):
@@ -104,8 +110,13 @@ class ExternalServiceFilter(base_filter.BaseFilter):
         if req.status_code == 204:
             return True
         elif req.status_code == 403:
-            raise ExternalServiceFilterException(
-                message=req.json().get('message'))
+            try:
+                message = req.json()['message']
+            except (requests.JSONDecodeError, KeyError):
+                raise ExternalServiceUnsupportedDeniedResponse(
+                    response=req.content)
+
+            raise ExternalServiceFilterException(message=message)
         else:
             raise ExternalServiceUnsupportedHTTPResponse(
                 status=req.status_code)
