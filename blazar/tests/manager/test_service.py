@@ -1718,7 +1718,7 @@ class ServiceTestCase(tests.DBTestCase):
         manager = service.ManagerService()
         enforcement_mngr = self.patch(manager, 'enforcement')
         enforcement_mngr.check_update.side_effect = (
-            enforcement.filters.external_service_filter.ExternalServiceUnsupportedHTTPResponse(status=503))
+            enforcement.exceptions.ExternalServiceUnsupportedHTTPResponse(status=503))
         manager.plugins = {'virtual:instance': self.fake_plugin}
         manager.resource_actions = (
             {'virtual:instance':
@@ -1736,7 +1736,7 @@ class ServiceTestCase(tests.DBTestCase):
                                mock.Mock(wraps=datetime.datetime)) as patched:
             patched.utcnow.return_value = target
             self.assertRaises(
-                enforcement.filters.external_service_filter.ExternalServiceUnsupportedHTTPResponse,
+                enforcement.exceptions.ExternalServiceUnsupportedHTTPResponse,
                 manager.update_lease,
                 lease_id=self.lease_id,
                 values=lease_values
@@ -1750,7 +1750,7 @@ class ServiceTestCase(tests.DBTestCase):
         manager = service.ManagerService()
         enforcement_mngr = self.patch(manager, 'enforcement')
         enforcement_mngr.check_update.side_effect = (
-            enforcement.filters.external_service_filter.ExternalServiceFilterException(message="filter exception"))
+            enforcement.exceptions.ExternalServiceFilterException(message="filter exception"))
         manager.plugins = {'virtual:instance': self.fake_plugin}
         manager.resource_actions = (
             {'virtual:instance':
@@ -1768,7 +1768,7 @@ class ServiceTestCase(tests.DBTestCase):
                                mock.Mock(wraps=datetime.datetime)) as patched:
             patched.utcnow.return_value = target
             self.assertRaises(
-                enforcement.filters.external_service_filter.ExternalServiceFilterException,
+                enforcement.exceptions.ExternalServiceFilterException,
                 manager.update_lease,
                 lease_id=self.lease_id,
                 values=lease_values
