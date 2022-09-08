@@ -27,3 +27,14 @@ class MaxLeaseUpdateWindowException(exceptions.NotAuthorized):
     code = 400
     msg_fmt = _('Lease can only be extended within %(extension_window)s '
                 'seconds of the leases current end time.')
+
+
+class ExternalServiceFilterException(exceptions.BlazarException):
+    code = 400
+    msg_fmt = _('%(message)s')
+
+
+class ExternalServiceUnsupportedHTTPResponse(exceptions.BlazarException):
+    code = 400
+    msg_fmt = _('External Service Filter returned a %(status)s http response. '
+                'Only 204 and 403 responses are supported.')
