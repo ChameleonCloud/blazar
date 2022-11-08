@@ -144,7 +144,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             reservation['resource_id'])
         self._update_allocations(dates_before, dates_after, reservation_id,
                                  reservation['status'], host_reservation,
-                                 values)
+                                 {'project_id': lease['project_id'], **values})
 
         updates = {}
         if 'min' in values or 'max' in values:
