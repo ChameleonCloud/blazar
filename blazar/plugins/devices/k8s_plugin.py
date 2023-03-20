@@ -81,9 +81,7 @@ class K8sPlugin():
 
         try:
             self.core_v1.read_node(device_name)
-        # TODO(jason): Future versions of the kubernetes client have this import
-        # available just from client.ApiException.
-        except client.api_client.ApiException as exc:
+        except client.ApiException as exc:
             if exc.status != 404:
                 LOG.exception("Error fetching node from k8s")
             raise manager_ex.DeviceNotFound(device=device_name)
