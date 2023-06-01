@@ -271,7 +271,7 @@ class ComputeHostAllocation(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
         return super(ComputeHostAllocation, self).to_dict()
 
 
-class ComputeHost(mb.BlazarBase):
+class ComputeHost(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     """Description
 
     Specifies resources asked by reservation from
@@ -303,7 +303,7 @@ class ComputeHost(mb.BlazarBase):
         return super(ComputeHost, self).to_dict()
 
 
-class ComputeHostExtraCapability(mb.BlazarBase):
+class ComputeHostExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     """Description
 
     Allows to define extra capabilities per administrator request for each
@@ -374,7 +374,7 @@ class FloatingIPAllocation(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
                                sa.ForeignKey('reservations.id'))
 
 
-class FloatingIP(mb.BlazarBase):
+class FloatingIP(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     """A table for Floating IP resource."""
 
     __tablename__ = 'floatingips'
@@ -389,7 +389,7 @@ class FloatingIP(mb.BlazarBase):
     __table_args__ = (sa.UniqueConstraint('subnet_id', 'floating_ip_address'),)
 
 
-class NetworkSegment(mb.BlazarBase):
+class NetworkSegment(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     """Description
 
     Specifies resources asked by reservation from Network Reservation API.
@@ -447,7 +447,7 @@ class NetworkAllocation(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
         return super(NetworkAllocation, self).to_dict()
 
 
-class NetworkSegmentExtraCapability(mb.BlazarBase):
+class NetworkSegmentExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     """Description
 
     Allows to define extra capabilities per administrator request for each
@@ -468,7 +468,7 @@ class NetworkSegmentExtraCapability(mb.BlazarBase):
         return super(NetworkSegmentExtraCapability, self).to_dict()
 
 
-class Device(mb.BlazarBase):
+class Device(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     """Description
 
     Specifies resources asked by reservation from Device Reservation API.
@@ -481,8 +481,8 @@ class Device(mb.BlazarBase):
     device_type = sa.Column(sa.Enum('container', 'vm', 'shell',
                                     name='allowed_device_types'),
                             nullable=False)
-    device_driver = sa.Column(sa.Enum('zun', name='allowed_device_drivers'),
-                              nullable=False)
+    device_driver = sa.Column(
+        sa.Enum('zun', 'k8s', name='allowed_device_drivers'), nullable=False)
     reservable = sa.Column(sa.Boolean, nullable=False,
                            server_default=sa.true())
 
@@ -532,7 +532,7 @@ class DeviceAllocation(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
         return super(DeviceAllocation, self).to_dict()
 
 
-class DeviceExtraCapability(mb.BlazarBase):
+class DeviceExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     """Description
 
     Allows to define extra capabilities per administrator request for each
