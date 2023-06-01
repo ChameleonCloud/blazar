@@ -87,7 +87,6 @@ class EventError(exceptions.BlazarException):
 
 class InvalidDate(exceptions.BlazarException):
     code = 400
-    restore_lease_status = True
     msg_fmt = _(
         '%(date)s is an invalid date. Required format: %(date_format)s')
 
@@ -119,6 +118,10 @@ class CantAddExtraCapability(exceptions.BlazarException):
     code = 409
     msg_fmt = _("Can't add extracapabilities %(keys)s to Host %(host)s")
 
+class ExtraCapabilityNotFound(exceptions.BlazarException):
+    code = 404
+    msg_fmt = _("Capability %(keys)s not found on resource %(resource)s")
+
 
 class EndpointsNotFound(exceptions.NotFound):
     code = 404
@@ -145,33 +148,29 @@ class HypervisorNotFound(exceptions.BlazarException):
 
 
 class NotEnoughResourcesAvailable(exceptions.BlazarException):
-    restore_lease_status = True
+    pass
 
 
 class NotEnoughHostsAvailable(NotEnoughResourcesAvailable):
     msg_fmt = _("Not enough hosts available")
 
 
-class NotEnoughResourcesDefaultProperties(exceptions.BlazarException):
-    restore_lease_status = True
+class NotEnoughResourcesDefaultProperties(NotEnoughResourcesAvailable):
     msg_fmt = _("Not enough resources available with query %(params)s")
 
 
 class MalformedParameter(exceptions.BlazarException):
     code = 400
-    restore_lease_status = True
     msg_fmt = _("Malformed parameter %(param)s")
 
 
 class MalformedRequirements(exceptions.BlazarException):
     code = 400
-    restore_lease_status = True
     msg_fmt = _("Malformed requirements %(rqrms)s")
 
 
 class MissingParameter(exceptions.BlazarException):
     code = 400
-    restore_lease_status = True
     msg_fmt = _("Missing parameter %(param)s")
 
 
@@ -195,7 +194,6 @@ class ProjectIdNotFound(exceptions.BlazarException):
 
 class InvalidRange(exceptions.BlazarException):
     code = 400
-    restore_lease_status = True
     msg_fmt = _('Invalid values for min/max of hosts. '
                 'Max must be equal to or larger than min.')
 
@@ -256,17 +254,29 @@ class NetworkNotFound(exceptions.NotFound):
     msg_fmt = _("Network '%(network)s' not found!")
 
 
+class SubnetpoolNotFound(exceptions.NotFound):
+    msg_fmt = _("Subnetpool '%(subnetpool)s' not found!")
+
+
+class RouterNotFound(exceptions.NotFound):
+    msg_fmt = _("Router '%(router)s' not found!")
+
+
 class InvalidNetwork(exceptions.NotAuthorized):
     msg_fmt = _("Invalid values for network %(network)s")
 
 
 class NotEnoughNetworksAvailable(NotEnoughResourcesAvailable):
-    restore_lease_status = True
     msg_fmt = _("Not enough networks available")
 
 
 class NetworkCreationFailed(exceptions.BlazarException):
     msg_fmt = _("Failed to create network %(name)s for reservation %(id)s. "
+                "%(msg)s")
+
+
+class NetworkExtraOnStartFailed(exceptions.BlazarException):
+    msg_fmt = _("Failed on extra on start steps for reservation %(id)s. "
                 "%(msg)s")
 
 
@@ -287,7 +297,6 @@ class DeviceNotFound(exceptions.NotFound):
 
 
 class NotEnoughDevicesAvailable(NotEnoughResourcesAvailable):
-    restore_lease_status = True
     msg_fmt = _("Not enough devices available")
 
 

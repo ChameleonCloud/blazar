@@ -74,7 +74,7 @@ def allocations_list(req, query, detail=False):
     return api_utils.render(allocations=_api.list_allocations(query))
 
 
-@rest.get('/<network_id>/allocation')
+@rest.get('/<network_id>/allocation', query=True)
 @validation.check_exists(_api.get_network, network_id='network_id')
 def allocations_get(req, network_id, query):
     """List all allocations on a specific network segment."""

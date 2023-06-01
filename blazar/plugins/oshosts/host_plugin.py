@@ -20,7 +20,7 @@ from novaclient import exceptions as nova_exceptions
 from oslo_config import cfg
 from oslo_utils import strutils
 
-from blazar import context
+from blazar import context, policy
 from blazar.db import api as db_api
 from blazar.db import exceptions as db_ex
 from blazar.db import utils as db_utils
@@ -144,7 +144,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             reservation['resource_id'])
         self._update_allocations(dates_before, dates_after, reservation_id,
                                  reservation['status'], host_reservation,
-                                 values)
+                                 {'project_id': lease['project_id'], **values})
 
         updates = {}
         if 'min' in values or 'max' in values:
@@ -268,7 +268,8 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         new_hostids = self._matching_hosts(
             reservation['hypervisor_properties'],
             reservation['resource_properties'],
-            '1-1', start_date, lease['end_date']
+            '1-1', start_date, lease['end_date'],
+            lease['project_id'],
         )
         if not new_hostids:
             db_api.host_allocation_destroy(allocation['id'])
@@ -338,6 +339,10 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             raise manager_ex.HostHavingServers(host=host_ref,
                                                servers=servers)
         host_details = inventory.get_host_details(host_ref)
+        if 'id' in host_details:
+            # Do not use nova's primary key for this host.
+            # Instead, generate a new one.
+            del host_details['id']
         # NOTE(sbauza): Only last duplicate name for same extra capability
         # will be stored
         to_store = set(host_values.keys()) - set(host_details.keys())
@@ -417,6 +422,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             return self.get_computehost(host_id)
 
         cant_update_extra_capability = []
+        cant_delete_extra_capability = []
         previous_capabilities = self._get_extra_capabilities(host_id)
         updated_keys = set(values.keys()) & set(previous_capabilities.keys())
         new_keys = set(values.keys()) - set(previous_capabilities.keys())
@@ -424,19 +430,21 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         for key in updated_keys:
             raw_capability, cap_name = next(iter(
                 db_api.host_extra_capability_get_all_per_name(host_id, key)))
-            capability = {'capability_value': values[key]}
 
             if self.is_updatable_extra_capability(raw_capability, cap_name):
-                try:
-                    if values[key] is not None:
+                if values[key] is not None:
+                    try:
                         capability = {'capability_value': values[key]}
                         db_api.host_extra_capability_update(
                             raw_capability['id'], capability)
-                    else:
+                    except (db_ex.BlazarDBException, RuntimeError):
+                        cant_update_extra_capability.append(cap_name)
+                else:
+                    try:
                         db_api.host_extra_capability_destroy(
                             raw_capability['id'])
-                except (db_ex.BlazarDBException, RuntimeError):
-                    cant_update_extra_capability.append(cap_name)
+                    except db_ex.BlazarDBException:
+                        cant_delete_extra_capability.append(cap_name)
             else:
                 LOG.info("Capability %s can't be updated because "
                          "existing reservations require it.",
@@ -457,6 +465,10 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         if cant_update_extra_capability:
             raise manager_ex.CantAddExtraCapability(
                 host=host_id, keys=cant_update_extra_capability)
+
+        if cant_delete_extra_capability:
+            raise manager_ex.ExtraCapabilityNotFound(
+                resource=host_id, keys=cant_delete_extra_capability)
 
         LOG.info('Extra capabilities on compute host %s updated with %s',
                  host_id, values)
@@ -490,8 +502,8 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                 host['hypervisor_hostname'])
         except manager_ex.HostNotFound:
             LOG.warning(
-                "Host %s not found in Nova and could not be cleaned up. Some manual "
-                "cleanup may be required.", host['hypervisor_hostname']
+                "Host %s not found in Nova and could not be cleaned up. Some "
+                "manual cleanup may be required.", host['hypervisor_hostname']
             )
 
         try:
@@ -521,6 +533,23 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         return {"resource_id": host_id, "reservations": allocs}
 
     def reallocate_computehost(self, host_id, data):
+        lease_id = data.get('lease_id')
+        if lease_id:
+            # If we're only reallocating a host for a single lease,
+            # then we allow non-admin users to perform this action,
+            # but only on leases they own
+            lease = db_api.lease_get(lease_id)
+            ctx = context.current()
+            prid = lease['project_id']
+            policy.check_enforcement('leases', action='reallocate', ctx=ctx, target={
+                'project': prid,
+                'user': ctx.user_id,
+                'project_id': prid,
+                'user_id': ctx.user_id,
+            })
+        else:
+            policy.check_enforcement('oshosts', action='reallocate')
+
         allocations = self.get_allocations(host_id, data, detail=True)
 
         for alloc in allocations['reservations']:
@@ -595,7 +624,9 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             values['resource_properties'],
             values['count_range'],
             values['start_date'],
-            values['end_date'])
+            values['end_date'],
+            values['project_id'],
+        )
 
         min_hosts, _ = [int(n) for n in values['count_range'].split('-')]
 
@@ -605,7 +636,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         return host_ids
 
     def _matching_hosts(self, hypervisor_properties, resource_properties,
-                        count_range, start_date, end_date):
+                        count_range, start_date, end_date, project_id):
         """Return the matching hosts (preferably not allocated)
 
         """
@@ -628,6 +659,8 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             filter_array += plugins_utils.convert_requirements(
                 resource_properties)
         for host in db_api.reservable_host_get_all_by_queries(filter_array):
+            if not self.is_project_allowed(project_id, resource_properties):
+                continue
             if not db_api.host_allocation_get_all_by_values(
                     compute_host_id=host['id']):
                 not_allocated_host_ids.append(host['id'])
@@ -733,7 +766,9 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             host_ids = self._matching_hosts(
                 hypervisor_properties, resource_properties,
                 str(min_hosts) + '-' + str(max_hosts),
-                dates_after['start_date'], dates_after['end_date'])
+                dates_after['start_date'], dates_after['end_date'],
+                values['project_id']
+            )
             if len(host_ids) >= min_hosts:
                 new_hosts = []
                 pool = nova.ReservationPool()

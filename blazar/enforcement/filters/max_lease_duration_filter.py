@@ -95,7 +95,7 @@ class MaxLeaseDurationFilter(base_filter.BaseFilter):
             update_at = datetime.utcnow()
 
             if update_at < min_window:
-                raise enforcement_ex.MaxLeaseDurationException(
+                raise enforcement_ex.MaxLeaseUpdateWindowException(
                     extension_window=(self.reservation_extension_window))
 
             start_date = current_lease_values['end_date']

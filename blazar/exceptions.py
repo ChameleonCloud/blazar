@@ -93,7 +93,6 @@ class Timeout(BlazarException):
 
 class InvalidInput(BlazarException):
     code = 400
-    restore_lease_status = True
     msg_fmt = _("Expected a %(cls)s type but received %(value)s.")
 
 

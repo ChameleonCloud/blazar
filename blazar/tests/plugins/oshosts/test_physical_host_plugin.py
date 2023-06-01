@@ -2333,7 +2333,9 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         result = self.fake_phys_plugin._matching_hosts(
             '[]', '[]', '1-3',
             datetime.datetime(2013, 12, 19, 20, 00),
-            datetime.datetime(2013, 12, 19, 21, 00))
+            datetime.datetime(2013, 12, 19, 21, 00),
+            None
+        )
         self.assertEqual(set(['host2', 'host3']), set(result))
 
     def test_matching_hosts_allocated_hosts(self):
@@ -2362,7 +2364,9 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         result = self.fake_phys_plugin._matching_hosts(
             '[]', '[]', '3-3',
             datetime.datetime(2013, 12, 19, 20, 00),
-            datetime.datetime(2013, 12, 19, 21, 00))
+            datetime.datetime(2013, 12, 19, 21, 00),
+            None
+        )
         self.assertEqual(set(['host1', 'host2', 'host3']), set(result))
 
     def test_matching_hosts_allocated_hosts_with_cleaning_time(self):
@@ -2394,7 +2398,9 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         result = self.fake_phys_plugin._matching_hosts(
             '[]', '[]', '3-3',
             datetime.datetime(2013, 12, 19, 20, 00),
-            datetime.datetime(2013, 12, 19, 21, 00))
+            datetime.datetime(2013, 12, 19, 21, 00),
+            None
+        )
         self.assertEqual(set(['host1', 'host2', 'host3']), set(result))
 
     def test_matching_hosts_not_matching(self):
@@ -2405,7 +2411,9 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         result = self.fake_phys_plugin._matching_hosts(
             '["=", "$memory_mb", "2048"]', '[]', '1-1',
             datetime.datetime(2013, 12, 19, 20, 00),
-            datetime.datetime(2013, 12, 19, 21, 00))
+            datetime.datetime(2013, 12, 19, 21, 00),
+            None
+        )
         self.assertEqual([], result)
 
     def test_check_params_with_valid_before_end(self):

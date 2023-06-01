@@ -21,6 +21,7 @@ import eventlet
 from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils.excutils import save_and_reraise_exception
+from oslo_service import periodic_task
 from stevedore import enabled
 
 from blazar import context
@@ -67,6 +68,15 @@ LEASE_DATE_FORMAT = "%Y-%m-%d %H:%M"
 EVENT_INTERVAL = 10
 
 
+class PeriodicTaskManager(periodic_task.PeriodicTasks):
+    def __init__(self):
+        super(PeriodicTaskManager, self).__init__(CONF)
+
+    def periodic_tasks(self, context, raise_on_error=False):
+        """Tasks to be run at a periodic interval."""
+        return self.run_periodic_tasks(context, raise_on_error=raise_on_error)
+
+
 class ManagerService(service_utils.RPCServer):
     """Service class for the blazar-manager service.
 
@@ -88,6 +98,8 @@ class ManagerService(service_utils.RPCServer):
         self.monitors = monitor.load_monitors(self.plugins) \
             + monitor.load_monitors(self.third_party_plugins)
         self.enforcement = enforcement.UsageEnforcement()
+        self.placement_client = placement.BlazarPlacementClient()
+        self.periodic_task_manager = PeriodicTaskManager()
 
     def start(self):
         super(ManagerService, self).start()
@@ -98,6 +110,13 @@ class ManagerService(service_utils.RPCServer):
                                stop_on_exception=False)
         for m in self.monitors:
             m.start_monitoring()
+
+        for plugin in self.plugins.values():
+            if hasattr(plugin, "periodic_tasks"):
+                for task in plugin.periodic_tasks:
+                    self.periodic_task_manager.add_periodic_task(task)
+
+        self.tg.add_dynamic_timer(self.periodic_tasks)
 
     def _setup_actions(self):
         """Setup actions for each resource type supported.
@@ -448,9 +467,31 @@ class ManagerService(service_utils.RPCServer):
                     self._send_notification(lease, events=['create'])
                     return lease
 
+    def _add_resource_type(self, reservations, existing_reservations):
+        rsvns_by_id = {}
+
+        for r in existing_reservations:
+            rsvns_by_id[r['id']] = r
+        for r in reservations:
+            if 'resource_type' not in r:
+                r['resource_type'] = rsvns_by_id[r['id']]['resource_type']
+
+        return reservations
+
     @status.lease.lease_status(
         transition=status.lease.UPDATING,
         result_in=status.lease.STABLE,
+        non_fatal_exceptions=[
+            common_ex.InvalidInput,
+            exceptions.InvalidRange,
+            exceptions.MissingParameter,
+            exceptions.MalformedRequirements,
+            exceptions.MalformedParameter,
+            exceptions.NotEnoughResourcesAvailable,
+            exceptions.InvalidDate,
+            exceptions.CantUpdateParameter,
+            exceptions.InvalidPeriod,
+        ]
     )
     def update_lease(self, lease_id, values):
         if not values:
@@ -876,6 +917,13 @@ class ManagerService(service_utils.RPCServer):
                 notifications.append('event.before_end_lease.stop')
 
             db_api.event_update(event['id'], update_values)
+
+    def periodic_tasks(self, raise_on_error=False):
+        """Tasks to be run at a periodic interval."""
+        ctxt = context.admin()
+        return self.periodic_task_manager.periodic_tasks(
+            ctxt, raise_on_error=raise_on_error
+        )
 
 
 @lru_cache(maxsize=None)
