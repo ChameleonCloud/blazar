@@ -116,6 +116,11 @@ def get_reservations_by_network_id(network_id, start_date, end_date):
         network_id, start_date, end_date)
 
 
+def get_reservations_by_floatingip_id(floatingip_id, start_date, end_date):
+    return IMPL.get_reservations_by_floatingip_id(
+        floatingip_id, start_date, end_date)
+
+
 def get_reservations_by_device_id(device_id, start_date, end_date):
     return IMPL.get_reservations_by_device_id(device_id, start_date, end_date)
 

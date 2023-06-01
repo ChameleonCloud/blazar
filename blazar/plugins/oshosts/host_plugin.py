@@ -973,6 +973,39 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                 recovered_hosts.extend([host for host in unreservable_hosts
                                         if host['id'] in active_hv_ids])
 
+            aggregates = self.nova.aggregates.list()
+            if aggregates:
+                freepool = next((agg for agg in aggregates if agg.name == "freepool"), None)
+                if not freepool:
+                    raise ValueError("Aggregate list does not contain a freepool!")
+                # Non-freepool aggregates are named after an associated reservation
+                res_ids = [agg.name for agg in aggregates if agg != freepool]
+                aggregate_reservations = {
+                    res["id"]: res for res in db_api.reservation_get_all_by_ids(res_ids)
+                }
+                for agg in aggregates:
+                    if agg == freepool:
+                        continue
+                    reservation = aggregate_reservations[agg.name]
+                    if reservation["status"] not in (status.reservation.ERROR, status.reservation.DELETED):
+                        # Any aggregates without an active reservation are the result of
+                        # a failed reservation teardown
+                        continue
+                    LOG.warning(
+                        f"Host aggregate for reservation {agg.name} failed to clean up."
+                    )
+                    for host in agg.hosts:
+                        try:
+                            # Remove the host from the reservation's aggregate
+                            agg.remove_host(host)
+                            # Return the host to the freepool
+                            freepool.add_host(host)
+                            recovered_hosts.append(host)
+                        except Exception as e:
+                            LOG.exception(f"Failed to recover host {host}", exc_info=e)
+                            failed_hosts.append(host)
+                    agg.delete()
+
         except Exception as e:
             LOG.exception('Skipping health check. %s', str(e))
 

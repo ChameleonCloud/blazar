@@ -19,13 +19,14 @@ from oslo_log import log as logging
 from oslo_utils.excutils import save_and_reraise_exception
 from oslo_utils import netutils
 from oslo_utils import strutils
+from sqlalchemy.exc import InvalidRequestError
 
 from blazar.db import api as db_api
 from blazar.db import exceptions as db_ex
 from blazar.db import utils as db_utils
 from blazar import exceptions
 from blazar.manager import exceptions as manager_ex
-from blazar.plugins import base
+from blazar.plugins import base, monitor
 from blazar.plugins import floatingips as plugin
 from blazar import status
 from blazar.utils.openstack import neutron
@@ -447,3 +448,73 @@ class FloatingIpPlugin(base.BasePlugin):
                         if k != 'floatingip_ids'})
 
         return fip_allocations
+
+
+class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClientWrapper):
+    """
+    Monitors reserved floating IPs which fail to clean up.
+    Deletes any floating IPs without an associated active reservation.
+    """
+
+    def __new__(cls, *args, **kwargs):
+        return super(FloatingIpMonitorPlugin, cls).__new__(cls, *args, **kwargs)
+
+    def filter_allocations(self, reservation, resource_ids):
+        return [alloc for alloc
+                in reservation["floatingip_allocations"]
+                if alloc["floating_ip_id"] in resource_ids]
+
+    def get_reservations_by_resource_ids(self, resource_ids,
+                                         interval_begin, interval_end):
+        return db_utils.get_reservations_by_floatingip_id(resource_ids,
+                                                          interval_begin,
+                                                          interval_end)
+
+    def get_unreservable_resourses(self):
+        return db_api.unreservable_fip_get_all_by_queries([])
+
+    def get_notification_event_types(self):
+        return ['service.update']
+
+    def notification_callback(self, event_type, payload):
+        return {}
+
+    def set_reservable(self, resource_id, is_reservable):
+        fip = db_api.floatingip_get(resource_id)
+        if fip is None:
+            raise manager_ex.FloatingIPNotFound(floatingip=resource_id)
+
+        try:
+            db_api.floatingip_destroy(resource_id)
+        except db_ex.BlazarDBException as e:
+            raise manager_ex.CantDeleteFloatingIP(floatingip=resource_id,
+                                                  msg=str(e))
+
+    def poll_resource_failures(self):
+        ip_allocations = db_api.fip_allocation_get_all_by_values({})
+        failed = []
+        recovered = []
+
+        for alloc in ip_allocations:
+            reservation = db_api.reservation_get(alloc["reservation_id"])
+            # If the reservation has been deleted, then the floating IP should have been cleared
+            if reservation["deleted"]:
+                fip_id = reservation["resource_id"]
+                try:
+                    # If we're successfully able to look up the FIP for a deleted reservation,
+                    # the FIP must have failed to delete
+                    fip = db_api.floatingip_get(fip_id)
+                    try:
+                        LOG.warning(
+                            f"Found floating IP {fip_id} stuck in deleted lease. Recovering..."
+                        )
+                        db_api.floatingip_destroy(fip_id)
+                        recovered.append(fip)
+                    except Exception:
+                        LOG.error("Failed to recover floating IP from deleted reservation")
+                        failed.append(fip)
+                except Exception:
+                    pass
+
+        return failed, recovered
+

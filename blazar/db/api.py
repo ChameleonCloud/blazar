@@ -132,6 +132,11 @@ def reservation_get_all_by_values(**kwargs):
 
 
 @to_dict
+def reservation_get_all_by_ids(ids):
+    return IMPL.reservation_get_all_by_ids(ids)
+
+
+@to_dict
 def reservation_get(reservation_id):
     """Return specific reservation."""
     return IMPL.reservation_get(reservation_id)
@@ -566,6 +571,12 @@ def reservable_network_get_all_by_queries(queries):
 def unreservable_network_get_all_by_queries(queries):
     """Returns unreservable networks filtered by an array of queries."""
     return IMPL.unreservable_network_get_all_by_queries(queries)
+
+
+@to_dict
+def unreservable_fip_get_all_by_queries(queries):
+    """Returns unreservable floating IPs filtered by an array of queries."""
+    return IMPL.unreservable_fip_get_all_by_queries(queries)
 
 
 def network_destroy(network_id):

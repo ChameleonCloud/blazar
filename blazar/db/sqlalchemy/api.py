@@ -153,6 +153,12 @@ def reservation_get_all_by_lease_id(lease_id):
     return reservations.all()
 
 
+def reservation_get_all_by_ids(ids):
+    reservation_query = model_query(models.Reservation, get_session())
+    filt = models.Reservation.id.in_(ids)
+    return reservation_query.filter(filt).all()
+
+
 def reservation_get_all_by_values(**kwargs):
     """Returns all entries filtered by col=value."""
 
@@ -1157,6 +1163,12 @@ def reservable_fip_get_all_by_queries(queries):
 
     """
     queries.append('reservable == 1')
+    return fip_get_all_by_queries(queries)
+
+
+def unreservable_fip_get_all_by_queries(queries):
+    """Returns unreseravable fips filtered by an array of queries"""
+    queries.append("reservable == 0")
     return fip_get_all_by_queries(queries)
 
 

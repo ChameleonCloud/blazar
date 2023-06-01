@@ -36,6 +36,12 @@ class BlazarNeutronClient(object):
         return getattr(self.neutron, attr)
 
 
+class NeutronClientWrapper(object):
+    @property
+    def neutron(self):
+        return BlazarNeutronClient()
+
+
 class FloatingIPPool(BlazarNeutronClient):
 
     def __init__(self, network_id, **kwargs):
