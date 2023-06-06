@@ -89,8 +89,6 @@ def _get_plugins():
     for ext in extension_manager.extensions:
         try:
             plugin_obj = ext.plugin()
-            LOG.info(ext)
-            LOG.info(plugin_obj)
         except Exception as e:
             LOG.warning("Could not load {0} plugin "
                         "for resource type {1} '{2}'".format(

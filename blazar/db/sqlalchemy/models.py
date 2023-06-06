@@ -15,15 +15,14 @@
 
 
 from oslo_utils import uuidutils
+
+from blazar.db.sqlalchemy import model_base as mb
 import sqlalchemy as sa
 from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from sqlalchemy.orm import relationship
 
-from blazar.db.sqlalchemy import model_base as mb
 
 # Helpers
-
-
 def _generate_unicode_uuid():
     return str(uuidutils.generate_uuid())
 
@@ -199,21 +198,21 @@ class Event(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
         return super(Event, self).to_dict()
 
 
-class ResourceProperty(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
-    """Defines an resource property by resource type."""
+class ExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
+    """Defines an extra capability by resource type."""
 
-    __tablename__ = 'resource_properties'
+    __tablename__ = 'extra_capabilities'
 
     id = _id_column()
     resource_type = sa.Column(sa.String(255), nullable=False)
-    property_name = sa.Column(sa.String(255), nullable=False)
+    capability_name = sa.Column(sa.String(255), nullable=False)
     private = sa.Column(sa.Boolean, nullable=False,
                         server_default=sa.false())
 
-    __table_args__ = (sa.UniqueConstraint('resource_type', 'property_name'),)
+    __table_args__ = (sa.UniqueConstraint('resource_type', 'capability_name'),)
 
     def to_dict(self):
-        return super(ResourceProperty, self).to_dict()
+        return super(ExtraCapability, self).to_dict()
 
 
 class ComputeHostReservation(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
@@ -606,22 +605,22 @@ class ResourceAllocation(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
         return super(ResourceAllocation, self).to_dict()
 
 
-class ResourceResourceProperty(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
+class ResourceExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     """Description
 
     Allows to define extra capabilities per administrator request for each
     Resource added.
     """
 
-    __tablename__ = 'resource_resource_properties'
+    __tablename__ = 'resource_extra_capabilities'
 
     id = _id_column()
     resource_id = sa.Column(sa.String(36), sa.ForeignKey('resources.id'),
                             nullable=False)
-    property_id = sa.Column(sa.String(36),
-                            sa.ForeignKey('resource_properties.id'),
+    capability_id = sa.Column(sa.String(36),
+                            sa.ForeignKey('extra_capabilities.id'),
                             nullable=False)
-    property_value = sa.Column(MediumText(), nullable=False)
+    capability_value = sa.Column(MediumText(), nullable=False)
 
     def to_dict(self):
-        return super(ResourceResourceProperty, self).to_dict()
+        return super(ResourceExtraCapability, self).to_dict()

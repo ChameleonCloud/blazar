@@ -17,9 +17,7 @@ import datetime
 
 from functools import lru_cache
 
-import eventlet
 from oslo_config import cfg
-from oslo_log import log as logging
 from oslo_utils.excutils import save_and_reraise_exception
 from oslo_service import periodic_task
 from stevedore import enabled
@@ -34,9 +32,12 @@ from blazar.manager import exceptions
 from blazar import monitor
 from blazar.notification import api as notification_api
 from blazar import status
+from blazar.utils.openstack import placement
 from blazar.utils import service as service_utils
 from blazar.utils import trusts
 from collections import defaultdict
+import eventlet
+from oslo_log import log as logging
 
 manager_opts = [
     cfg.ListOpt('plugins',
@@ -242,6 +243,7 @@ class ManagerService(service_utils.RPCServer):
                      'time': {'op': 'le',
                               'border': datetime.datetime.utcnow()}}
         )
+
         for batch in self._select_for_execution(events):
             self._process_events_concurrently(batch)
 
@@ -320,7 +322,7 @@ class ManagerService(service_utils.RPCServer):
                 'Terminated leases can only be renamed')
 
         if (values['end_date'] < now or
-           values['end_date'] < values['start_date']):
+                values['end_date'] < values['start_date']):
             raise common_ex.InvalidInput(
                 'End date must be later than current and start date')
 
@@ -715,6 +717,9 @@ class ManagerService(service_utils.RPCServer):
         lease = self.get_lease(lease_id)
         allocations = self._existing_allocations(lease['reservations'])
         try:
+            # no rpc call with authentication context, i.e.
+            # context.current() doesn't work here.
+            # so need to get context from the lease trust.
             self.enforcement.on_end(trusts.create_ctx_from_trust(
                 lease['trust_id']), lease, allocations)
         except Exception as e:
@@ -831,6 +836,8 @@ class ManagerService(service_utils.RPCServer):
             else:
                 raise exceptions.UnsupportedResourceType(
                     resource_type=resource_type)
+
+                    
             allocations[resource_type] = [
                 plugin.get(cid) for cid in candidate_ids]
 
