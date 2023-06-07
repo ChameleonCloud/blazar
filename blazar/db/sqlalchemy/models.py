@@ -261,8 +261,7 @@ class ComputeHostAllocation(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     __tablename__ = 'computehost_allocations'
 
     id = _id_column()
-    compute_host_id = sa.Column(sa.String(36),
-                                sa.ForeignKey('computehosts.id'))
+    compute_host_id = sa.Column(sa.String(36))
     reservation_id = sa.Column(sa.String(36),
                                sa.ForeignKey('reservations.id'))
 
@@ -313,11 +312,10 @@ class ComputeHostExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
 
     id = _id_column()
     computehost_id = sa.Column(sa.String(36), sa.ForeignKey('computehosts.id'))
-    property_id = sa.Column(sa.String(36),
-                            sa.ForeignKey('resource_properties.id'),
-                            nullable=False)
+    capability_id = sa.Column(sa.String(255),
+                              sa.ForeignKey('extra_capabilities.id'),
+                              nullable=False)
     capability_value = sa.Column(MediumText(), nullable=False)
-
     def to_dict(self):
         return super(ComputeHostExtraCapability, self).to_dict()
 
@@ -459,7 +457,7 @@ class NetworkSegmentExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     network_id = sa.Column(sa.String(36), sa.ForeignKey('network_segments.id'),
                            nullable=False)
     capability_id = sa.Column(sa.String(255),
-                              sa.ForeignKey('resource_properties.id'),
+                              sa.ForeignKey('extra_capabilities.id'),
                               nullable=False)
     capability_value = sa.Column(MediumText(), nullable=False)
 
@@ -544,7 +542,7 @@ class DeviceExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     device_id = sa.Column(sa.String(36), sa.ForeignKey('devices.id'),
                           nullable=False)
     capability_id = sa.Column(sa.String(255),
-                              sa.ForeignKey('resource_properties.id'),
+                              sa.ForeignKey('extra_capabilities.id'),
                               nullable=False)
     capability_value = sa.Column(MediumText(), nullable=False)
 

@@ -18,10 +18,11 @@
 from datetime import datetime
 import sys
 
+from oslo_config import cfg
+
 from blazar.db import exceptions as db_exc
 from blazar.db.sqlalchemy import facade_wrapper
 from blazar.db.sqlalchemy import models
-from oslo_config import cfg
 from oslo_db import exception as common_db_exc
 from oslo_db.sqlalchemy import session as db_session
 from oslo_log import log as logging
@@ -207,7 +208,7 @@ def reservation_destroy(reservation_id):
             raise db_exc.BlazarDBNotFound(id=reservation_id,
                                           model='Reservation')
 
-        # TODO this does not cascade right
+        # TODO this does not cascade right. 
         reservation.soft_delete(session=session)
 
 
@@ -538,7 +539,7 @@ def instance_reservation_destroy(instance_reservation_id):
         if not instance:
             raise db_exc.BlazarDBNotFound(
                 id=instance_reservation_id, model='InstanceReservations')
-        
+
         instance.soft_delete(session=session)
 
 
@@ -877,7 +878,7 @@ def host_extra_capability_get_all_per_name(host_id, capability_name):
     with session.begin():
         query = _host_extra_capability_get_all_per_host(session, host_id)
         return query.filter(
-            models.ExtraCapability.capability_name == capability_name).all()).all()
+            models.ExtraCapability.capability_name == capability_name).all()
 
 
 # FloatingIP reservation
@@ -1971,8 +1972,8 @@ def device_extra_capability_get_latest_per_name(device_id, capability_name):
             .order_by(models.DeviceExtraCapability.created_at.desc())
             .first())
 
-
 # Resource Properties
+
 
 def _resource_property_get(session, resource_type, capability_name):
     query = (
@@ -1986,6 +1987,7 @@ def _resource_property_get(session, resource_type, capability_name):
 def resource_property_get(resource_type, capability_name):
     return _resource_property_get(get_session(), resource_type,
                                   capability_name)
+
 
 def resource_properties_list(resource_type):
     session = get_session()
@@ -2060,7 +2062,7 @@ def resource_property_update(resource_type, property_name, values):
 def _resource_property_get_or_create(session, resource_type, capability_name):
     if capability_name in FORBIDDEN_EXTRA_CAPABILITY_NAMES:
         raise db_exc.BlazarDBForbiddenExtraCapability(
-            property_name=property_name)
+            property_name=capability_name)
 
     resource_property = _resource_property_get(
         session, resource_type, capability_name)
@@ -2070,7 +2072,7 @@ def _resource_property_get_or_create(session, resource_type, capability_name):
     else:
         rp_values = {
             'resource_type': resource_type,
-            'property_name': capability_name}
+            'capability_name': capability_name}
 
         return resource_property_create(rp_values)
 

@@ -19,10 +19,7 @@ IMPL = notifier.Notifier()
 
 
 def send_lease_notification(context, lease, notification):
-    try:
-        IMPL.send_lease_notification(context, lease, notification)
-    except Exception:
-        pass
+    IMPL.send_lease_notification(context, lease, notification)
 
 
 def format_lease_payload(lease):

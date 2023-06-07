@@ -39,6 +39,7 @@ from collections import defaultdict
 import eventlet
 from oslo_log import log as logging
 
+
 manager_opts = [
     cfg.ListOpt('plugins',
                 default=['dummy.vm.plugin'],
@@ -57,7 +58,7 @@ manager_opts = [
                default=1,
                min=0,
                max=50,
-               help='Number of times to retry an event action.')
+               help='Number of times to retry an event action.'),
 ]
 
 CONF = cfg.CONF
@@ -298,7 +299,6 @@ class ManagerService(service_utils.RPCServer):
             start_date = now
         else:
             start_date = self._date_from_string(start_date)
-
         if end_date == 'now':
             end_date = now
         else:
@@ -570,7 +570,7 @@ class ManagerService(service_utils.RPCServer):
             raise common_ex.NotAuthorized(e)
 
         # TODO(frossigneux) rollback if an exception is raised
-        for reservation in existing_reservations:
+        for reservation in (existing_reservations):
             v = {}
             v['start_date'] = values['start_date']
             v['end_date'] = values['end_date']
@@ -827,17 +827,46 @@ class ManagerService(service_utils.RPCServer):
             res['start_date'] = lease['start_date']
             res['end_date'] = lease['end_date']
             res['project_id'] = lease['project_id']
-            if resource_type in self.plugins:
-                plugin = self.plugins.get(resource_type)
-                candidate_ids = plugin.allocation_candidates(res)
-            elif resource_type in self.third_party_plugins:
-                plugin = self.third_party_plugins.get(resource_type)
-                candidate_ids = plugin.allocation_candidates(res)
-            else:
-                raise exceptions.UnsupportedResourceType(
-                    resource_type=resource_type)
 
-                    
+            plugin = self._get_plugin(resource_type)
+
+            if not plugin:
+                raise common_ex.BlazarException(
+                    'Invalid plugin names are specified: %s' % resource_type)
+
+            original_res = res.copy()
+            try:
+                plugin.update_default_parameters(res)
+                candidate_ids = plugin.allocation_candidates(res)
+            except exceptions.NotEnoughResourcesAvailable:
+                candidate_ids = None
+                # Retry this function if allowed
+                if hasattr(
+                    CONF[plugin.resource_type],
+                    "retry_allocation_without_defaults"
+                ) and CONF[plugin.resource_type]\
+                        .retry_allocation_without_defaults:
+                    LOG.info("Not enough resources with default properties. "
+                             "Retrying with defaults removed.")
+                    try:
+                        candidate_ids = plugin.allocation_candidates(
+                            original_res)
+                    except exceptions.NotEnoughResourcesAvailable:
+                        pass
+
+                # If the retry didn't get candidate IDs, raise an exception
+                if candidate_ids is None:
+                    if hasattr(
+                        CONF[plugin.resource_type],
+                        "display_default_resource_properties"
+                    ) and CONF[plugin.resource_type]\
+                            .display_default_resource_properties:
+                        raise exceptions.\
+                            NotEnoughResourcesDefaultProperties(
+                                params=str(res))
+                    else:
+                        raise
+
             allocations[resource_type] = [
                 plugin.get(cid) for cid in candidate_ids]
 
