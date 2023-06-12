@@ -52,6 +52,8 @@ class StitchportPlugin(base.BasePlugin):
         if existing:
             msg = "A stitchport with that name already exists"
             raise plugin_ex.InvalidCreateResourceData(msg)
+        LOG.info(dir(self.neutron_client))
+        LOG.info(dir(self.neutron_client.neutron))
         port = self.neutron_client.create_port({
             "port": {
                 "network_id": CONF[self.resource_type()].network_id,
@@ -78,8 +80,8 @@ class StitchportPlugin(base.BasePlugin):
         if "name" in data:
             port_data["name"] = data["name"]
         if "vlan_tag" in data or "provider" in data:
-            binding_profile = self.neutron_client.get_port(
-                stitchport["data"]["port_id"])["binding:profile"]
+            binding_profile = self.neutron_client.show_port(
+                stitchport["data"]["port_id"])["port"]["binding:profile"]
             if "vlan_tag" in data:
                 binding_profile["vlan_tag"] = data["vlan_tag"]
             if "provider" in data:
@@ -109,8 +111,9 @@ class StitchportPlugin(base.BasePlugin):
         project_id = lease["project_id"]
         for stitchport in resources:
             try:
-                neutron_port = self.neutron_client.get_port(
-                    stitchport["data"]["port_id"])
+                neutron_port = self.neutron_client.show_port(
+                    stitchport["data"]["port_id"])["port"]
+                LOG.info(neutron_port)
                 binding_profile = neutron_port["binding:profile"]
                 binding_profile["project_id"] = project_id
                 binding_profile["reservation_id"] = res_id
@@ -133,8 +136,8 @@ class StitchportPlugin(base.BasePlugin):
                     res_id,
                     stitchport["data"]["port_id"]
                 )
-                neutron_port = self.neutron_client.get_port(
-                    stitchport["data"]["port_id"])
+                neutron_port = self.neutron_client.show_port(
+                    stitchport["data"]["port_id"])["port"]
                 binding_profile = neutron_port["binding:profile"]
                 port_to_del = binding_profile.pop("patch_id", None)
                 if port_to_del:

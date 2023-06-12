@@ -20,7 +20,7 @@ class DummyPlugin(base.BasePlugin):
     def resource_type(self):
         return "dummy"
 
-    def validate_create_params(self, resource_id, data):
+    def validate_create_params(self, data):
         return self.validate_data(data, ["name", "score"], [], "create")
 
     def validate_update_params(self, resource_id, data):

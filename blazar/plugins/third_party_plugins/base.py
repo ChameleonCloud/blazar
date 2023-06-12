@@ -34,6 +34,7 @@ from . import exceptions as plugin_ex
 import abc
 import collections
 import datetime
+import json
 from random import shuffle
 
 LOG = logging.getLogger(__name__)
@@ -146,7 +147,9 @@ class BasePlugin(metaclass=abc.ABCMeta):
 
     def on_end(self, reservation_id, lease=None):
         """Delete resource."""
+        LOG.info("on end is called")
         resource_reservation = db_api.resource_reservation_get(reservation_id)
+        LOG.info(resource_reservation)
         self.deallocate(
             resource_reservation, self._get_resources(
                 resource_reservation["reservation_id"]))
@@ -552,6 +555,7 @@ class BasePlugin(metaclass=abc.ABCMeta):
                      '(lease: %s).', reservation['id'], lease['name'])
             return False
         else:
+            # TODO this does not deallocate the old resource.
             new_resource_id = new_resource_ids.pop()
             db_api.resource_allocation_update(
                 allocation['id'], {'resource_id': new_resource_id})
@@ -566,6 +570,17 @@ class BasePlugin(metaclass=abc.ABCMeta):
                     ]
                 )
             return True
+
+    def update_default_parameters(self, values):
+        """Update values with any defaults"""
+        pass
+
+    def add_default_resource_properties(self, values):
+        if not values.get('resource_properties', ''):
+            values['resource_properties'] = CONF[
+                self.resource_type
+            ].default_resource_properties
+        return values
 
     def api_list(self):
         policy.check_enforcement(self.resource_type(), "get")
@@ -597,7 +612,7 @@ class BasePlugin(metaclass=abc.ABCMeta):
     def api_update(self, resource_id, data):
         policy.check_enforcement(self.resource_type(), "put")
         extras = data["extras"]
-        data = data["data"]
+        data = json.loads(data["data"])
         if not data and not extras:
             return None
         else:

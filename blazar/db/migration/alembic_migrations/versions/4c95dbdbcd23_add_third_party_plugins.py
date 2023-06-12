@@ -16,14 +16,14 @@
 """add third party plugins
 
 Revision ID: 4c95dbdbcd23
-Revises: 42c7fd6e792e
+Revises: 4b7bdec3ae61
 Create Date: 2022-01-07 20:47:31.416670
 
 """
 
 # revision identifiers, used by Alembic.
 revision = '4c95dbdbcd23'
-down_revision = '42c7fd6e792e'
+down_revision = '4b7bdec3ae61'
 
 from alembic import op
 import sqlalchemy as sa

@@ -2243,7 +2243,7 @@ def resource_get_all_by_queries(resource_type, queries):
         # we must do this first, to prioritize it over a JSON match
         extra_filter = (
             _resource_resource_property_query(get_session())
-            .filter(models.ResourceProperty.property_name == key)
+            .filter(models.ExtraCapability.capability_name == key)
         ).all()
         raw_column = getattr(models.Resource, key, None)
         if extra_filter:
@@ -2357,14 +2357,14 @@ def resource_update(resource_type, resource_id, data):
 
 def _resource_resource_property_query(session):
     return (
-        model_query(models.ResourceResourceProperty, session)
-        .join(models.ResourceProperty)
-        .add_column(models.ResourceProperty.property_name))
+        model_query(models.ResourceExtraCapability, session)
+        .join(models.ExtraCapability)
+        .add_column(models.ExtraCapability.capability_name))
 
 
 def _resource_resource_property_get(session, resource_resource_property_id):
     query = _resource_resource_property_query(session).filter(
-        models.ResourceResourceProperty.id == resource_resource_property_id)
+        models.ResourceExtraCapability.id == resource_resource_property_id)
 
     return query.first()
 
@@ -2376,7 +2376,7 @@ def resource_resource_property_get(resource_resource_property_id):
 
 def _resource_resource_property_get_all_per_resource(session, resource_id):
     query = _resource_resource_property_query(session).filter(
-        models.ResourceResourceProperty.resource_id == resource_id)
+        models.ResourceExtraCapability.resource_id == resource_id)
 
     return query
 
@@ -2395,7 +2395,7 @@ def resource_resource_property_create(resource_type, values):
     del values['property_name']
     values['property_id'] = resource_property.id
 
-    resource_resource_property = models.ResourceResourceProperty()
+    resource_resource_property = models.ResourceExtraCapability()
     resource_resource_property.update(values)
 
     session = get_session()
@@ -2435,7 +2435,7 @@ def resource_resource_property_destroy(resource_resource_property_id):
             # raise not found error
             raise db_exc.BlazarDBNotFound(
                 id=resource_resource_property_id,
-                model='ResourceResourceProperty')
+                model='ResourceExtraCapability')
 
         session.delete(resource_resource_property[0])
 
@@ -2458,8 +2458,8 @@ def resource_resource_property_get_latest_per_name(
                                                                  resource_id)
         return (
             query
-            .filter(models.ResourceProperty.property_name == property_name)
-            .order_by(models.ResourceResourceProperty.created_at.desc())
+            .filter(models.ExtraCapability.capability_name == property_name)
+            .order_by(models.ResourceExtraCapability.created_at.desc())
             .first())
 
 
