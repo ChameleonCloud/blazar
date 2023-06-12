@@ -44,7 +44,9 @@ LOG = logging.getLogger(__name__)
 
 before_end_options = ['', 'snapshot', 'default']
 
-
+# NOTE(mppowers) This is mostly an example of how to write a third party
+# plugin class, based on the host plugin. The entire third party host
+# implementaion is in this file, saving thousands of lines of code.
 class HostPlugin(base.BasePlugin, nova.NovaClientWrapper):
     freepool_name = CONF.nova.aggregate_freepool_name
 

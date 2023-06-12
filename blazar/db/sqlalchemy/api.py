@@ -198,6 +198,38 @@ def reservation_update(reservation_id, values):
     return reservation_get(reservation_id)
 
 
+def _reservation_destroy(session, reservation):
+    if reservation.instance_reservation:
+        reservation.instance_reservation.soft_delete(session=session)
+
+    if reservation.computehost_reservation:
+        reservation.computehost_reservation.soft_delete(session=session)
+
+    if reservation.network_reservation:
+        reservation.network_reservation.soft_delete(session=session)
+
+    if reservation.floatingip_reservation:
+        reservation.floatingip_reservation.soft_delete(session=session)
+
+    if reservation.computehost_allocations:
+        for computehost_allocation in reservation.computehost_allocations:
+            computehost_allocation.soft_delete(session=session)
+
+    if reservation.network_allocations:
+        for network_allocation in reservation.network_allocations:
+            network_allocation.soft_delete(session=session)
+
+    if reservation.floatingip_allocations:
+        for floatingip_allocation in reservation.floatingip_allocations:
+            floatingip_allocation.soft_delete(session=session)
+
+    if reservation.resource_allocations:
+        for resource_allocation in reservation.resource_allocations:
+            resource_allocation.soft_delete(session=session)
+
+    reservation.soft_delete(session=session)
+
+
 def reservation_destroy(reservation_id):
     session = get_session()
     with session.begin():
@@ -208,8 +240,7 @@ def reservation_destroy(reservation_id):
             raise db_exc.BlazarDBNotFound(id=reservation_id,
                                           model='Reservation')
 
-        # TODO this does not cascade right. 
-        reservation.soft_delete(session=session)
+        _reservation_destroy(session, reservation)
 
 
 # Lease
@@ -303,7 +334,12 @@ def lease_destroy(lease_id):
             # raise not found error
             raise db_exc.BlazarDBNotFound(id=lease_id, model='Lease')
 
-        # TODO this does not cascade right
+        for reservation in lease.reservations:
+            _reservation_destroy(session, reservation)
+
+        for event in lease.events:
+            event.soft_delete(session=session)
+
         lease.soft_delete(session=session)
 
 

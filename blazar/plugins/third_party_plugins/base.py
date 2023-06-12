@@ -544,6 +544,15 @@ class BasePlugin(metaclass=abc.ABCMeta):
             reservation['resource_id'])
         lease = db_api.lease_get(reservation['lease_id'])
 
+        if reservation['status'] == status.reservation.ACTIVE:
+            self.deallocate(
+                resource_reservation,
+                [
+                    db_api.resource_get(
+                        self.resource_type(), allocation["resource_id"])
+                ]
+            )
+
         start_date = max(datetime.datetime.utcnow(), lease['start_date'])
         new_resource_ids = self.matching_resources(
             resource_reservation["values"]['resource_properties'],
@@ -555,7 +564,6 @@ class BasePlugin(metaclass=abc.ABCMeta):
                      '(lease: %s).', reservation['id'], lease['name'])
             return False
         else:
-            # TODO this does not deallocate the old resource.
             new_resource_id = new_resource_ids.pop()
             db_api.resource_allocation_update(
                 allocation['id'], {'resource_id': new_resource_id})

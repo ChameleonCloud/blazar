@@ -52,8 +52,6 @@ class StitchportPlugin(base.BasePlugin):
         if existing:
             msg = "A stitchport with that name already exists"
             raise plugin_ex.InvalidCreateResourceData(msg)
-        LOG.info(dir(self.neutron_client))
-        LOG.info(dir(self.neutron_client.neutron))
         port = self.neutron_client.create_port({
             "port": {
                 "network_id": CONF[self.resource_type()].network_id,
@@ -113,7 +111,6 @@ class StitchportPlugin(base.BasePlugin):
             try:
                 neutron_port = self.neutron_client.show_port(
                     stitchport["data"]["port_id"])["port"]
-                LOG.info(neutron_port)
                 binding_profile = neutron_port["binding:profile"]
                 binding_profile["project_id"] = project_id
                 binding_profile["reservation_id"] = res_id
