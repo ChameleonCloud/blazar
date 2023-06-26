@@ -230,11 +230,13 @@ class PhysicalHostPluginTestCase(tests.TestCase):
                      'capability_value': 'bar',
                      }
         self.get_extra_capabilities.return_value = {'foo': 'bar'}
-        self.db_host_create.return_value = self.fake_host
+        self.db_host_create.return_value = fake_host
         host = self.fake_phys_plugin.create_computehost(fake_request)
         self.db_host_create.assert_called_once_with(self.fake_host)
         self.prov_create.assert_called_once_with('hypvsr1')
         self.db_host_extra_capability_create.assert_called_once_with(fake_capa)
+        # the returned host will not have id
+        fake_host.pop('id')
         self.assertEqual(fake_host, host)
 
     def test_create_host_with_capabilities_too_long(self):
@@ -290,7 +292,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         fake_host.update({'foo': 'bar'})
         fake_request = fake_host.copy()
         self.get_extra_capabilities.return_value = {'foo': 'bar'}
-        self.db_host_create.return_value = self.fake_host
+        self.db_host_create.return_value = fake_host
         fake = self.db_host_extra_capability_create
         fake.side_effect = fake_db_host_extra_capability_create
         self.assertRaises(manager_exceptions.CantAddExtraCapability,
@@ -729,6 +731,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             'start_date': now,
             'end_date': now + datetime.timedelta(hours=1),
             'resource_type': plugin.RESOURCE_TYPE,
+            'project_id': 'fake-project'
         }
         host_reservation_create = self.patch(self.db_api,
                                              'host_reservation_create')
@@ -751,6 +754,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             'start_date': datetime.datetime(2013, 12, 19, 20, 00),
             'end_date': datetime.datetime(2013, 12, 19, 21, 00),
             'resource_type': plugin.RESOURCE_TYPE,
+            'project_id': 'fake-project'
         }
         self.rp_create.return_value = mock.MagicMock(id=1)
         host_reservation_create = self.patch(self.db_api,
@@ -917,7 +921,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         lease_get = self.patch(self.db_api, 'lease_get')
         lease_get.return_value = {
             'start_date': datetime.datetime(2013, 12, 19, 20, 00),
-            'end_date': datetime.datetime(2013, 12, 19, 21, 00)
+            'end_date': datetime.datetime(2013, 12, 19, 21, 00),
+            'project_id': 'fake-project'
         }
         host_reservation_get = self.patch(self.db_api, 'host_reservation_get')
         host_reservation_get.return_value = {
@@ -959,7 +964,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
     def test_update_reservation_move_failure(self):
         values = {
             'start_date': datetime.datetime(2013, 12, 20, 20, 00),
-            'end_date': datetime.datetime(2013, 12, 20, 21, 30)
+            'end_date': datetime.datetime(2013, 12, 20, 21, 30),
+            'project_id': 'fake-project'
         }
         reservation_get = self.patch(self.db_api, 'reservation_get')
         reservation_get.return_value = {
@@ -970,7 +976,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         lease_get = self.patch(self.db_api, 'lease_get')
         lease_get.return_value = {
             'start_date': datetime.datetime(2013, 12, 19, 20, 00),
-            'end_date': datetime.datetime(2013, 12, 19, 21, 00)
+            'end_date': datetime.datetime(2013, 12, 19, 21, 00),
+            'project_id': 'fake-project'
         }
         host_reservation_get = self.patch(
             self.db_api,
@@ -1024,7 +1031,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         lease_get = self.patch(self.db_api, 'lease_get')
         lease_get.return_value = {
             'start_date': datetime.datetime(2013, 12, 19, 20, 00),
-            'end_date': datetime.datetime(2013, 12, 19, 21, 00)
+            'end_date': datetime.datetime(2013, 12, 19, 21, 00),
+            'project_id': 'fake-project'
         }
         host_reservation_get = self.patch(
             self.db_api,
@@ -1079,7 +1087,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         lease_get = self.patch(self.db_api, 'lease_get')
         lease_get.return_value = {
             'start_date': datetime.datetime(2013, 12, 19, 20, 00),
-            'end_date': datetime.datetime(2013, 12, 19, 21, 00)
+            'end_date': datetime.datetime(2013, 12, 19, 21, 00),
+            'project_id': 'fake-project'
         }
         host_reservation_get = self.patch(
             self.db_api,
@@ -1146,14 +1155,15 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         lease_get = self.patch(self.db_api, 'lease_get')
         lease_get.return_value = {
             'start_date': datetime.datetime(2017, 7, 12, 20, 00),
-            'end_date': datetime.datetime(2017, 7, 12, 21, 00)
+            'end_date': datetime.datetime(2017, 7, 12, 21, 00),
+            'project_id': 'fake-project'
         }
         host_reservation_get = self.patch(self.db_api, 'host_reservation_get')
         host_reservation_get.return_value = {
             'id': '91253650-cc34-4c4f-bbe8-c943aa7d0c9b',
             'count_range': '2-3',
             'hypervisor_properties': '["=", "$memory_mb", "16384"]',
-            'resource_properties': ''
+            'resource_properties': '',
         }
         host_allocation_get_all = self.patch(
             self.db_api, 'host_allocation_get_all_by_values')
@@ -1193,7 +1203,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             '',
             '1-1',
             datetime.datetime(2017, 7, 12, 20, 00),
-            datetime.datetime(2017, 7, 12, 21, 00)
+            datetime.datetime(2017, 7, 12, 21, 00),
+            'fake-project'
         )
         host_allocation_destroy.assert_not_called()
         host_allocation_create.assert_called_with(
@@ -1222,7 +1233,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         lease_get = self.patch(self.db_api, 'lease_get')
         lease_get.return_value = {
             'start_date': datetime.datetime(2017, 7, 12, 20, 00),
-            'end_date': datetime.datetime(2017, 7, 12, 21, 00)
+            'end_date': datetime.datetime(2017, 7, 12, 21, 00),
+            'project_id': 'fake-project'
         }
         host_reservation_get = self.patch(self.db_api, 'host_reservation_get')
         host_reservation_get.return_value = {
@@ -1262,7 +1274,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             '',
             '1-1',
             datetime.datetime(2017, 7, 12, 20, 00),
-            datetime.datetime(2017, 7, 12, 21, 00)
+            datetime.datetime(2017, 7, 12, 21, 00),
+            'fake-project'
         )
 
     def test_update_reservation_min_decrease(self):
@@ -1280,7 +1293,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         lease_get = self.patch(self.db_api, 'lease_get')
         lease_get.return_value = {
             'start_date': datetime.datetime(2017, 7, 12, 20, 00),
-            'end_date': datetime.datetime(2017, 7, 12, 21, 00)
+            'end_date': datetime.datetime(2017, 7, 12, 21, 00),
+            'project_id': 'fake-project'
         }
         host_reservation_get = self.patch(self.db_api, 'host_reservation_get')
         host_reservation_get.return_value = {
@@ -1341,7 +1355,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         lease_get = self.patch(self.db_api, 'lease_get')
         lease_get.return_value = {
             'start_date': datetime.datetime(2017, 7, 12, 20, 00),
-            'end_date': datetime.datetime(2017, 7, 12, 21, 00)
+            'end_date': datetime.datetime(2017, 7, 12, 21, 00),
+            'project_id': 'fake-project'
         }
         host_reservation_get = self.patch(self.db_api, 'host_reservation_get')
         host_reservation_get.return_value = {
@@ -1388,7 +1403,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             '',
             '0-1',
             datetime.datetime(2017, 7, 12, 20, 00),
-            datetime.datetime(2017, 7, 12, 21, 00)
+            datetime.datetime(2017, 7, 12, 21, 00),
+            'fake-project'
         )
         host_allocation_destroy.assert_not_called()
         host_allocation_create.assert_called_with(
@@ -1417,7 +1433,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         lease_get = self.patch(self.db_api, 'lease_get')
         lease_get.return_value = {
             'start_date': datetime.datetime(2017, 7, 12, 20, 00),
-            'end_date': datetime.datetime(2017, 7, 12, 21, 00)
+            'end_date': datetime.datetime(2017, 7, 12, 21, 00),
+            'project_id': 'fake-project'
         }
         host_reservation_get = self.patch(self.db_api, 'host_reservation_get')
         host_reservation_get.return_value = {
@@ -1456,7 +1473,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         host_get = self.patch(self.db_api, 'host_get')
         host_get.return_value = {
             'hypervisor_hostname': 'host3_hostname',
-            'service_name': 'service1'
+            'service_name': 'service1',
         }
         add_computehost = self.patch(
             self.nova.ReservationPool, 'add_computehost')
@@ -1473,7 +1490,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             '',
             '0-1',
             datetime.datetime(2017, 7, 12, 20, 00),
-            datetime.datetime(2017, 7, 12, 21, 00)
+            datetime.datetime(2017, 7, 12, 21, 00),
+            'fake-project'
         )
         host_allocation_destroy.assert_not_called()
         host_allocation_create.assert_called_with(
@@ -1503,7 +1521,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         lease_get = self.patch(self.db_api, 'lease_get')
         lease_get.return_value = {
             'start_date': datetime.datetime(2017, 7, 12, 20, 00),
-            'end_date': datetime.datetime(2017, 7, 12, 21, 00)
+            'end_date': datetime.datetime(2017, 7, 12, 21, 00),
+            'project_id': 'fake-project'
         }
         host_reservation_get = self.patch(self.db_api, 'host_reservation_get')
         host_reservation_get.return_value = {
@@ -1545,7 +1564,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             '',
             '0-1',
             datetime.datetime(2017, 7, 12, 20, 00),
-            datetime.datetime(2017, 7, 12, 21, 00)
+            datetime.datetime(2017, 7, 12, 21, 00),
+            'fake-project'
         )
         host_reservation_update.assert_called_with(
             '91253650-cc34-4c4f-bbe8-c943aa7d0c9b',
@@ -1567,14 +1587,16 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         lease_get = self.patch(self.db_api, 'lease_get')
         lease_get.return_value = {
             'start_date': datetime.datetime(2017, 7, 12, 20, 00),
-            'end_date': datetime.datetime(2017, 7, 12, 21, 00)
+            'end_date': datetime.datetime(2017, 7, 12, 21, 00),
+            'project_id': 'fake-project'
         }
         host_reservation_get = self.patch(self.db_api, 'host_reservation_get')
         host_reservation_get.return_value = {
             'id': '91253650-cc34-4c4f-bbe8-c943aa7d0c9b',
             'count_range': '1-2',
             'hypervisor_properties': '["=", "$memory_mb", "16384"]',
-            'resource_properties': ''
+            'resource_properties': '',
+            'project_id': 'fake-project'
         }
         host_allocation_get_all = self.patch(
             self.db_api, 'host_allocation_get_all_by_values')
@@ -1626,7 +1648,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         lease_get = self.patch(self.db_api, 'lease_get')
         lease_get.return_value = {
             'start_date': datetime.datetime(2017, 7, 12, 20, 00),
-            'end_date': datetime.datetime(2017, 7, 12, 21, 00)
+            'end_date': datetime.datetime(2017, 7, 12, 21, 00),
+            'project_id': 'fake-project'
         }
         host_reservation_get = self.patch(self.db_api, 'host_reservation_get')
         host_reservation_get.return_value = {
@@ -1665,7 +1688,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             '',
             '1-1',
             datetime.datetime(2017, 7, 12, 20, 00),
-            datetime.datetime(2017, 7, 12, 21, 00)
+            datetime.datetime(2017, 7, 12, 21, 00),
+            'fake-project'
         )
         host_allocation_create.assert_called_with(
             {
@@ -1696,7 +1720,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         lease_get = self.patch(self.db_api, 'lease_get')
         lease_get.return_value = {
             'start_date': datetime.datetime(2013, 12, 19, 20, 00),
-            'end_date': datetime.datetime(2013, 12, 19, 21, 00)
+            'end_date': datetime.datetime(2013, 12, 19, 21, 00),
+            'project_id': 'fake-project'
         }
         host_reservation_get = self.patch(self.db_api, 'host_reservation_get')
         host_reservation_get.return_value = {
@@ -2149,7 +2174,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         dummy_allocation = {
             'id': 'alloc-1',
             'compute_host_id': failed_host['id'],
-            'reservation_id': 'rsrv-1'
+            'reservation_id': 'rsrv-1',
         }
         dummy_reservation = {
             'id': 'rsrv-1',
@@ -2167,7 +2192,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             'name': 'lease-name',
             'start_date': datetime.datetime(2020, 1, 1, 12, 00),
             'end_date': datetime.datetime(2020, 1, 2, 12, 00),
-            'trust_id': 'trust-1'
+            'trust_id': 'trust-1',
+            'project_id': 'fake-project'
         }
         reservation_get = self.patch(self.db_api, 'reservation_get')
         reservation_get.return_value = dummy_reservation
@@ -2189,7 +2215,9 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         matching_hosts.assert_called_once_with(
             dummy_reservation['hypervisor_properties'],
             dummy_reservation['resource_properties'],
-            '1-1', dummy_lease['start_date'], dummy_lease['end_date'])
+            '1-1', dummy_lease['start_date'], dummy_lease['end_date'],
+            dummy_lease['project_id']
+        )
         alloc_update.assert_called_once_with(
             dummy_allocation['id'],
             {'compute_host_id': new_host['id']})
@@ -2221,7 +2249,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             'name': 'lease-name',
             'start_date': datetime.datetime(2020, 1, 1, 12, 00),
             'end_date': datetime.datetime(2020, 1, 2, 12, 00),
-            'trust_id': 'trust-1'
+            'trust_id': 'trust-1',
+            'project_id': 'fake-project'
         }
         reservation_get = self.patch(self.db_api, 'reservation_get')
         reservation_get.return_value = dummy_reservation
@@ -2240,6 +2269,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
                                mock.Mock(wraps=datetime.datetime)) as patched:
             patched.utcnow.return_value = datetime.datetime(
                 2020, 1, 1, 13, 00)
+            self.nova_client.client.get.return_value = None, {'servers': []}
             result = self.fake_phys_plugin._reallocate(dummy_allocation)
 
         self.remove_compute_host.assert_called_once_with(
@@ -2249,7 +2279,9 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             dummy_reservation['hypervisor_properties'],
             dummy_reservation['resource_properties'],
             '1-1', datetime.datetime(2020, 1, 1, 13, 00),
-            dummy_lease['end_date'])
+            dummy_lease['end_date'],
+            'fake-project'
+        )
         alloc_update.assert_called_once_with(
             dummy_allocation['id'],
             {'compute_host_id': new_host['id']})
@@ -2281,7 +2313,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             'name': 'lease-name',
             'start_date': datetime.datetime(2020, 1, 1, 12, 00),
             'end_date': datetime.datetime(2020, 1, 2, 12, 00),
-            'trust_id': 'trust-1'
+            'trust_id': 'trust-1',
+            'project_id': 'fake-project'
         }
         reservation_get = self.patch(self.db_api, 'reservation_get')
         reservation_get.return_value = dummy_reservation
@@ -2303,7 +2336,9 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         matching_hosts.assert_called_once_with(
             dummy_reservation['hypervisor_properties'],
             dummy_reservation['resource_properties'],
-            '1-1', dummy_lease['start_date'], dummy_lease['end_date'])
+            '1-1', dummy_lease['start_date'], dummy_lease['end_date'],
+            dummy_lease['project_id']
+        )
         alloc_destroy.assert_called_once_with(dummy_allocation['id'])
         self.assertEqual(False, result)
 
