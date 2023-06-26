@@ -32,7 +32,7 @@ from blazar import status
 CONF = cfg.CONF
 
 
-class FloatingIpPluginTest(tests.DBTestCase):
+class FloatingIpPluginTest(tests.TestCase):
 
     def setUp(self):
         super(FloatingIpPluginTest, self).setUp()
