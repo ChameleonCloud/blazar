@@ -2092,11 +2092,9 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             [failed_host],
             datetime.datetime(2020, 1, 1, 12, 00),
             datetime.datetime(2020, 1, 1, 13, 00))
-        reallocate.assert_called_once_with(
-            dummy_reservation['computehost_allocations'][0])
-        self.assertEqual(
-            {dummy_reservation['id']: {'resources_changed': True}},
-            result)
+        # skipped for leases which are active d285bc9
+        reallocate.assert_not_called()
+        self.assertEqual({}, result)
 
     def test_heal_active_reservations_and_missing_resources(self):
         failed_host = {'id': '1'}
@@ -2162,11 +2160,9 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             [failed_host],
             datetime.datetime(2020, 1, 1, 12, 00),
             datetime.datetime(2020, 1, 1, 13, 00))
-        reallocate.assert_called_once_with(
-            dummy_reservation['computehost_allocations'][0])
-        self.assertEqual(
-            {dummy_reservation['id']: {'missing_resources': True}},
-            result)
+        # skipped for leases which are active d285bc9
+        reallocate.assert_not_called()
+        self.assertEqual({}, result)
 
     def test_reallocate_before_start(self):
         failed_host = {'id': '1'}
