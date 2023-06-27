@@ -6,7 +6,12 @@ env:
   TOX_ENV: py38
 
 on:
-  push
+  push:
+    branches:
+      - "*"
+  pull_request:
+    types:
+      types: [opened, reopened]
 
 jobs:
   test:
