@@ -1,0 +1,32 @@
+name: Unit tests
+
+env:
+  # This should match the default python_version build arg
+  PYTHON_VERSION: 3.8
+  TOX_ENV: py38
+
+on:
+  push:
+    branches:
+      - "*"
+  pull_request:
+    types:
+      types: [opened, reopened]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Python 3.x
+        uses: actions/setup-python@v1
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install tox
+        run: pip install tox
+
+      - name: Run tests
+        run: tox -e ${{ env.TOX_ENV }}
