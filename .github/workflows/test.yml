@@ -23,8 +23,5 @@ jobs:
       - name: Install tox
         run: pip install tox
 
-      - name: Install poetry
-        run: pip install poetry
-
       - name: Run tests
         run: tox -e ${{ env.TOX_ENV }}
