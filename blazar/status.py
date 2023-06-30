@@ -198,6 +198,7 @@ class LeaseStatus(BaseStatus):
         def decorator(func):
             @wraps(func)
             def wrapper(*args, **kwargs):
+                print(args, kwargs)
                 # Update a lease status
                 if "lease_id" in kwargs:
                     lease_id = kwargs["lease_id"]
@@ -205,6 +206,7 @@ class LeaseStatus(BaseStatus):
                     lease_id = args[1]
                 lease = db_api.lease_get(lease_id)
                 original_status = lease['status']
+                print(lease)
                 if cls.is_valid_transition(original_status,
                                            transition,
                                            lease_id=lease_id):
@@ -221,8 +223,10 @@ class LeaseStatus(BaseStatus):
 
                 # Executing the wrapped function
                 try:
+                    print("execuitng........")
                     result = func(*args, **kwargs)
                 except Exception as e:
+                    print(e)
                     is_non_fatal = any(
                         [isinstance(e, non_fatal_type)
                          for non_fatal_type in non_fatal_exceptions])

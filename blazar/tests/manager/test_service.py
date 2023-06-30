@@ -106,7 +106,7 @@ class FakeLeaseStatus(object):
 
 
 @ddt.ddt
-class ServiceTestCase(tests.TestCase):
+class ServiceTestCase(tests.DBTestCase):
     def setUp(self):
         super(ServiceTestCase, self).setUp()
 
@@ -157,7 +157,9 @@ class ServiceTestCase(tests.TestCase):
                       'user_id': self.user_id,
                       'project_id': self.project_id,
                       'events': [
-                          {'event_type': 'start_lease',
+                          {
+                              'id': 'asdf',
+                              'event_type': 'start_lease',
                            'time': datetime.datetime(2013, 12, 20, 13, 00),
                            'status': 'UNDONE'},
                           {'event_type': 'end_lease',
@@ -1061,7 +1063,7 @@ class ServiceTestCase(tests.TestCase):
                                'datetime',
                                mock.Mock(wraps=datetime.datetime)) as patched:
             patched.utcnow.return_value = target
-            self.manager.update_lease(lease_id=self.lease_id,
+            f = self.manager.update_lease(lease_id=self.lease_id,
                                       values=lease_values)
         self.fake_plugin.update_reservation.assert_called_with(
             '593e7028-c0d1-4d76-8642-2ffd890b324c',
@@ -1308,7 +1310,26 @@ class ServiceTestCase(tests.TestCase):
                 exceptions.InvalidInput, self.manager.update_lease,
                 lease_id=self.lease_id, values=lease_values)
 
+    def test_update_lease_prolong(self):
+        events = self.patch(self.db_api, 'event_get_first_sorted_by_filters')
+        events.return_value = self.lease['events'][0]
+        lease_values = {
+            'name': 'renamed',
+            'prolong_for': '8d'
+        }
+        target = datetime.datetime(2013, 12, 14)
+        with mock.patch.object(datetime,
+                               'datetime',
+                               mock.Mock(wraps=datetime.datetime)) as patched:
+            patched.utcnow.return_value = target
+            f = self.manager.update_lease(lease_id=self.lease_id,
+                                      values=lease_values)
+            self.enforcement.check_update.assert_called()
+            self.lease_update.assert_called_once()
+
     def test_update_lease_end_date_before_current_time(self):
+        events = self.patch(self.db_api, 'event_get_first_sorted_by_filters')
+        events.return_value = self.lease['events'][0]
         lease_values = {
             'name': 'renamed',
             'end_date': '2013-12-14 13:00'

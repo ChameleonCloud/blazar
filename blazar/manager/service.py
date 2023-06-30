@@ -474,9 +474,14 @@ class ManagerService(service_utils.RPCServer):
             exceptions.InvalidDate,
             exceptions.CantUpdateParameter,
             exceptions.InvalidPeriod,
+            enforcement.exceptions.MaxLeaseDurationException,
+            enforcement.exceptions.MaxLeaseUpdateWindowException,
+            enforcement.filters.external_service_filter.ExternalServiceUnsupportedHTTPResponse,
+            enforcement.filters.external_service_filter.ExternalServiceFilterException,
         ]
     )
     def update_lease(self, lease_id, values):
+        print(values)
         if not values:
             return db_api.lease_get(lease_id)
 
