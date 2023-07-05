@@ -124,8 +124,8 @@ class FloatingIpPlugin(base.BasePlugin):
             db_api.fip_allocation_create({
                 'floatingip_id': fip_id,
                 'reservation_id': reservation_id})
-
-        self.deallocate(fip_reservation, allocs_to_remove)
+        if allocs_to_remove:
+            self.deallocate(fip_reservation, allocs_to_remove)
 
     def _allocations_to_remove(self, dates_before, dates_after, allocs,
                                amount):

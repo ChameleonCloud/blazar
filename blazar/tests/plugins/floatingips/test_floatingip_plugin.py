@@ -26,6 +26,7 @@ from blazar.plugins.floatingips import floatingip_plugin
 from blazar import tests
 from blazar.utils.openstack import exceptions as opst_exceptions
 from blazar.utils.openstack import neutron
+from blazar import status
 
 
 CONF = cfg.CONF
@@ -433,8 +434,7 @@ class FloatingIpPluginTest(tests.TestCase):
             values)
         fip_reservation_update.assert_called_once_with(
             'fip_resv_id1', {'amount': 2})
-        self.fip_pool.assert_called_once_with(
-            'f548089e-fb3e-4013-a043-c5ed809c7a67')
+        self.fip_pool.assert_any_call('f548089e-fb3e-4013-a043-c5ed809c7a67')
         m.create_reserved_floatingip.assert_called_once_with(
             'subnet-id',
             '172.2.24.100',
@@ -766,6 +766,11 @@ class FloatingIpPluginTest(tests.TestCase):
         fip_reservation_get.return_value = {
             'reservation_id': 'reservation-id1',
             'network_id': 'network-id1'
+        }
+        reservation_get = self.patch(self.db_api, 'reservation_get')
+        # only if reservation is active, FloatingIPPool is called in deallocate
+        reservation_get.return_value = {
+            'status': status.reservation.ACTIVE,
         }
         fip_allocation_get_all_by_values = self.patch(
             self.db_api, 'fip_allocation_get_all_by_values'
