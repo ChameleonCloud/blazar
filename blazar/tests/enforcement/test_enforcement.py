@@ -304,3 +304,25 @@ class EnforcementTestCase(tests.TestCase):
 
         self.assertDictEqual(expected_context, formatted_context)
         self.assertDictEqual(expected_lease, formatted_lease)
+
+    def test_check_create_with_exception_and_message(self):
+        lease_values, rsv, allocs = get_lease_rsv_allocs()
+        ctx = context.current()
+
+        check_create = self.patch(self.enforcement.enabled_filters[0],
+                                  'check_create')
+
+        check_create.side_effect = enforcement.filters.external_service_filter.ExternalServiceFilterException(
+                message="filter exception"
+            )
+        # with self.assertRaisesRegex(exceptions.NotAuthorized, "") as na_e:
+        self.enforcement.check_create(context=ctx, lease_values=lease_values,
+                                        reservations=rsv, allocations=allocs)
+        # print(str(na_e))
+        # print(na_e)
+            
+
+        # self.assertRaises(exceptions.NotAuthorized,
+        #                   self.enforcement.check_create,
+        #                   context=ctx, lease_values=lease_values,
+        #                   reservations=rsv, allocations=allocs)

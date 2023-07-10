@@ -1810,3 +1810,70 @@ class ServiceTestCase(tests.DBTestCase):
             self.lease_update.assert_called_with(
                 '11-22-33', {'status': 'ERROR'}
             )
+
+    def test_create_lease_fatal_enforcement_exception_message(self):
+        importlib.reload(service)
+        manager = service.ManagerService()
+        enforcement_mngr = self.patch(manager, 'enforcement')
+        enforcement_mngr.check_create.side_effect = (
+            enforcement.filters.external_service_filter.ExternalServiceFilterException(
+                message="filter exception"
+            )
+        )
+        manager.plugins = {'virtual:instance': self.fake_plugin}
+        manager.resource_actions = (
+            {'virtual:instance':
+            {'on_start': self.fake_plugin.on_start,
+            'on_end': self.fake_plugin.on_end}})
+        events = self.patch(self.db_api, 'event_get_first_sorted_by_filters')
+        events.return_value = self.lease['events'][0]
+        lease_values = self.lease_values
+        
+        exception = None
+        try:
+            manager.create_lease(lease_values)
+        except exceptions.NotAuthorized as e:
+            exception = e
+            
+        self.assertIsNotNone(exception)
+        exception_message = str(exception)
+        expected_message = "filter exception"
+        self.assertEqual(expected_message, exception_message)
+
+    def test_update_lease_fatal_enforcement_exception_message(self):
+        importlib.reload(service)
+        manager = service.ManagerService()
+        enforcement_mngr = self.patch(manager, 'enforcement')
+        enforcement_mngr.check_update.side_effect = (
+            enforcement.filters.external_service_filter.ExternalServiceFilterException(
+                message="filter exception"
+            )
+        )
+        manager.plugins = {'virtual:instance': self.fake_plugin}
+        manager.resource_actions = (
+            {'virtual:instance':
+            {'on_start': self.fake_plugin.on_start,
+            'on_end': self.fake_plugin.on_end}})
+        events = self.patch(self.db_api, 'event_get_first_sorted_by_filters')
+        events.return_value = self.lease['events'][0]
+        exception = None
+        lease_values = {
+            'name': 'renamed',
+            'prolong_for': '8d'
+        }
+        target = datetime.datetime(2013, 12, 14)
+        with mock.patch.object(datetime,
+                               'datetime',
+                               mock.Mock(wraps=datetime.datetime)) as patched:
+            patched.utcnow.return_value = target
+            try:
+                manager.update_lease(lease_id=self.lease_id, 
+                                        values=lease_values)
+            except exceptions.NotAuthorized as e:
+                exception = e
+                print(e, "exception print here")
+
+        exception_message = str(exception)
+        expected_message = "filter exception"
+        self.assertEqual(expected_message, exception_message)
+

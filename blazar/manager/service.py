@@ -556,10 +556,12 @@ class ManagerService(service_utils.RPCServer):
                                           existing_reservations,
                                           new_reservations)
         except common_ex.NotAuthorized as e:
+            print("manually raised it!!!!!!!!!")
             LOG.error("Enforcement checks failed. %s", str(e))
             # raise the same error so the decorator can capture it
-            # and handle non fatal exceptions
-            raise e
+            # handle non fatal exceptions and to propagate better error messages
+            raise common_ex.NotAuthorized(e)
+
 
         # TODO(frossigneux) rollback if an exception is raised
         for reservation in (existing_reservations):
