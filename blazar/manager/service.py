@@ -474,6 +474,10 @@ class ManagerService(service_utils.RPCServer):
             exceptions.InvalidDate,
             exceptions.CantUpdateParameter,
             exceptions.InvalidPeriod,
+            enforcement.exceptions.MaxLeaseDurationException,
+            enforcement.exceptions.MaxLeaseUpdateWindowException,
+            enforcement.filters.external_service_filter.ExternalServiceUnsupportedHTTPResponse,
+            enforcement.filters.external_service_filter.ExternalServiceFilterException,
         ]
     )
     def update_lease(self, lease_id, values):
@@ -497,7 +501,6 @@ class ManagerService(service_utils.RPCServer):
                                                             end_date)
         values['start_date'] = start_date
         values['end_date'] = end_date
-
         self._check_for_invalid_date_inputs(lease, values, now)
 
         if before_end_date:
@@ -554,7 +557,9 @@ class ManagerService(service_utils.RPCServer):
                                           new_reservations)
         except common_ex.NotAuthorized as e:
             LOG.error("Enforcement checks failed. %s", str(e))
-            raise common_ex.NotAuthorized(e)
+            # raise the same error so the decorator can capture it
+            # and handle non fatal exceptions
+            raise e
 
         # TODO(frossigneux) rollback if an exception is raised
         for reservation in (existing_reservations):
