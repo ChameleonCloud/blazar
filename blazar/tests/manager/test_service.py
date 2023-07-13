@@ -1063,7 +1063,7 @@ class ServiceTestCase(tests.DBTestCase):
                                'datetime',
                                mock.Mock(wraps=datetime.datetime)) as patched:
             patched.utcnow.return_value = target
-            f = self.manager.update_lease(lease_id=self.lease_id,
+            self.manager.update_lease(lease_id=self.lease_id,
                                       values=lease_values)
         self.fake_plugin.update_reservation.assert_called_with(
             '593e7028-c0d1-4d76-8642-2ffd890b324c',
