@@ -746,7 +746,12 @@ class ManagerService(service_utils.RPCServer):
                         raise common_ex.InvalidStatus
                 action_fn = self.resource_actions[resource_type][action_time]
                 action_fn(reservation['resource_id'], lease=lease)
-            except common_ex.BlazarException:
+            except Exception as exc:
+                if not isinstance(exc, common_ex.BlazarException):
+                    LOG.warning((
+                        "An unexpected exception type was generated. This "
+                        "indicates that some exception is not being wrapped "
+                        "properly in a BlazarException."))
                 LOG.exception("Failed to execute action %(action)s "
                               "for lease %(lease)s",
                               {'action': action_time,
@@ -793,20 +798,6 @@ class ManagerService(service_utils.RPCServer):
                 'status': status.reservation.PENDING
             }
             reservation = db_api.reservation_create(reservation_values)
-            resource_id = plugin.reserve_resource(
-                reservation['id'],
-                values
-            )
-            db_api.reservation_update(reservation['id'],
-                                      {'resource_id': resource_id})
-        elif resource_type in self.third_party_plugins:
-            reservation_values = {
-                'lease_id': values['lease_id'],
-                'resource_type': resource_type,
-                'status': status.reservation.PENDING
-            }
-            reservation = db_api.reservation_create(reservation_values)
-            plugin = self.plugin_manager.get(resource_type)
             resource_id = plugin.reserve_resource(
                 reservation['id'],
                 values
@@ -877,31 +868,23 @@ class ManagerService(service_utils.RPCServer):
 
         for reservation in reservations:
             resource_type = reservation['resource_type']
-            if resource_type in self.plugins:
-                plugin = self.plugins.get(resource_type)
-                if not plugin:
-                    raise common_ex.BlazarException(
-                        f'Invalid plugin names are specified: {resource_type}')
-                resource_ids = [
-                    x['resource_id'] for x in plugin.list_allocations(
-                        dict(reservation_id=reservation['id']))
-                    if x['reservations']]
-                allocations[resource_type] = [
-                    plugin.get(rid) for rid in resource_ids]
-            elif resource_type in self.third_party_plugins:
-                plugin = self.third_party_plugins.get(resource_type)
-                if not plugin:
-                    raise common_ex.BlazarException(
-                        f'Invalid plugin names are specified: {resource_type}')
-                resource_ids = [
-                    x['resource_id'] for x in plugin.list_allocations(
-                        dict(reservation_id=reservation['id']))
-                    if x['reservations']]
-                allocations[resource_type] = [
-                    plugin.get(rid) for rid in resource_ids]
-            else:
-                raise exceptions.UnsupportedResourceType(
-                    resource_type=resource_type)
+
+            plugin = self._get_plugin(resource_type)
+
+            if not plugin:
+                raise common_ex.BlazarException(
+                    f'Invalid plugin names are specified: {resource_type}')
+
+            plugin = self.plugins.get(resource_type)
+
+            resource_ids = [
+                x['resource_id'] for x in plugin.list_allocations(
+                    dict(reservation_id=reservation['id']))
+                if x['reservations']]
+
+            allocations[resource_type] = [
+                plugin.get(rid) for rid in resource_ids]
+
         return allocations
 
     def _send_notification(self, lease, events=[]):

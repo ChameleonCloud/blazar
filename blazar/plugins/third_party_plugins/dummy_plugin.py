@@ -25,3 +25,12 @@ class DummyPlugin(base.BasePlugin):
 
     def validate_update_params(self, resource_id, data):
         return self.validate_data(data, ["name", "score"], [], "update")
+
+    def poll_resource_failures(self):
+        return [], []
+
+    def notification_callback(self, event_type, payload):
+        return {}
+
+    def get_notification_event_types(self):
+        return []

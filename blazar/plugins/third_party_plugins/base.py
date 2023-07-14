@@ -24,6 +24,7 @@ from blazar.db import api as db_api
 from blazar.db import exceptions as db_ex
 from blazar.db import utils as db_utils
 from blazar.manager import exceptions as manager_ex
+from blazar.plugins import base as base_plugin
 from blazar.policies import base
 from blazar import policy
 from blazar import status
@@ -104,6 +105,8 @@ class BasePlugin(metaclass=abc.ABCMeta):
             ex_fn = plugin_ex.InvalidCreateResourceData
         elif action_type == "update":
             ex_fn = plugin_ex.InvalidUpdateResourceData
+        else:
+            raise ValueError(f"Unsupported action '{action_type}'")
         data_keys = set(data.keys())
         required_keys = set(required_keys)
         missing_required_keys = required_keys - data_keys
@@ -147,9 +150,7 @@ class BasePlugin(metaclass=abc.ABCMeta):
 
     def on_end(self, reservation_id, lease=None):
         """Delete resource."""
-        LOG.info("on end is called")
         resource_reservation = db_api.resource_reservation_get(reservation_id)
-        LOG.info(resource_reservation)
         self.deallocate(
             resource_reservation, self._get_resources(
                 resource_reservation["reservation_id"]))
@@ -203,9 +204,10 @@ class BasePlugin(metaclass=abc.ABCMeta):
                 (start_date_with_margin, end_date_with_margin),
             ]:
                 not_allocated_resource_ids.append(resource['id'])
+        # Give up to the maximum requested, provided min is met
         if len(not_allocated_resource_ids) >= int(min_resources):
             shuffle(not_allocated_resource_ids)
-            return not_allocated_resource_ids[:int(min_resources)]
+            return not_allocated_resource_ids[:int(max_resources)]
         else:
             raise plugin_ex.NotEnoughResourcesAvailable()
 
@@ -243,6 +245,7 @@ class BasePlugin(metaclass=abc.ABCMeta):
 
     def get_allocations(self, resource_id, query, detail=False):
         options = self.get_query_options(query, QUERY_TYPE_ALLOCATION)
+        options['detail'] = detail
         resource_allocations = self.query_resource_allocations(
             [resource_id], **options)
         allocs = resource_allocations.get(resource_id, [])
@@ -479,7 +482,6 @@ class BasePlugin(metaclass=abc.ABCMeta):
             raw_capability, cap_name = next(iter(
                 db_api.resource_resource_property_get_all_per_name(
                     resource_id, key)))
-            capability = {'capability_value': extras[key]}
 
             if self.is_updatable_extra_capability(raw_capability, cap_name):
                 try:
@@ -528,14 +530,17 @@ class BasePlugin(metaclass=abc.ABCMeta):
             extra_capabilities[key] = capability.capability_value
         return extra_capabilities
 
+    @abc.abstractmethod
     def poll_resource_failures(self):
-        return [], []
+        pass
 
+    @abc.abstractmethod
     def notification_callback(self, event_type, payload):
-        return {}
+        pass
 
+    @abc.abstractmethod
     def get_notification_event_types(self):
-        return []
+        pass
 
     def reallocate(self, allocation):
         """Reallocate this allocation to a different resource"""
@@ -613,13 +618,13 @@ class BasePlugin(metaclass=abc.ABCMeta):
         policy.check_enforcement(self.resource_type(), "get")
         resource = self.get(resource_id)
         if resource is None:
-            raise manager_ex.ResourceNotFound(
+            raise plugin_ex.ResourceNotFound(
                 resource=resource_id, resource_type=self.resource_type())
         return resource
 
     def api_update(self, resource_id, data):
         policy.check_enforcement(self.resource_type(), "put")
-        extras = data["extras"]
+        extras = data.get("extras")
         data = json.loads(data["data"])
         if not data and not extras:
             return None
@@ -636,7 +641,7 @@ class BasePlugin(metaclass=abc.ABCMeta):
         policy.check_enforcement(self.resource_type(), "delete")
         resource = db_api.resource_get(self.resource_type(), resource_id)
         if resource is None:
-            raise manager_ex.ResourceNotFound(
+            raise plugin_ex.ResourceNotFound(
                 resource=resource_id, resource_type=self.resource_type())
         allocations = db_api.resource_allocation_get_all_by_values(
             resource_id=resource_id)
@@ -793,6 +798,11 @@ class BasePlugin(metaclass=abc.ABCMeta):
         attributes_to_copy = [
             "id", "lease_id", "start_date", "end_date", "status"]
         for reservation in reservations:
+            if not detail:
+                del reservation['project_id']
+                del reservation['lease_name']
+                del reservation['status']
+
             for resource_id in reservation['resource_ids']:
                 if resource_id in resources_allocs.keys():
                     resources_allocs[resource_id].append({
@@ -912,7 +922,7 @@ class BasePlugin(metaclass=abc.ABCMeta):
         return resource_policy
 
 
-class ResourceMonitorPlugin():
+class ResourceMonitorPlugin(base_plugin.BaseMonitorPlugin):
     """Monitor plugin for resource."""
 
     # Singleton design pattern

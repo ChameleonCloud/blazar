@@ -187,3 +187,9 @@ class StitchportPlugin(base.BasePlugin):
             LOG.exception('Skipping health check. %s', str(e))
 
         return failed_ports, recovered_ports
+
+    def notification_callback(self, event_type, payload):
+        return {}
+
+    def get_notification_event_types(self):
+        return []
