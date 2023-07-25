@@ -1652,7 +1652,7 @@ def device_destroy(device_id):
         device.soft_delete(session=session)
 
         # Also delete this device's extra capabilities
-        for capability in device_extra_capability_get_all_per_device(device_id):
+        for capability,platform_version in device_extra_capability_get_all_per_device(device_id):
             capability.soft_delete(session=session)
 
 
