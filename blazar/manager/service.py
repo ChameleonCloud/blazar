@@ -45,6 +45,9 @@ manager_opts = [
                 default=['dummy.vm.plugin'],
                 help='All plugins to use (one for every resource type to '
                      'support.)'),
+    cfg.ListOpt('third_party_plugins',
+                default=[],
+                help='All third party plugins to use'),
     cfg.IntOpt('minutes_before_end_lease',
                default=60,
                min=0,
@@ -87,8 +90,15 @@ class ManagerService(service_utils.RPCServer):
         target = manager.get_target()
         super(ManagerService, self).__init__(target)
         self.plugins = get_plugins()
+        self.third_party_plugins = get_third_party_plugins()
+        if self.plugins.keys() & self.third_party_plugins.keys():
+            msg = ("You have provided several plugins for "
+                   "one resource type in configuration file. "
+                   "Please set one plugin per resource type.")
+            raise exceptions.PluginConfigurationError(error=msg)
         self.resource_actions = self._setup_actions()
-        self.monitors = monitor.load_monitors(self.plugins)
+        self.monitors = monitor.load_monitors(self.plugins) \
+            + monitor.load_monitors(self.third_party_plugins)
         self.enforcement = enforcement.UsageEnforcement()
         self.placement_client = placement.BlazarPlacementClient()
         self.periodic_task_manager = PeriodicTaskManager()
@@ -129,6 +139,11 @@ class ManagerService(service_utils.RPCServer):
             actions[resource_type]['on_end'] = plugin.on_end
             actions[resource_type]['before_end'] = plugin.before_end
             plugin.setup(None)
+        for resource_type, plugin in self.third_party_plugins.items():
+            actions[resource_type] = {}
+            actions[resource_type]['on_start'] = plugin.on_start
+            actions[resource_type]['on_end'] = plugin.on_end
+            actions[resource_type]['before_end'] = plugin.before_end
         return actions
 
     @service_utils.with_empty_context
@@ -310,6 +325,10 @@ class ManagerService(service_utils.RPCServer):
                 values['end_date'] < values['start_date']):
             raise common_ex.InvalidInput(
                 'End date must be later than current and start date')
+
+    def _get_plugin(self, resource_type):
+        return self.plugins.get(
+            resource_type, self.third_party_plugins.get(resource_type, None))
 
     def validate_params(self, values, required_params):
         if isinstance(required_params, list):
@@ -527,15 +546,9 @@ class ManagerService(service_utils.RPCServer):
                 'Please enter valid reservation IDs. Invalid reservation '
                 'IDs are: %s' % ','.join([str(id) for id in invalid_ids]))
 
-        reservations = self._add_resource_type(
-            reservations, existing_reservations)
-
-        try:
-            [
-                self.plugins[r['resource_type']] for r
-                in (reservations + existing_reservations)]
-        except KeyError:
-            raise exceptions.CantUpdateParameter(param='resource_type')
+        for r in (reservations + existing_reservations):
+            if not self._get_plugin(r['resource_type']):
+                raise exceptions.CantUpdateParameter(param='resource_type')
 
         existing_allocs = self._existing_allocations(existing_reservations)
 
@@ -577,8 +590,8 @@ class ManagerService(service_utils.RPCServer):
             if resource_type != reservation['resource_type']:
                 raise exceptions.CantUpdateParameter(
                     param='resource_type')
-            self.plugins[resource_type].update_reservation(
-                reservation['id'], v)
+            plugin = self._get_plugin(reservation['resource_type'])
+            plugin.update_reservation(reservation['id'], v)
 
         event = db_api.event_get_first_sorted_by_filters(
             'lease_id',
@@ -674,11 +687,10 @@ class ManagerService(service_utils.RPCServer):
                 self.enforcement.on_end(context.current(), lease, allocations)
             except Exception as e:
                 LOG.error(e)
-
         unclean_end = False
         for reservation in self._reservations_execution_ordered(lease):
             if reservation['status'] != status.reservation.DELETED:
-                plugin = self.plugins[reservation['resource_type']]
+                plugin = self._get_plugin(reservation['resource_type'])
                 try:
                     plugin.on_end(reservation['resource_id'], lease=lease)
                 except (db_ex.BlazarDBException, RuntimeError):
@@ -783,21 +795,23 @@ class ManagerService(service_utils.RPCServer):
 
     def _create_reservation(self, values):
         resource_type = values['resource_type']
-        if resource_type not in self.plugins:
+        plugin = self._get_plugin(resource_type)
+        if plugin:
+            reservation_values = {
+                'lease_id': values['lease_id'],
+                'resource_type': resource_type,
+                'status': status.reservation.PENDING
+            }
+            reservation = db_api.reservation_create(reservation_values)
+            resource_id = plugin.reserve_resource(
+                reservation['id'],
+                values
+            )
+            db_api.reservation_update(reservation['id'],
+                                      {'resource_id': resource_id})
+        else:
             raise exceptions.UnsupportedResourceType(
                 resource_type=resource_type)
-        reservation_values = {
-            'lease_id': values['lease_id'],
-            'resource_type': resource_type,
-            'status': status.reservation.PENDING
-        }
-        reservation = db_api.reservation_create(reservation_values)
-        resource_id = self.plugins[resource_type].reserve_resource(
-            reservation['id'],
-            values
-        )
-        db_api.reservation_update(reservation['id'],
-                                  {'resource_id': resource_id})
 
     def _allocation_candidates(self, lease, reservations):
         """Returns dict by resource type of reservation candidates."""
@@ -810,11 +824,7 @@ class ManagerService(service_utils.RPCServer):
             res['end_date'] = lease['end_date']
             res['project_id'] = lease['project_id']
 
-            if resource_type not in self.plugins:
-                raise exceptions.UnsupportedResourceType(
-                    resource_type=resource_type)
-
-            plugin = self.plugins.get(resource_type)
+            plugin = self._get_plugin(resource_type)
 
             if not plugin:
                 raise common_ex.BlazarException(
@@ -864,15 +874,13 @@ class ManagerService(service_utils.RPCServer):
         for reservation in reservations:
             resource_type = reservation['resource_type']
 
-            if resource_type not in self.plugins:
-                raise exceptions.UnsupportedResourceType(
-                    resource_type=resource_type)
-
-            plugin = self.plugins.get(resource_type)
+            plugin = self._get_plugin(resource_type)
 
             if not plugin:
                 raise common_ex.BlazarException(
-                    'Invalid plugin names are specified: %s' % resource_type)
+                    f'Invalid plugin names are specified: {resource_type}')
+
+            plugin = self.plugins.get(resource_type)
 
             resource_ids = [
                 x['resource_id'] for x in plugin.list_allocations(
@@ -976,4 +984,37 @@ def get_plugins():
                 raise exceptions.PluginConfigurationError(error=msg)
 
             plugins[plugin_obj.resource_type] = plugin_obj
+    return plugins
+
+
+@lru_cache(maxsize=None)
+def get_third_party_plugins():
+    config_plugins = CONF.manager.third_party_plugins
+    plugins = {}
+    extension_manager = enabled.EnabledExtensionManager(
+        check_func=lambda ext: ext.name in config_plugins,
+        namespace='blazar.resource.third_party_plugins',
+        invoke_on_load=False
+    )
+
+    invalid_plugins = (set(config_plugins) -
+                       set([ext.name for ext
+                            in extension_manager.extensions]))
+    if invalid_plugins:
+        raise common_ex.BlazarException('Invalid third party plugin names are '
+                                        'specified: %s' % invalid_plugins)
+    for ext in extension_manager.extensions:
+        try:
+            plugin_obj = ext.plugin()
+        except Exception as e:
+            LOG.warning("Could not load {0} plugin "
+                        "for resource type {1} '{2}'".format(
+                            ext.name, ext.plugin.resource_type, e))
+        else:
+            if plugin_obj.resource_type in plugins:
+                msg = ("You have provided several plugins for "
+                       "one resource type in configuration file. "
+                       "Please set one plugin per resource type.")
+                raise exceptions.PluginConfigurationError(error=msg)
+            plugins[plugin_obj.resource_type()] = plugin_obj
     return plugins

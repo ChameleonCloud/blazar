@@ -1,0 +1,23 @@
+{
+    "resource": {
+        "id": "1",
+        "created_at": "2017-12-27 10:00:00",
+        "updated_at": null,
+        "resource_type": "compute_host",
+        "reservable": true,
+        "data": {
+            "id": 5,
+            "availability_zone": "nova",
+            "hypervisor_hostname": "jason-devstack_4",
+            "service_name": "jason-devstack_4",
+            "vcpus": 1000,
+            "cpu_info": "{\"arch\": \"x86_64\", \"model\": \"Nehalem\", \"vendor\": \"Intel\", \"features\": [\"pge\", \"clflush\"], \"topology\": {\"cores\": 1, \"threads\": 1, \"sockets\": 4}}",
+            "hypervisor_type": "fake",
+            "hypervisor_version": 1000,
+            "memory_mb": 800000,
+            "local_gb": 600000,
+            "trust_id": "107bc5fa333a4a6db6762c72328b04b5"
+        },
+        "extra_capability_sample": "bar"
+    }
+}

@@ -125,6 +125,17 @@ def get_reservations_by_device_ids(device_ids, start_date, end_date):
                                                end_date)
 
 
+def get_reservations_by_resource_id(resource_id, start_date, end_date):
+    return IMPL.get_reservations_by_resource_id(
+        resource_id, start_date, end_date)
+
+
+def get_reservations_by_resource_ids(
+        resource_ids, resource_type, start_date, end_date):
+    return IMPL.get_reservations_by_resource_ids(
+        resource_ids, resource_type, start_date, end_date)
+
+
 def get_reservation_allocations_by_host_ids(host_ids, start_date, end_date,
                                             lease_id=None,
                                             reservation_id=None):
@@ -150,6 +161,15 @@ def get_reservation_allocations_by_device_ids(device_ids, start_date, end_date,
                                               reservation_id=None):
     return IMPL.get_reservation_allocations_by_device_ids(
         device_ids, start_date, end_date, lease_id, reservation_id)
+
+
+def get_reservation_allocations_by_resource_ids(resource_ids,
+                                                start_date,
+                                                end_date,
+                                                lease_id=None,
+                                                reservation_id=None):
+    return IMPL.get_reservation_allocations_by_resource_ids(
+        resource_ids, start_date, end_date, lease_id, reservation_id)
 
 
 def get_plugin_reservation(resource_type, resource_id):

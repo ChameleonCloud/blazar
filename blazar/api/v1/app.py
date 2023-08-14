@@ -29,6 +29,7 @@ from blazar.api.v1 import api_version_request
 from blazar.api.v1 import request_id
 from blazar.api.v1 import request_log
 from blazar.api.v1 import utils as api_utils
+from blazar import policy
 
 
 LOG = logging.getLogger(__name__)
@@ -86,6 +87,26 @@ def make_app():
     for ext in extension_manager.extensions:
         bp = ext.plugin()
         app.register_blueprint(bp, url_prefix=bp.url_prefix)
+
+    # Load third party plugins
+    resource_plugins = []
+    extension_manager = enabled.EnabledExtensionManager(
+        check_func=lambda ext:
+            ext.name in cfg.CONF.manager.third_party_plugins,
+        namespace='blazar.resource.third_party_plugins',
+        invoke_on_load=False
+    )
+    for ext in extension_manager.extensions:
+        plugin = ext.plugin()
+        bp = plugin.create_API()
+        app.register_blueprint(bp, url_prefix=bp.url_prefix)
+        resource_plugins.append(
+            {"name": plugin.resource_type(), "prefix": bp.url_prefix})
+        policy.register_plugin_opts(plugin.get_policy())
+
+    def resources_list():
+        return api_utils.render(resource_plugins)
+    app.route('/v1/resources', methods=['GET'])(resources_list)
 
     for code in werkzeug_exceptions.default_exceptions:
         app.register_error_handler(code, make_json_error)

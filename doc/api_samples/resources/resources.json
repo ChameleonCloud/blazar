@@ -1,0 +1,6 @@
+[
+    {
+        "name": "compute_host",
+        "prefix": "/v1/compute_host"
+    }
+]
