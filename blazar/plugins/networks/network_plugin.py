@@ -294,11 +294,6 @@ class NetworkPlugin(base.BasePlugin):
 
         try:
             ports = neutron_client.list_ports(network_id=network_id)
-            instance_ports = neutron_client.list_ports(
-                device_owner='compute:nova', network_id=network_id)
-            for instance_port in instance_ports['ports']:
-                self.delete_port(neutron_client, ironic_client, instance_port)
-
             subnets = neutron_client.list_subnets(network_id=network_id)
             subnet_ids = [s['id'] for s in subnets['subnets']]
 
