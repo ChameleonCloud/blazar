@@ -622,6 +622,9 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
         for server in self.nova.servers.list(search_opts={
                 'flavor': reservation_id,
                 'all_tenants': 1}, detailed=False):
+            interfaces = self.nova.servers.interface_list(server=server)
+            for interface in interfaces:
+                self.nova.servers.interface_detach(server, interface['port_id'])
             try:
                 self.nova.servers.delete(server=server)
             except nova_exceptions.NotFound:
