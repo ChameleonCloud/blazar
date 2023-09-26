@@ -34,7 +34,9 @@ from blazar.utils.openstack import ironic
 from blazar.utils.openstack import nova
 from blazar.utils.openstack import neutron
 from blazar.utils import plugins as plugins_utils
+import retrying
 
+INSTANCE_DELETION_TIMEOUT = 10 * 60 * 1000  # 10 minutes
 
 plugin_opts = [
     cfg.StrOpt('default_resource_properties',
@@ -91,6 +93,16 @@ def _get_plugins():
         plugins[plugin_obj.usage_type] = plugin_obj
     return plugins
 
+@retrying.retry(stop_max_delay=INSTANCE_DELETION_TIMEOUT,
+                    wait_fixed=5000,  # 5 seconds interval
+                    retry_on_result=lambda x: x is False)
+def _check_server_deletion(server_id):
+    nova_client =  nova.BlazarNovaClient(endpoint_override=CONF.nova.endpoint_override)
+    server = nova_client.servers.get(server_id)
+    if server:
+        LOG.info('Waiting to delete server: %s ', server)
+        return False
+    return True
 
 class NetworkPlugin(base.BasePlugin):
     """Plugin for network resource."""
@@ -278,7 +290,6 @@ class NetworkPlugin(base.BasePlugin):
                      "ID was recorded",
                      reservation_id)
             return
-        nova_client =  nova.BlazarNovaClient(endpoint_override=CONF.nova.endpoint_override)
         neutron_client = neutron.BlazarNeutronClient(trust_id=trust_id)
         ironic_client = None
         try:
@@ -298,7 +309,8 @@ class NetworkPlugin(base.BasePlugin):
             instance_ports = neutron_client.list_ports(
                 device_owner='compute:nova', network_id=network_id)
             for instance_port in instance_ports['ports']:
-                nova_client.servers.wait_for_delete(instance_port['device_id'])
+                if not _check_server_deletion(instance_port['device_id']):
+                    LOG.error('Timed out while deleting servers on reservation')
             subnets = neutron_client.list_subnets(network_id=network_id)
             subnet_ids = [s['id'] for s in subnets['subnets']]
 
