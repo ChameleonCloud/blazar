@@ -31,6 +31,7 @@ from blazar.plugins import base
 from blazar.plugins import networks as plugin
 from blazar import status
 from blazar.utils.openstack import ironic
+from blazar.utils.openstack import nova
 from blazar.utils.openstack import neutron
 from blazar.utils import plugins as plugins_utils
 
@@ -277,7 +278,7 @@ class NetworkPlugin(base.BasePlugin):
                      "ID was recorded",
                      reservation_id)
             return
-
+        nova_client = nova.NovaClientWrapper()
         neutron_client = neutron.BlazarNeutronClient(trust_id=trust_id)
         ironic_client = None
         try:
@@ -294,6 +295,9 @@ class NetworkPlugin(base.BasePlugin):
 
         try:
             ports = neutron_client.list_ports(network_id=network_id)
+            instance_ports = neutron_client.list_ports(
+                device_owner='compute:nova', network_id=network_id)
+            LOG.debug(f"{instance_ports}")
             subnets = neutron_client.list_subnets(network_id=network_id)
             subnet_ids = [s['id'] for s in subnets['subnets']]
 
