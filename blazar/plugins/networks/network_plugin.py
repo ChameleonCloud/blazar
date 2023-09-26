@@ -34,6 +34,7 @@ from blazar.utils.openstack import ironic
 from blazar.utils.openstack import nova
 from blazar.utils.openstack import neutron
 from blazar.utils import plugins as plugins_utils
+from novaclient import exceptions as nova_exceptions
 import retrying
 
 INSTANCE_DELETION_TIMEOUT = 10 * 60 * 1000  # 10 minutes
@@ -98,9 +99,11 @@ def _get_plugins():
                     retry_on_result=lambda x: x is False)
 def _check_server_deletion(server_id):
     nova_client =  nova.BlazarNovaClient(endpoint_override=CONF.nova.endpoint_override)
-    server = nova_client.servers.get(server_id)
-    if server:
-        LOG.info('Waiting to delete server: %s ', server)
+    try:
+        server = nova_client.servers.get(server_id)
+    except nova_exceptions.NotFound:
+        return True
+    else:
         return False
     return True
 
