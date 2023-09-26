@@ -278,7 +278,7 @@ class NetworkPlugin(base.BasePlugin):
                      "ID was recorded",
                      reservation_id)
             return
-        nova_client = nova.NovaClientWrapper()
+        nova_client =  nova.BlazarNovaClient(endpoint_override=CONF.nova.endpoint_override)
         neutron_client = neutron.BlazarNeutronClient(trust_id=trust_id)
         ironic_client = None
         try:
