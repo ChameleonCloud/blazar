@@ -250,19 +250,6 @@ class NetworkPlugin(base.BasePlugin):
                         msg=str(e)
                     )
 
-    def delete_port(self, neutron_client, ironic_client, port):
-        if port['binding:vnic_type'] == 'baremetal':
-            node = port.get('binding:host_id')
-            node_info = ironic_client.node.get(node)
-
-            if node and node_info.instance_uuid:
-                ironic_client.node.vif_detach(node, port['id'])
-            else:
-                raise Exception("Expected to find attribute binding:host_id "
-                                "on port %s" % port['id'])
-
-        neutron_client.delete_port(port['id'])
-
     def delete_subnet(self, neutron_client, subnet_id):
         neutron_client.delete_subnet(subnet_id)
 
@@ -297,7 +284,7 @@ class NetworkPlugin(base.BasePlugin):
             instance_ports = neutron_client.list_ports(
                 device_owner='compute:nova', network_id=network_id)
             for instance_port in instance_ports['ports']:
-                self.delete_port(neutron_client, ironic_client, instance_port)
+                neutron_client.delete_port(instance_port['id'])
 
             subnets = neutron_client.list_subnets(network_id=network_id)
             subnet_ids = [s['id'] for s in subnets['subnets']]
