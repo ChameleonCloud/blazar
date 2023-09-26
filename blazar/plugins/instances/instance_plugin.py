@@ -622,16 +622,6 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
         for server in self.nova.servers.list(search_opts={
                 'flavor': reservation_id,
                 'all_tenants': 1}, detailed=False):
-            interfaces = self.nova.servers.interface_list(server=server)
-            for interface in interfaces:
-                try:
-                    self.nova.servers.interface_detach(server, interface['port_id'])
-                except nova_exceptions.NotFound:
-                    LOG.info("Could not find server '%s', may have been deleted "
-                            "concurrently.", server.id)
-                except Exception as e:
-                    LOG.exception("Failed to delete server '%s': %s.", server.id,
-                                str(e))
             try:
                 self.nova.servers.delete(server=server)
             except nova_exceptions.NotFound:
@@ -640,7 +630,6 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
             except Exception as e:
                 LOG.exception("Failed to delete server '%s': %s.", server.id,
                               str(e))
-            self.nova.servers.wait_for_delete(server.id)
 
         # We need to check the deletion is complete before deleting the
         # reservation inventory. See the bug #1813252 for details.
