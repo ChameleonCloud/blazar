@@ -297,7 +297,8 @@ class NetworkPlugin(base.BasePlugin):
             ports = neutron_client.list_ports(network_id=network_id)
             instance_ports = neutron_client.list_ports(
                 device_owner='compute:nova', network_id=network_id)
-            LOG.debug(f"{instance_ports}")
+            for instance_port in instance_ports['ports']:
+                nova_client.servers.wait_for_delete(instance_port['device_id'])
             subnets = neutron_client.list_subnets(network_id=network_id)
             subnet_ids = [s['id'] for s in subnets['subnets']]
 
