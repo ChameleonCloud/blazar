@@ -95,7 +95,7 @@ def _get_plugins():
     return plugins
 
 @retrying.retry(stop_max_delay=INSTANCE_DELETION_TIMEOUT,
-                    wait_fixed=5000,  # 5 seconds interval
+                    wait_fixed=2000,  # 2 seconds interval
                     retry_on_result=lambda x: x is False)
 def _check_server_deletion(server_id):
     nova_client =  nova.BlazarNovaClient(endpoint_override=CONF.nova.endpoint_override)
@@ -105,7 +105,6 @@ def _check_server_deletion(server_id):
         return True
     else:
         return False
-    return True
 
 class NetworkPlugin(base.BasePlugin):
     """Plugin for network resource."""
