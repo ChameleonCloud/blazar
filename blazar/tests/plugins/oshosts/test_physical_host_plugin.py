@@ -26,6 +26,7 @@ from oslo_config import fixture as conf_fixture
 import testtools
 
 from blazar import context
+from blazar import status
 from blazar.db import api as db_api
 from blazar.db import exceptions as db_exceptions
 from blazar.db import utils as db_utils
@@ -40,15 +41,6 @@ from blazar.utils.openstack import placement
 from blazar.utils import trusts
 
 CONF = cfg.CONF
-
-
-class AggregateFake(object):
-
-    def __init__(self, i, name, hosts):
-        self.id = i
-        self.name = name
-        self.hosts = hosts
-
 
 class PhysicalHostPluginSetupOnlyTestCase(tests.TestCase):
 
@@ -2780,3 +2772,35 @@ class PhysicalHostMonitorPluginTestCase(tests.TestCase):
             result = self.host_monitor_plugin.heal()
 
         self.assertEqual(reservation_flags, result)
+
+    def test_poll_resource_failures_aggregate_cleanup(self):
+        hosts = []
+        host_get_all = self.patch(db_api,
+                                  'host_get_all_by_filters')
+        host_get_all.return_value = hosts
+        reservations_get_all = self.patch(db_api,
+                                  'reservation_get_all_by_ids')
+        reservations = [{
+            'id': "aggregate-1",
+            'status': status.reservation.ERROR
+        },{
+            'id': "aggregate-2",
+            'status': status.reservation.ACTIVE
+        }]
+        reservations_get_all.return_value = reservations
+        host1 = mock.MagicMock(id=1, hosts=["host-1"])
+        host1.name = "aggregate-1"
+        host2 = mock.MagicMock(id=1, hosts=["host-2"])
+        host2.name = "aggregate-2"
+        freepool = mock.MagicMock(id=1, hosts=["host-3"])
+        freepool.name = "freepool"
+        aggregates = [host1, host2, freepool]
+        list_aggregates = self.patch(
+            self.host_monitor_plugin.nova.aggregates, 'list'
+        )
+        list_aggregates.return_value = aggregates
+        result = self.host_monitor_plugin.poll_resource_failures()
+        self.assertEqual(([], ["host-1"]), result)
+        freepool.add_host.assert_called_once_with('host-1')
+        host1.remove_host.assert_called_with('host-1')
+        host1.delete.assert_called_with()
