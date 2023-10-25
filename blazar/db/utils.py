@@ -152,6 +152,10 @@ def get_reservation_allocations_by_device_ids(device_ids, start_date, end_date,
         device_ids, start_date, end_date, lease_id, reservation_id)
 
 
+def get_recent_non_pending_reservation_by_host_id(host_id):
+    return IMPL.get_recent_non_pending_reservation_by_host_id(host_id)
+
+
 def get_plugin_reservation(resource_type, resource_id):
     return IMPL.get_plugin_reservation(resource_type, resource_id)
 

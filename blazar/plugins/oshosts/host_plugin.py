@@ -974,38 +974,41 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                                         if host['id'] in active_hv_ids])
 
             aggregates = self.nova.aggregates.list()
-            if aggregates:
-                freepool = next((agg for agg in aggregates if agg.name == "freepool"), None)
-                if not freepool:
-                    raise ValueError("Aggregate list does not contain a freepool!")
-                # Non-freepool aggregates are named after an associated reservation
-                res_ids = [agg.name for agg in aggregates if agg != freepool]
-                aggregate_reservations = {
-                    res["id"]: res for res in db_api.reservation_get_all_by_ids(res_ids)
-                }
-                for agg in aggregates:
-                    if agg == freepool:
-                        continue
-                    reservation = aggregate_reservations[agg.name]
-                    if reservation["status"] not in (status.reservation.ERROR, status.reservation.DELETED):
-                        # Any aggregates without an active reservation are the result of
-                        # a failed reservation teardown
-                        continue
-                    LOG.warning(
-                        f"Host aggregate for reservation {agg.name} failed to clean up."
-                    )
-                    for host in agg.hosts:
-                        try:
-                            # Remove the host from the reservation's aggregate
-                            agg.remove_host(host)
-                            # Return the host to the freepool
-                            freepool.add_host(host)
-                            recovered_hosts.append(host)
-                        except Exception as e:
-                            LOG.exception(f"Failed to recover host {host}", exc_info=e)
-                            failed_hosts.append(host)
-                    agg.delete()
-
+            # get all physical hosts
+            hosts = db_api.host_list()
+            pool = nova.ReservationPool()
+            freepool = pool.get_aggregate_from_name_or_id(pool.freepool_name)
+            if not freepool:
+                raise ValueError("Aggregate list does not contain a freepool!")
+            aggregates = self.nova.aggregates.list()
+            # create a map to get the current aggregate of a host in nova
+            host_to_agg_map = {host: agg.name for agg in aggregates for host in agg.hosts}
+            for host in hosts:
+                # get the most recent reservation for the host_id and check if we need to move to freepool
+                reservation = db_utils.get_recent_non_pending_reservation_by_host_id(host.id)
+                # an aggregate not in 'active' or 'pending' reservation should be in freepool
+                if reservation.status == status.reservation.ACTIVE:
+                    continue
+                host_uuid = host.hypervisor_hostname
+                curr_agg = host_to_agg_map.get(host.hypervisor_hostname)
+                if curr_agg and (curr_agg.name == freepool.name):
+                    # if the host is already in freepool skip it
+                    continue
+                try:
+                    # Remove the host from the reservation's aggregate
+                    if curr_agg:
+                        curr_agg.remove_host(host_uuid)
+                    # if the host is not in any aggregate and in non-active reservation
+                    # it should be moved to freepool
+                    freepool.add_host(host_uuid)
+                    recovered_hosts.append(host)
+                    hosts_in_agg = pool.get_computehosts(curr_agg)
+                    if not hosts_in_agg:
+                        # if there are no hosts in the aggregate
+                        curr_agg.delete()
+                except Exception as e:
+                    LOG.exception(f"Failed to recover host {host}", exc_info=e)
+                    failed_hosts.append(host)
         except Exception as e:
             LOG.exception('Skipping health check. %s', str(e))
 
