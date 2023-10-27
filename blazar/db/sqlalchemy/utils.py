@@ -15,7 +15,7 @@
 # under the License.
 
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from blazar.db.sqlalchemy import api
 from blazar.db.sqlalchemy import facade_wrapper
 from blazar.db.sqlalchemy import models
@@ -302,7 +302,7 @@ def get_recent_non_pending_reservation_by_host_id(host_id):
         host_id (): Host id - primary key of ComputeHost table
     """
     session = get_session()
-    curr_date = datetime.now()
+    curr_date = datetime.now() + timedelta(seconds=300)
     query = (
         session.query(
             models.ComputeHost.id.label('host_id'),

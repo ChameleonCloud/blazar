@@ -975,19 +975,18 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
 
             aggregates = self.nova.aggregates.list()
             # get all physical hosts
-            hosts = db_api.host_list()
+            all_hosts = db_api.host_list()
             pool = nova.ReservationPool()
             freepool = pool.get_aggregate_from_name_or_id(pool.freepool_name)
             if not freepool:
                 raise ValueError("Aggregate list does not contain a freepool!")
-            aggregates = self.nova.aggregates.list()
             # create a map to get the current aggregate of a host in nova
-            host_to_agg_map = {host: agg.name for agg in aggregates for host in agg.hosts}
-            for host in hosts:
+            host_to_agg_map = {host: agg for agg in aggregates for host in agg.hosts}
+            for host in all_hosts:
                 # get the most recent reservation for the host_id and check if we need to move to freepool
                 reservation = db_utils.get_recent_non_pending_reservation_by_host_id(host.id)
                 # an aggregate not in 'active' or 'pending' reservation should be in freepool
-                if reservation.status == status.reservation.ACTIVE:
+                if reservation and reservation.status == status.reservation.ACTIVE:
                     continue
                 host_uuid = host.hypervisor_hostname
                 curr_agg = host_to_agg_map.get(host.hypervisor_hostname)
@@ -998,14 +997,12 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                     # Remove the host from the reservation's aggregate
                     if curr_agg:
                         curr_agg.remove_host(host_uuid)
+                        hosts_in_agg = pool.get_computehosts(curr_agg)
+                        if not hosts_in_agg:
+                            curr_agg.delete()
                     # if the host is not in any aggregate and in non-active reservation
                     # it should be moved to freepool
                     freepool.add_host(host_uuid)
-                    recovered_hosts.append(host)
-                    hosts_in_agg = pool.get_computehosts(curr_agg)
-                    if not hosts_in_agg:
-                        # if there are no hosts in the aggregate
-                        curr_agg.delete()
                 except Exception as e:
                     LOG.exception(f"Failed to recover host {host}", exc_info=e)
                     failed_hosts.append(host)

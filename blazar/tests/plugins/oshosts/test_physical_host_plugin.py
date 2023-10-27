@@ -2774,33 +2774,60 @@ class PhysicalHostMonitorPluginTestCase(tests.TestCase):
         self.assertEqual(reservation_flags, result)
 
     def test_poll_resource_failures_aggregate_cleanup(self):
-        hosts = []
-        host_get_all = self.patch(db_api,
-                                  'host_get_all_by_filters')
-        host_get_all.return_value = hosts
-        reservations_get_all = self.patch(db_api,
-                                  'reservation_get_all_by_ids')
-        reservations = [{
-            'id': "aggregate-1",
-            'status': status.reservation.ERROR
-        },{
-            'id': "aggregate-2",
-            'status': status.reservation.ACTIVE
-        }]
-        reservations_get_all.return_value = reservations
-        host1 = mock.MagicMock(id=1, hosts=["host-1"])
-        host1.name = "aggregate-1"
-        host2 = mock.MagicMock(id=1, hosts=["host-2"])
-        host2.name = "aggregate-2"
-        freepool = mock.MagicMock(id=1, hosts=["host-3"])
-        freepool.name = "freepool"
-        aggregates = [host1, host2, freepool]
+        # Create a list of hosts
+        host_in_errored_res = mock.MagicMock(**{
+            'id': 1,
+            'hypervisor_hostname': 'host-1'
+        })
+        host_in_active_res = mock.MagicMock(**{
+            'id': 2,
+            'hypervisor_hostname': 'host-2'
+        })
+        host_in_freepool = mock.MagicMock(**{
+            'id': 3,
+            'hypervisor_hostname': 'host-3'
+        })
+
+        # Set up mock responses for the database and Nova
+        hosts_get_all = self.patch(db_api, 'host_get_all_by_filters')
+        hosts_get_all.return_value = []
+        hosts_list = self.patch(db_api, 'host_list')
+        hosts_list.return_value = [
+            host_in_errored_res,
+            host_in_active_res,
+            host_in_freepool,
+        ]
+        get_reservations = self.patch(db_utils, 'get_recent_non_pending_reservation_by_host_id')
+        get_reservations.side_effect = [
+            mock.MagicMock(**{'id': "aggregate-1", 'status': status.reservation.ERROR}),
+            mock.MagicMock(**{'id': "aggregate-2", 'status': status.reservation.ACTIVE}),
+            # if the host has no reservations, it should be moved to freepool
+            None
+        ]
+
+        # Create mock aggregate objects
+        aggregate1 = mock.MagicMock(id=1, hosts=[host_in_errored_res.hypervisor_hostname])
+        aggregate1.configure_mock(name="aggregate-1")
+        aggregate2 = mock.MagicMock(id=2, hosts=[host_in_active_res.hypervisor_hostname])
+        aggregate2.configure_mock(name="aggregate-2")
+        freepool = mock.MagicMock(id=3, hosts=[])
+        freepool.configure_mock(name="freepool")
+        freepool_get = self.patch(nova.ReservationPool, 'get_aggregate_from_name_or_id')
+        freepool_get.return_value = freepool
+        hosts_in_agg = self.patch(nova.ReservationPool, 'get_computehosts')
+        hosts_in_agg.return_value = None
+
         list_aggregates = self.patch(
             self.host_monitor_plugin.nova.aggregates, 'list'
         )
-        list_aggregates.return_value = aggregates
-        result = self.host_monitor_plugin.poll_resource_failures()
-        self.assertEqual(([], ["host-1"]), result)
-        freepool.add_host.assert_called_once_with('host-1')
-        host1.remove_host.assert_called_with('host-1')
-        host1.delete.assert_called_with()
+        list_aggregates.return_value = [aggregate1, aggregate2, freepool]
+        failed_hosts, recovered_hosts = self.host_monitor_plugin.poll_resource_failures()
+
+        self.assertEqual(failed_hosts, [])
+        self.assertEqual(recovered_hosts, [])
+        freepool.add_host.assert_has_calls([
+            mock.call(host_in_errored_res.hypervisor_hostname),
+            mock.call(host_in_freepool.hypervisor_hostname)
+        ])
+        aggregate1.remove_host.assert_called_with(host_in_errored_res.hypervisor_hostname)
+        aggregate1.delete.assert_called_with()
