@@ -132,11 +132,6 @@ def reservation_get_all_by_values(**kwargs):
 
 
 @to_dict
-def reservation_get_all_by_ids(ids):
-    return IMPL.reservation_get_all_by_ids(ids)
-
-
-@to_dict
 def reservation_get(reservation_id):
     """Return specific reservation."""
     return IMPL.reservation_get(reservation_id)

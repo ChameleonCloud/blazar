@@ -307,21 +307,13 @@ def get_recent_non_pending_reservation_by_host_id(host_id):
         session.query(
             models.ComputeHost.id.label('host_id'),
             models.ComputeHost.hypervisor_hostname,
-            models.Reservation.status,
+            models.Reservation.status.label('reservation_status'),
             models.Lease.start_date,
             models.Lease.end_date,
             models.ComputeHostReservation.aggregate_id,
-            models.Reservation.id.label('reservation_id'),
+            models.ComputeHostReservation.reservation_id,
         )
-        .join(models.ComputeHostAllocation)
-        .join(
-            models.Reservation,
-            models.ComputeHostAllocation.reservation_id == models.Reservation.id
-        )
-        .join(
-            models.Lease,
-            models.Reservation.lease_id == models.Lease.id
-        )
+        .join(models.Lease)
         .filter(models.ComputeHost.id == host_id)
         .filter(models.Lease.start_date < curr_date)
         .filter(models.Reservation.status != status.reservation.PENDING)
@@ -332,7 +324,7 @@ def get_recent_non_pending_reservation_by_host_id(host_id):
             models.Lease.start_date,
             models.Lease.end_date,
             models.ComputeHostReservation.aggregate_id,
-             models.Reservation.id,
+            models.ComputeHostReservation.reservation_id,
         )
         .order_by(models.Lease.start_date.desc())
     )

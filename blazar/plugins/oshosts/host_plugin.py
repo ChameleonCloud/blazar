@@ -984,23 +984,23 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                 raise ValueError("Aggregate list does not contain a freepool!")
             for host in all_hosts:
                 # get the most recent reservation for the host_id and check if we need to move to freepool
-                reservation = db_utils.get_recent_non_pending_reservation_by_host_id(host.id)
-                if reservation and reservation.status == status.reservation.ACTIVE:
-                    LOG.info(f"{host.hypervisor_hostname} is in a active reservation"
-                             f"{reservation.reservation_id}")
+                reservation = db_utils.get_recent_non_pending_reservation_by_host_id(host['id'])
+                if reservation and reservation["reservation_status"] == status.reservation.ACTIVE:
+                    LOG.info(f"{host['hypervisor_hostname']} is in a active reservation"
+                             f"{reservation['reservation_id']}")
                     continue
                 # host not in 'active' or 'pending' reservation should be in freepool
-                host_uuid = host.hypervisor_hostname
-                curr_agg = host_to_agg_map.get(host.hypervisor_hostname)
+                host_uuid = host['hypervisor_hostname']
+                curr_agg = host_to_agg_map.get(host['hypervisor_hostname'])
                 if curr_agg and (curr_agg.name == freepool.name):
                     # if the host is already in freepool skip it
-                    LOG.info(f"{host.hypervisor_hostname} is already in a freepool - skipping it")
+                    LOG.info(f"{host['hypervisor_hostname']} is already in a freepool - skipping it")
                     continue
                 try:
                     # Remove the host from the reservation's aggregate
                     if curr_agg:
-                        LOG.info(f"Removing host {host.hypervisor_name} from aggregate"
-                                 f"{curr_agg.name} - No hosts in it")
+                        LOG.info(f"Removing host {host['hypervisor_hostname']} from aggregate"
+                                 f" {curr_agg.name} - No hosts in it")
                         curr_agg.remove_host(host_uuid)
                         hosts_in_agg = pool.get_computehosts(curr_agg)
                         if not hosts_in_agg:
@@ -1008,7 +1008,7 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                             curr_agg.delete()
                     # if the host is not in any aggregate and in non-active reservation
                     # it should be moved to freepool
-                    LOG.info(f"Adding host {host.hypervisor_name} to freepool")
+                    LOG.info(f"Adding host {host['hypervisor_hostname']} to freepool")
                     freepool.add_host(host_uuid)
                 except Exception as e:
                     LOG.exception(f"Failed to recover host {host}", exc_info=e)
