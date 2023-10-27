@@ -311,6 +311,7 @@ def get_recent_non_pending_reservation_by_host_id(host_id):
             models.Lease.start_date,
             models.Lease.end_date,
             models.ComputeHostReservation.aggregate_id,
+            models.Reservation.id.label('reservation_id'),
         )
         .join(models.ComputeHostAllocation)
         .join(
@@ -331,6 +332,7 @@ def get_recent_non_pending_reservation_by_host_id(host_id):
             models.Lease.start_date,
             models.Lease.end_date,
             models.ComputeHostReservation.aggregate_id,
+             models.Reservation.id,
         )
         .order_by(models.Lease.start_date.desc())
     )
