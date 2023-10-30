@@ -325,11 +325,11 @@ class ReservationPool(NovaClientWrapper):
         hosts_failing_to_remove = []
         hosts_failing_to_add = []
         hosts_not_in_freepool = []
-        for host in hosts:
+        def process_host(host):
             if freepool_agg.id == agg.id:
                 if host not in freepool_agg.hosts:
                     hosts_not_in_freepool.append(host)
-                    continue
+                    return
             try:
                 self.nova.aggregates.remove_host(agg.id, host)
             except nova_exception.ClientException:
@@ -341,7 +341,8 @@ class ReservationPool(NovaClientWrapper):
                     self.nova.aggregates.add_host(freepool_agg.id, host)
                 except nova_exception.ClientException:
                     hosts_failing_to_add.append(host)
-
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            executor.map(process_host, hosts)
         if hosts_failing_to_remove:
             raise manager_exceptions.CantRemoveHost(
                 host=hosts_failing_to_remove, pool=agg)
