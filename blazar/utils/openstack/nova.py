@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import uuid as uuidgen
+import concurrent.futures
 
 from novaclient import client as nova_client
 from novaclient import exceptions as nova_exception
@@ -240,8 +241,8 @@ class ReservationPool(NovaClientWrapper):
         except manager_exceptions.AggregateNotFound:
             raise manager_exceptions.NoFreePool()
 
-        try:
-            for host in hosts:
+        def process_host(host):
+            try:
                 if freepool_agg.id != agg.id and not stay_in:
                     if host not in freepool_agg.hosts:
                         raise manager_exceptions.HostNotInFreePool(
@@ -279,7 +280,15 @@ class ReservationPool(NovaClientWrapper):
                     except Exception as e:
                         LOG.exception(
                             'Failed to delete %s: %s.', server, str(e))
+            except Exception as e:
+                LOG.exception('Error processing host %s: %s', host, str(e))
+                raise e
 
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            futures = executor.map(process_host, hosts)
+        try:
+            # exception will be raised when the value is retrieved from the iterator
+            results = list(futures)
         except Exception as e:
             if added_hosts:
                 LOG.warn('Removing hosts added to aggregate %s: %s',
