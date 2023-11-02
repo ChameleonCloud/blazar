@@ -25,7 +25,7 @@ from blazar.db import exceptions as db_ex
 from blazar.db import utils as db_utils
 from blazar import exceptions
 from blazar.manager import exceptions as manager_ex
-from blazar.plugins import base
+from blazar.plugins import base, monitor
 from blazar.plugins import floatingips as plugin
 from blazar import status
 from blazar.utils.openstack import neutron
@@ -43,7 +43,7 @@ CONF.register_opts(plugin_opts, group=plugin.RESOURCE_TYPE)
 LOG = logging.getLogger(__name__)
 
 QUERY_TYPE_ALLOCATION = 'allocation'
-
+MONITOR_ARGS = {"resource_type": plugin.RESOURCE_TYPE}
 
 class FloatingIpPlugin(base.BasePlugin):
     """Plugin for floating IP resource."""
@@ -54,6 +54,10 @@ class FloatingIpPlugin(base.BasePlugin):
     query_options = {
         QUERY_TYPE_ALLOCATION: ['lease_id', 'reservation_id']
     }
+
+    def __init__(self):
+        super(FloatingIpPlugin, self).__init__()
+        self.monitor = FloatingIpMonitorPlugin(**MONITOR_ARGS)
 
     def check_params(self, values):
         if 'network_id' not in values:
@@ -447,3 +451,80 @@ class FloatingIpPlugin(base.BasePlugin):
                         if k != 'floatingip_ids'})
 
         return fip_allocations
+
+
+class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClientWrapper):
+    """
+    Monitors reserved floating IPs which fail to clean up.
+    Deletes any floating IPs without an associated active reservation.
+    """
+
+    def __new__(cls, *args, **kwargs):
+        return super(FloatingIpMonitorPlugin, cls).__new__(cls, *args, **kwargs)
+
+    def filter_allocations(self, reservation, resource_ids):
+        return [alloc for alloc
+                in reservation["floatingip_allocations"]
+                if alloc["floating_ip_id"] in resource_ids]
+
+    def get_reservations_by_resource_ids(self, resource_ids,
+                                         interval_begin, interval_end):
+        return db_utils.get_reservations_by_floatingip_id(resource_ids,
+                                                          interval_begin,
+                                                          interval_end)
+
+    def get_unreservable_resourses(self):
+        return db_api.unreservable_fip_get_all_by_queries([])
+
+    def get_notification_event_types(self):
+        """Get event types of notification messages to handle."""
+        return ['service.update']
+
+    def notification_callback(self, event_type, payload):
+        return {}
+
+    def set_reservable(self, resource_id, is_reservable):
+        fip = db_api.floatingip_get(resource_id)
+        if fip is None:
+            raise manager_ex.FloatingIPNotFound(floatingip=resource_id)
+
+        try:
+            db_api.floatingip_destroy(resource_id)
+        except db_ex.BlazarDBException as e:
+            raise manager_ex.CantDeleteFloatingIP(floatingip=resource_id,
+                                                  msg=str(e))
+
+    def poll_resource_failures(self):
+        failed = []
+        recovered = []
+        fip_allocations = db_api.fip_allocation_get_all_by_values({})
+        fip_allocation_map = {fip_alloc["floatingip_id"]: fip_alloc for fip_alloc in fip_allocations}
+        fips = db_api.floatingip_list()
+        for fip in fips:
+            set_reservable = False
+            try:
+                fip_alloc = fip_allocation_map.get(fip['id'])
+                if fip_alloc:
+                    reservation = db_api.reservation_get(fip_alloc["reservation_id"])
+                    if reservation["status"] in [status.reservation.DELETED, status.reservation.ERROR]:
+                        set_reservable = True
+                        LOG.warning(
+                            f"Found floating IP {fip['id']} stuck in deleted lease. Recovering..."
+                        )
+                    else:
+                        # reservation status is active or pending, ignore it
+                        continue
+                else:
+                    # there is no allocation for the fip. The FIP should be reservable
+                    LOG.warning(
+                        f"Found floating IP {fip['id']} not in any lease. setting it as reservable..."
+                    )
+                    set_reservable = True
+                if set_reservable:
+                    self.set_reservable(fip["id"])
+                    recovered.append(fip)
+            except Exception as e:
+                LOG.error("Failed to recover floating IP from deleted reservation", exc_info=e)
+                failed.append(fip)
+        return failed, recovered
+

@@ -157,6 +157,21 @@ def get_reservations_by_device_ids(device_ids, start_date, end_date):
     return query.all()
 
 
+def get_reservations_by_floatingip_id(floatingip_id, start_date, end_date):
+    session = get_session()
+    border0 = sa.and_(models.Lease.start_date < start_date,
+                      models.Lease.end_date < start_date)
+    border1 = sa.and_(models.Lease.start_date > end_date,
+                      models.Lease.end_date > end_date)
+    query = (api.model_query(models.Reservation, session=session)
+             .join(models.Lease)
+             .join(models.FloatingIPAllocation)
+             .filter(models.FloatingIPAllocation.deleted.is_(None))
+             .filter(models.FloatingIPAllocation.floatingip_id == floatingip_id)
+             .filter(~sa.or_(border0, border1)))
+    return query.all()
+
+
 def get_reservations_for_allocations(session, start_date, end_date,
                                      lease_id=None, reservation_id=None):
     fields = ['id', 'status', 'lease_id', 'start_date',

@@ -520,6 +520,12 @@ def reservable_fip_get_all_by_queries(queries):
     return IMPL.reservable_fip_get_all_by_queries(queries)
 
 
+@to_dict
+def unreservable_fip_get_all_by_queries(queries):
+    """Returns unreservable floating IPs filtered by an array of queries."""
+    return IMPL.unreservable_fip_get_all_by_queries(queries)
+
+
 def floatingip_destroy(floatingip_id):
     """Delete specific floating ip."""
     IMPL.floatingip_destroy(floatingip_id)

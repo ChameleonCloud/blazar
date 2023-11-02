@@ -1160,6 +1160,12 @@ def reservable_fip_get_all_by_queries(queries):
     return fip_get_all_by_queries(queries)
 
 
+def unreservable_fip_get_all_by_queries(queries):
+    """Returns unreseravable fips filtered by an array of queries"""
+    queries.append("reservable == 0")
+    return fip_get_all_by_queries(queries)
+
+
 def floatingip_get(floatingip_id):
     return _floatingip_get(get_session(), floatingip_id)
 
