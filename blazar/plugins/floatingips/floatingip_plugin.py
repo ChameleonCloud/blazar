@@ -524,8 +524,12 @@ class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClien
             # get the reservation ID from neutron tags
             if 'tags' in fip_info_from_neutron:
                 tags = fip_info_from_neutron['tags']
-                reservation_tag = next((tags[i + 1] for i, tag in enumerate(tags) if tag == 'blazar'), None)
-                reservation_id_from_neutron = reservation_tag.replace("reservation:")
+                try:
+                    reservation_tag = next((tags[i + 1] for i, tag in enumerate(tags) if tag == 'blazar'), None)
+                    reservation_id_from_neutron = reservation_tag.replace("reservation:")
+                except Exception as e:
+                    LOG.error("Floating IP does not have 'blazar' tag in neutron", exc_info=e)
+                    raise e
                 reservation = db_api.reservation_get(reservation_id_from_neutron)
                 if reservation["status"] in [status.reservation.DELETED, status.reservation.ERROR]:
                     LOG.warning(
