@@ -122,3 +122,6 @@ class FloatingIPPool(BlazarNeutronClient):
             self.neutron.update_floatingip(fip['id'], body)
 
         self.neutron.delete_floatingip(fip['id'])
+
+    def show_floatingip(self, address):
+        return self.neutron.show_floatingip(address)

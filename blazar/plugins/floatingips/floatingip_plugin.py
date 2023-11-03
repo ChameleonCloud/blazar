@@ -13,6 +13,7 @@
 # under the License.
 
 import datetime
+import concurrent.futures
 
 from oslo_config import cfg
 from oslo_log import log as logging
@@ -30,6 +31,7 @@ from blazar.plugins import floatingips as plugin
 from blazar import status
 from blazar.utils.openstack import neutron
 from blazar.utils import plugins as plugins_utils
+from blazar.utils.openstack import exceptions
 
 plugin_opts = [
     cfg.BoolOpt('retry_allocation_without_defaults',
@@ -497,34 +499,42 @@ class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClien
     def poll_resource_failures(self):
         failed = []
         recovered = []
-        fip_allocations = db_api.fip_allocation_get_all_by_values({})
-        fip_allocation_map = {fip_alloc["floatingip_id"]: fip_alloc for fip_alloc in fip_allocations}
         fips = db_api.floatingip_list()
-        for fip in fips:
-            set_reservable = False
-            try:
-                fip_alloc = fip_allocation_map.get(fip['id'])
-                if fip_alloc:
-                    reservation = db_api.reservation_get(fip_alloc["reservation_id"])
-                    if reservation["status"] in [status.reservation.DELETED, status.reservation.ERROR]:
-                        set_reservable = True
-                        LOG.warning(
-                            f"Found floating IP {fip['id']} stuck in deleted lease. Recovering..."
-                        )
-                    else:
-                        # reservation status is active or pending, ignore it
-                        continue
-                else:
-                    # there is no allocation for the fip. The FIP should be reservable
-                    LOG.warning(
-                        f"Found floating IP {fip['id']} not in any lease. setting it as reservable..."
-                    )
-                    set_reservable = True
-                if set_reservable:
-                    self.set_reservable(fip["id"])
-                    recovered.append(fip)
-            except Exception as e:
-                LOG.error("Failed to recover floating IP from deleted reservation", exc_info=e)
-                failed.append(fip)
-        return failed, recovered
 
+        def process_fip(fip):
+            fip_address = fip["floating_ip_address"]
+            fip_pool = neutron.FloatingIPPool(fip['floating_network_id'])
+            # check if the FIP is in neutron subnet allocation pools
+            try:
+                subnet = fip_pool.fetch_subnet(fip_address)
+            except exceptions.NeutronUsesFloatingIP as e:
+                LOG.warn(f"Floating ip {fip_address} is in use by subnet pools", exc_info=True)
+                raise e
+            # if the FIP is not found in any subnet, no need to clean the FIP
+            except exceptions.FloatingIPSubnetNotFound as e:
+                LOG.warn(f"Floating ip {fip_address} is not found in any subnet", exc_info=True)
+                raise e
+            # get the floating IP reservation ID from neutron
+            try:
+                fip_info_from_neutron = fip_pool.show_floatingip(fip["floating_ip_address"])
+            except Exception as e:
+                LOG.error("Error getting Floating IP from neutron", exc_info=e)
+                failed.append(fip["id"])
+                raise e
+            # get the reservation ID from neutron tags
+            if 'tags' in fip_info_from_neutron:
+                tags = fip_info_from_neutron['tags']
+                reservation_tag = next((tags[i + 1] for i, tag in enumerate(tags) if tag == 'blazar'), None)
+                reservation_id_from_neutron = reservation_tag.replace("reservation:")
+                reservation = db_api.reservation_get(reservation_id_from_neutron)
+                if reservation["status"] in [status.reservation.DELETED, status.reservation.ERROR]:
+                    LOG.warning(
+                        f"Found floating IP {fip['id']} stuck in deleted lease. Recovering..."
+                    )
+                    fip_pool.delete_reserved_floatingip(fip_address)
+                    recovered.append(fip["id"])
+            else:
+                LOG.info(f"{fip_address} does not have reservation tags in neutron")
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            executor.map(process_fip, fips)
+        return failed, recovered
