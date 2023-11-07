@@ -40,6 +40,8 @@ plugin_opts = [
                      'without the default properties'),
 ]
 
+plugin_opts.extend(monitor.monitor_opts)
+
 CONF = cfg.CONF
 CONF.register_opts(plugin_opts, group=plugin.RESOURCE_TYPE)
 LOG = logging.getLogger(__name__)
