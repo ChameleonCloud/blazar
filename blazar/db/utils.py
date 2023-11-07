@@ -125,8 +125,8 @@ def get_reservations_by_device_ids(device_ids, start_date, end_date):
                                                end_date)
 
 
-def get_reservations_by_floatingip_id(floatingip_id, start_date, end_date):
-    return IMPL.get_reservations_by_floatingip_id(
+def get_reservations_by_floatingip_ids(floatingip_id, start_date, end_date):
+    return IMPL.get_reservations_by_floatingip_ids(
         floatingip_id, start_date, end_date)
 
 

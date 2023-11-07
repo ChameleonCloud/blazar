@@ -473,7 +473,7 @@ class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClien
 
     def get_reservations_by_resource_ids(self, resource_ids,
                                          interval_begin, interval_end):
-        return db_utils.get_reservations_by_floatingip_id(resource_ids,
+        return db_utils.get_reservations_by_floatingip_ids(resource_ids,
                                                           interval_begin,
                                                           interval_end)
 
