@@ -16,6 +16,7 @@ import datetime
 from unittest import mock
 
 from oslo_config import cfg
+from oslo_config import fixture as conf_fixture
 
 from blazar import context
 from blazar.db import api as db_api
@@ -24,10 +25,10 @@ from blazar.manager import exceptions as mgr_exceptions
 from blazar.plugins import floatingips as plugin
 from blazar.plugins.floatingips import floatingip_plugin
 from blazar import tests
-from blazar.utils.openstack import exceptions as opst_exceptions
+from blazar.utils.openstack import exceptions as utils_exceptions
 from blazar.utils.openstack import neutron
+from blazar.utils.openstack import base
 from blazar import status
-
 
 CONF = cfg.CONF
 
@@ -78,11 +79,11 @@ class FloatingIpPluginTest(tests.TestCase):
 
     def test_create_floatingip_with_invalid_ip(self):
         m = mock.MagicMock()
-        m.fetch_subnet.side_effect = opst_exceptions.NeutronUsesFloatingIP()
+        m.fetch_subnet.side_effect = utils_exceptions.NeutronUsesFloatingIP()
         self.fip_pool.return_value = m
 
         fip_plugin = floatingip_plugin.FloatingIpPlugin()
-        self.assertRaises(opst_exceptions.NeutronUsesFloatingIP,
+        self.assertRaises(utils_exceptions.NeutronUsesFloatingIP,
                           fip_plugin.create_floatingip,
                           {'floating_ip_address': 'invalid-ip',
                            'floating_network_id': 'id'})
@@ -928,3 +929,124 @@ class FloatingIpPluginTest(tests.TestCase):
                           'network-id', [], 2,
                           datetime.datetime(2013, 12, 19, 20, 0),
                           datetime.datetime(2013, 12, 19, 21, 0))
+
+
+class FloatingIpMonitorPluginTestCase(tests.TestCase):
+
+    def setUp(self):
+        super(FloatingIpMonitorPluginTestCase, self).setUp()
+        self.db_api = db_api
+        self.db_utils = db_utils
+        self.fip_monitor_plugin = floatingip_plugin.FloatingIpMonitorPlugin()
+
+    def test_poll_fip_with_fip_in_pool(self):
+        def fake_fetch_subnet(*args, **kwargs):
+            raise utils_exceptions.NeutronUsesFloatingIP(floatingip="1", subnet="2")
+
+        fips = [
+            {'id': '1',
+             'floating_network_id': 'network1',
+             'floating_ip_address': "10.10.10.1"},
+            {'id': '2',
+             'floating_network_id': 'network2',
+             'floating_ip_address': "10.10.10.2"},
+        ]
+
+        fip_list = self.patch(db_api, 'floatingip_list')
+        fip_list.return_value = fips
+        neutron_client_patch = self.patch(neutron.neutron_client.Client, 'show_network')
+        neutron_client_patch.show_network.return_value = {"subnets": "1"}
+        fetch_subnet = self.patch(neutron.FloatingIPPool, 'fetch_subnet')
+        fetch_subnet.side_effect = fake_fetch_subnet
+        result = self.fip_monitor_plugin.poll_resource_failures()
+        self.assertEqual(result, ([], []))
+
+    def test_poll_fip_without_reservation_tags(self):
+        def fake_fetch_subnet(*args, **kwargs):
+            return
+        def fake_get_reservation(res_id):
+            return {
+                'status': status.reservation.DELETED
+            }
+        def fake_show_fip(fip_addr):
+            if fip_addr == "1":
+                return {
+                    'tags':[
+                        'blazar',
+                        f'reservation:{fip_addr}'
+                    ]
+                }
+            else:
+                return {'tags':[]}
+
+        fips = [
+            {'id': '1',
+             'floating_network_id': 'network1',
+             'floating_ip_address': "1"},
+            {'id': '2',
+             'floating_network_id': 'network2',
+             'floating_ip_address': "2"},
+        ]
+
+        fip_list = self.patch(db_api, 'floatingip_list')
+        fip_list.return_value = fips
+        neutron_client_patch = self.patch(neutron.neutron_client.Client, 'show_network')
+        neutron_client_patch.show_network.return_value = {"subnets": "1"}
+        fetch_subnet = self.patch(neutron.FloatingIPPool, 'fetch_subnet')
+        fetch_subnet.side_effect = fake_fetch_subnet
+        show_fip_patch = self.patch(neutron.FloatingIPPool, 'show_floatingip')
+        show_fip_patch.side_effect = fake_show_fip
+        fip_reservation_get_patch = self.patch(db_api, 'reservation_get')
+        fip_reservation_get_patch.side_effect = fake_get_reservation
+        delete_reserved_patch = self.patch(neutron.FloatingIPPool, 'delete_reserved_floatingip')
+
+        result = self.fip_monitor_plugin.poll_resource_failures()
+        self.assertTrue(delete_reserved_patch.called)
+        self.assertEqual(result, (["2"], ["1"]))
+
+
+    def test_poll_fip_with_reservation_status_deleted(self):
+        def fake_fetch_subnet(*args, **kwargs):
+            return
+        def fake_get_reservation(res_id):
+            if res_id == "1":
+                return {
+                    'status': status.reservation.DELETED
+                }
+            elif res_id == "2":
+                return {
+                    'status': status.reservation.ACTIVE
+                }
+            return
+        def fake_show_fip(fip_addr):
+            return {
+                'tags':[
+                    'blazar',
+                    f'reservation:{fip_addr}'
+                ]
+            }
+
+        fips = [
+            {'id': '1',
+             'floating_network_id': 'network1',
+             'floating_ip_address': "1"},
+            {'id': '2',
+             'floating_network_id': 'network2',
+             'floating_ip_address': "2"},
+        ]
+
+        fip_list = self.patch(db_api, 'floatingip_list')
+        fip_list.return_value = fips
+        neutron_client_patch = self.patch(neutron.neutron_client.Client, 'show_network')
+        neutron_client_patch.show_network.return_value = {"subnets": "1"}
+        fetch_subnet = self.patch(neutron.FloatingIPPool, 'fetch_subnet')
+        fetch_subnet.side_effect = fake_fetch_subnet
+        show_fip_patch = self.patch(neutron.FloatingIPPool, 'show_floatingip')
+        show_fip_patch.side_effect = fake_show_fip
+        fip_reservation_get_patch = self.patch(db_api, 'reservation_get')
+        fip_reservation_get_patch.side_effect = fake_get_reservation
+        delete_reserved_patch = self.patch(neutron.FloatingIPPool, 'delete_reserved_floatingip')
+
+        result = self.fip_monitor_plugin.poll_resource_failures()
+        self.assertTrue(delete_reserved_patch.called)
+        self.assertEqual(result, ([], ["1"]))
