@@ -296,8 +296,7 @@ def get_reservation_allocations_by_device_ids(device_ids, start_date, end_date,
 
 def get_most_recent_reservation_info_by_host_id(host_id):
     """returns the recent host reservation which not in
-    pending or active status and start_date of the reservation
-    is less than current date
+    pending status and start_date of the reservation is less than current date
 
     Args:
         host_id (): Host id - primary key of ComputeHost table
@@ -317,9 +316,7 @@ def get_most_recent_reservation_info_by_host_id(host_id):
         .join(models.Lease)
         .filter(models.ComputeHost.id == host_id)
         .filter(models.Lease.start_date < curr_date)
-        .filter(models.Reservation.status.not_in(
-            [status.reservation.PENDING, status.reservation.ACTIVE]
-        ))
+        .filter(models.Reservation.status != status.reservation.PENDING)
         .group_by(
             models.ComputeHost.id,
             models.ComputeHost.hypervisor_hostname,

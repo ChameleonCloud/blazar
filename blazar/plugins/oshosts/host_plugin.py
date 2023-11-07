@@ -985,6 +985,7 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
             for host in all_hosts:
                 # get the most recent reservation for the host_id and check if we need to move to freepool
                 reservation = db_utils.get_most_recent_reservation_info_by_host_id(host['id'])
+                # ignore the reservation which is active, as the host must already be in the right pool
                 if reservation and reservation["reservation_status"] == status.reservation.ACTIVE:
                     LOG.info(f"{host['hypervisor_hostname']} is in a active reservation"
                              f"{reservation['reservation_id']}")
