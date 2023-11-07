@@ -15,13 +15,14 @@
 # under the License.
 
 import sys
-
+from datetime import datetime, timedelta
 from blazar.db.sqlalchemy import api
 from blazar.db.sqlalchemy import facade_wrapper
 from blazar.db.sqlalchemy import models
 from blazar.manager import exceptions as mgr_exceptions
 from blazar.plugins import instances as instance_plugin
 from blazar.plugins import oshosts as host_plugin
+from blazar import status
 from collections import defaultdict
 import sqlalchemy as sa
 
@@ -291,6 +292,46 @@ def get_reservation_allocations_by_device_ids(device_ids, start_date, end_date,
         r['device_ids'] = allocations[r['id']]
 
     return reservations
+
+
+def get_most_recent_reservation_info_by_host_id(host_id):
+    """returns the recent host reservation which not in
+    pending or active status and start_date of the reservation
+    is less than current date
+
+    Args:
+        host_id (): Host id - primary key of ComputeHost table
+    """
+    session = get_session()
+    curr_date = datetime.now() + timedelta(seconds=300)
+    query = (
+        session.query(
+            models.ComputeHost.id.label('host_id'),
+            models.ComputeHost.hypervisor_hostname,
+            models.Reservation.status.label('reservation_status'),
+            models.Lease.start_date,
+            models.Lease.end_date,
+            models.ComputeHostReservation.aggregate_id,
+            models.ComputeHostReservation.reservation_id,
+        )
+        .join(models.Lease)
+        .filter(models.ComputeHost.id == host_id)
+        .filter(models.Lease.start_date < curr_date)
+        .filter(models.Reservation.status.not_in(
+            [status.reservation.PENDING, status.reservation.ACTIVE]
+        ))
+        .group_by(
+            models.ComputeHost.id,
+            models.ComputeHost.hypervisor_hostname,
+            models.Reservation.status,
+            models.Lease.start_date,
+            models.Lease.end_date,
+            models.ComputeHostReservation.aggregate_id,
+            models.ComputeHostReservation.reservation_id,
+        )
+        .order_by(models.Lease.start_date.desc())
+    )
+    return query.first()
 
 
 def get_user_ids_for_lease_ids(lease_ids):
