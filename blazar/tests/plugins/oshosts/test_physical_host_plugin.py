@@ -2797,7 +2797,7 @@ class PhysicalHostMonitorPluginTestCase(tests.TestCase):
             host_in_active_res,
             host_in_freepool,
         ]
-        get_reservations = self.patch(db_utils, 'get_recent_non_pending_reservation_by_host_id')
+        get_reservations = self.patch(db_utils, 'get_most_recent_reservation_info_by_host_id')
         get_reservations.side_effect = [
             {'id': "aggregate-1", 'reservation_status': status.reservation.ERROR, 'reservation_id': 1},
             {'id': "aggregate-2", 'reservation_status': status.reservation.ACTIVE, 'reservation_id': 2},

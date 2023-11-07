@@ -984,7 +984,7 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                 raise ValueError("Aggregate list does not contain a freepool!")
             for host in all_hosts:
                 # get the most recent reservation for the host_id and check if we need to move to freepool
-                reservation = db_utils.get_recent_non_pending_reservation_by_host_id(host['id'])
+                reservation = db_utils.get_most_recent_reservation_info_by_host_id(host['id'])
                 if reservation and reservation["reservation_status"] == status.reservation.ACTIVE:
                     LOG.info(f"{host['hypervisor_hostname']} is in a active reservation"
                              f"{reservation['reservation_id']}")
