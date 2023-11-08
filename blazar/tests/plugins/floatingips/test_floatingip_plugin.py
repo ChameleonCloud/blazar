@@ -954,6 +954,11 @@ class FloatingIpMonitorPluginTestCase(tests.TestCase):
 
         fip_list = self.patch(db_api, 'floatingip_list')
         fip_list.return_value = fips
+        get_reservations = self.patch(db_utils, 'get_most_recent_reservation_info_by_fip_id')
+        get_reservations.side_effect = [
+            {'id': "1", 'status': status.reservation.ERROR},
+            {'id': "2", 'status': status.reservation.ERROR}
+        ]
         neutron_client_patch = self.patch(neutron.neutron_client.Client, 'show_network')
         neutron_client_patch.show_network.return_value = {"subnets": "1"}
         fetch_subnet = self.patch(neutron.FloatingIPPool, 'fetch_subnet')
@@ -990,6 +995,11 @@ class FloatingIpMonitorPluginTestCase(tests.TestCase):
 
         fip_list = self.patch(db_api, 'floatingip_list')
         fip_list.return_value = fips
+        get_reservations = self.patch(db_utils, 'get_most_recent_reservation_info_by_fip_id')
+        get_reservations.side_effect = [
+            {'id': "1", 'status': status.reservation.ERROR},
+            {'id': "2", 'status': status.reservation.ACTIVE}
+        ]
         neutron_client_patch = self.patch(neutron.neutron_client.Client, 'show_network')
         neutron_client_patch.show_network.return_value = {"subnets": "1"}
         fetch_subnet = self.patch(neutron.FloatingIPPool, 'fetch_subnet')
@@ -1037,6 +1047,11 @@ class FloatingIpMonitorPluginTestCase(tests.TestCase):
 
         fip_list = self.patch(db_api, 'floatingip_list')
         fip_list.return_value = fips
+        get_reservations = self.patch(db_utils, 'get_most_recent_reservation_info_by_fip_id')
+        get_reservations.side_effect = [
+            {'id': "1", 'status': status.reservation.ERROR},
+            {'id': "2", 'status': status.reservation.ACTIVE}
+        ]
         neutron_client_patch = self.patch(neutron.neutron_client.Client, 'show_network')
         neutron_client_patch.show_network.return_value = {"subnets": "1"}
         fetch_subnet = self.patch(neutron.FloatingIPPool, 'fetch_subnet')

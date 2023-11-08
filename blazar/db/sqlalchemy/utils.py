@@ -321,7 +321,11 @@ def get_most_recent_reservation_info_by_host_id(host_id):
     query = (
         session.query(
             models.ComputeHost.id.label('host_id'),
-            models.Reservation.status.label('reservation_status'),
+            models.ComputeHost.hypervisor_hostname,
+            models.Reservation.status.label('status'),
+            models.Lease.start_date,
+            models.Lease.end_date,
+            models.ComputeHostReservation.aggregate_id,
             models.ComputeHostReservation.reservation_id,
         )
         .filter(models.ComputeHost.id == host_id)
@@ -367,7 +371,6 @@ def get_most_recent_reservation_info_by_fip_id(fip_id):
             models.FloatingIPReservation.reservation_id,
         )
         .join(models.Lease)
-        .join(models.Reservation)
         .join(models.FloatingIPReservation)
         .join(models.FloatingIPAllocation)
         .filter(models.Lease.start_date < curr_date)
