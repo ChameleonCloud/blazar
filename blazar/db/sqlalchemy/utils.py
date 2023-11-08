@@ -348,6 +348,41 @@ def get_most_recent_reservation_info_by_host_id(host_id):
     return query.first()
 
 
+def get_most_recent_reservation_info_by_fip_id(fip_id):
+    """returns the recent FIP reservation which not in
+    pending status and start_date of the reservation is less than current date
+
+    Args:
+        host_id (): Host id - primary key of ComputeHost table
+    """
+    session = get_session()
+    curr_date = datetime.now() + timedelta(seconds=300)
+    query = (
+        session.query(
+            models.FloatingIP.id.label('fip_id'),
+            models.FloatingIP.floating_ip_address,
+            models.Reservation.status.label('reservation_status'),
+            models.Lease.start_date,
+            models.Lease.end_date,
+            models.FloatingIPReservation.reservation_id,
+        )
+        .join(models.Lease)
+        .join(models.Reservation)
+        .join(models.FloatingIPReservation)
+        .join(models.FloatingIPAllocation)
+        .filter(models.Lease.start_date < curr_date)
+        .filter(models.Reservation.status != status.reservation.PENDING)
+        .group_by(
+            models.FloatingIP.id,
+            models.Reservation.status,
+            models.Lease.start_date,
+            models.Lease.end_date,
+        )
+        .order_by(models.Lease.start_date.desc())
+    )
+    return query.first()
+
+
 def get_user_ids_for_lease_ids(lease_ids):
     session = get_session()
 

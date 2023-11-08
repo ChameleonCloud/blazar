@@ -499,18 +499,23 @@ class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClien
 
         def process_fip(fip):
             fip_address = fip["floating_ip_address"]
+            fip_curr_reservation = db_utils.get_most_recent_reservation_info_by_fip_id(fip['id'])
+            LOG.info(f"current reservation for {fip_address} is {fip_curr_reservation}")
+            if fip_curr_reservation['status'] == status.reservation.ACTIVE:
+                # This means that FIP works fine and no need to recover
+                return
             fip_pool = neutron.FloatingIPPool(fip['floating_network_id'])
             # check if the FIP is in neutron subnet allocation pools
             try:
                 subnet = fip_pool.fetch_subnet(fip_address)
             # if the FIP is in neutron allocation pools, make the FIP not reservable
             except utils_exceptions.NeutronUsesFloatingIP as e:
-                LOG.warn(f"Floating ip {fip_address} is in use by subnet pools", exc_info=True)
+                LOG.warn(f"Failed: Floating ip {fip_address} is in use by subnet pools")
                 failed.append(fip)
                 return
             # if the FIP is not found in any subnet, it can be reserved
             except utils_exceptions.FloatingIPSubnetNotFound as e:
-                LOG.warn(f"Floating ip {fip_address} is not found in any subnet", exc_info=True)
+                LOG.warn(f"Floating ip {fip_address} is not found in any subnet, recovering...")
                 recovered.append(fip)
                 return
             # get the floating IP reservation ID from neutron
@@ -518,7 +523,7 @@ class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClien
                 fip_info_from_neutron = fip_pool.show_floatingip(fip["floating_ip_address"])
             except Exception as e:
                 # If the FIP is not registered in neutron that means there is no reservation for this IP
-                LOG.error("Error getting Floating IP from neutron", exc_info=e)
+                LOG.error("Error getting Floating IP from neutron - {e}, recovering...")
                 recovered.append(fip)
                 return
             # get the reservation ID from neutron tags
