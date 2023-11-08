@@ -503,12 +503,15 @@ class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClien
             # check if the FIP is in neutron subnet allocation pools
             try:
                 subnet = fip_pool.fetch_subnet(fip_address)
+            # if the FIP is in neutron allocation pools, make the FIP not reservable
             except utils_exceptions.NeutronUsesFloatingIP as e:
                 LOG.warn(f"Floating ip {fip_address} is in use by subnet pools", exc_info=True)
+                failed.append(fip)
                 return
-            # if the FIP is not found in any subnet, no need to clean the FIP
+            # if the FIP is not found in any subnet, it can be reserved
             except utils_exceptions.FloatingIPSubnetNotFound as e:
                 LOG.warn(f"Floating ip {fip_address} is not found in any subnet", exc_info=True)
+                recovered.append(fip)
                 return
             # get the floating IP reservation ID from neutron
             try:
@@ -516,6 +519,7 @@ class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClien
             except Exception as e:
                 # If the FIP is not registered in neutron that means there is no reservation for this IP
                 LOG.error("Error getting Floating IP from neutron", exc_info=e)
+                recovered.append(fip)
                 return
             # get the reservation ID from neutron tags
             if 'tags' in fip_info_from_neutron:
@@ -524,18 +528,19 @@ class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClien
                     reservation_tag = next((tags[i + 1] for i, tag in enumerate(tags) if tag == 'blazar'), None)
                     reservation_id_from_neutron = reservation_tag.replace("reservation:", "")
                 except Exception as e:
-                    LOG.error("Floating IP does not have 'blazar' tag in neutron", exc_info=e)
+                    LOG.warn("Floating IP does not have 'blazar' tag in neutron", exc_info=e)
                     return
                 reservation = db_api.reservation_get(reservation_id_from_neutron)
                 if reservation["status"] in [status.reservation.DELETED, status.reservation.ERROR]:
                     LOG.warning(
                         f"Found floating IP {fip['id']} stuck in deleted lease. Recovering..."
                     )
-                    # delete the FIP in neutron, so new leases for this FIP can be created
+                    LOG.info(f"Deleting {fip_address} from neutron and setting it as reservable in blazar")
                     fip_pool.delete_reserved_floatingip(fip_address)
-                    recovered.append(fip["id"])
+                    recovered.append(fip)
             else:
-                LOG.info(f"{fip_address} does not have reservation tags in neutron")
+                LOG.warn(f"{fip_address} does not have reservation tags in neutron")
+
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = executor.map(process_fip, fips)
         try:
