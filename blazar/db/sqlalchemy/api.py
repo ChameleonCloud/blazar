@@ -1203,6 +1203,16 @@ def floatingip_destroy(floatingip_id):
         floatingip.soft_delete(session=session)
 
 
+def floatingip_update(fip_id, values):
+    session = get_session()
+
+    with session.begin():
+        fip = _floatingip_get(session, fip_id)
+        fip.update(values)
+        fip.save(session=session)
+
+    return floatingip_get(fip_id)
+
 # Networks
 
 def _network_get(session, network_id):

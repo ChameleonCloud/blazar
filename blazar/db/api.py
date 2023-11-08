@@ -531,6 +531,12 @@ def floatingip_destroy(floatingip_id):
     IMPL.floatingip_destroy(floatingip_id)
 
 
+@to_dict
+def floatingip_update(floatingip_id):
+    """Update specific floating ip."""
+    IMPL.floatingip_update(floatingip_id)
+
+
 # Networks
 
 def network_create(values):

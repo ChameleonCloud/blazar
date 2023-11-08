@@ -487,16 +487,10 @@ class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClien
     def notification_callback(self, event_type, payload):
         return {}
 
-    def set_reservable(self, resource_id, is_reservable):
-        fip = db_api.floatingip_get(resource_id)
-        if fip is None:
-            raise manager_ex.FloatingIPNotFound(floatingip=resource_id)
-
-        try:
-            db_api.floatingip_destroy(resource_id)
-        except db_ex.BlazarDBException as e:
-            raise manager_ex.CantDeleteFloatingIP(floatingip=resource_id,
-                                                  msg=str(e))
+    def set_reservable(self, resource, is_reservable):
+        db_api.floatingip_update(resource["id"], {"reservable": is_reservable})
+        LOG.warn('%s %s.', resource["floating_ip_address"],
+                 "recovered" if is_reservable else "failed")
 
     def poll_resource_failures(self):
         failed = []
@@ -515,14 +509,13 @@ class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClien
             # if the FIP is not found in any subnet, no need to clean the FIP
             except utils_exceptions.FloatingIPSubnetNotFound as e:
                 LOG.warn(f"Floating ip {fip_address} is not found in any subnet", exc_info=True)
-                failed.append(fip["id"])
                 return
             # get the floating IP reservation ID from neutron
             try:
                 fip_info_from_neutron = fip_pool.show_floatingip(fip["floating_ip_address"])
             except Exception as e:
+                # If the FIP is not registered in neutron that means there is no reservation for this IP
                 LOG.error("Error getting Floating IP from neutron", exc_info=e)
-                failed.append(fip["id"])
                 return
             # get the reservation ID from neutron tags
             if 'tags' in fip_info_from_neutron:
@@ -532,13 +525,13 @@ class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClien
                     reservation_id_from_neutron = reservation_tag.replace("reservation:", "")
                 except Exception as e:
                     LOG.error("Floating IP does not have 'blazar' tag in neutron", exc_info=e)
-                    failed.append(fip["id"])
                     return
                 reservation = db_api.reservation_get(reservation_id_from_neutron)
                 if reservation["status"] in [status.reservation.DELETED, status.reservation.ERROR]:
                     LOG.warning(
                         f"Found floating IP {fip['id']} stuck in deleted lease. Recovering..."
                     )
+                    # delete the FIP in neutron, so new leases for this FIP can be created
                     fip_pool.delete_reserved_floatingip(fip_address)
                     recovered.append(fip["id"])
             else:
