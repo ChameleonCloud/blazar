@@ -25,6 +25,8 @@ from blazar.plugins import oshosts as host_plugin
 from blazar import status
 from collections import defaultdict
 import sqlalchemy as sa
+from oslo_log import log as logging
+LOG = logging.getLogger(__name__)
 
 
 get_session = facade_wrapper.get_session
@@ -322,7 +324,7 @@ def get_most_recent_reservation_info_by_host_id(host_id):
         session.query(
             models.ComputeHost.id.label('host_id'),
             models.ComputeHost.hypervisor_hostname,
-            models.Reservation.status.label('status'),
+            models.Reservation.status.label('reservation_status'),
             models.Lease.start_date,
             models.Lease.end_date,
             models.ComputeHostReservation.aggregate_id,
@@ -365,24 +367,26 @@ def get_most_recent_reservation_info_by_fip_id(fip_id):
         session.query(
             models.FloatingIP.id.label('fip_id'),
             models.FloatingIP.floating_ip_address,
-            models.Reservation.status.label('reservation_status'),
+            models.Reservation.status.label('status'),
             models.Lease.start_date,
             models.Lease.end_date,
-            models.FloatingIPReservation.reservation_id,
+            models.Reservation.id,
         )
         .join(models.Lease)
-        .join(models.FloatingIPReservation)
         .join(models.FloatingIPAllocation)
+        .filter(models.FloatingIP.id == fip_id)
         .filter(models.Lease.start_date < curr_date)
         .filter(models.Reservation.status != status.reservation.PENDING)
         .group_by(
             models.FloatingIP.id,
+            models.FloatingIPAllocation.reservation_id,
             models.Reservation.status,
             models.Lease.start_date,
             models.Lease.end_date,
         )
         .order_by(models.Lease.start_date.desc())
     )
+    LOG.info(f"the sql query is {str(query)}")
     return query.first()
 
 
