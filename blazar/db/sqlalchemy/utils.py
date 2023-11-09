@@ -367,23 +367,26 @@ def get_most_recent_reservation_info_by_fip_id(fip_id):
         session.query(
             models.FloatingIP.id.label('fip_id'),
             models.FloatingIP.floating_ip_address,
-            models.Reservation.status.label('status'),
             models.Lease.start_date,
             models.Lease.end_date,
+            models.Reservation.status.label('status'),
             models.Reservation.id,
         )
-        .join(models.Lease)
-        .join(models.FloatingIPAllocation)
         .filter(models.FloatingIP.id == fip_id)
+        .join(
+            models.FloatingIPAllocation,
+            models.FloatingIPAllocation.floatingip_id == models.FloatingIP.id
+        )
+        .join(
+            models.Reservation,
+            models.Reservation.id == models.FloatingIPAllocation.reservation_id
+        )
+        .join(
+            models.Lease,
+            models.Lease.id == models.Reservation.lease_id
+        )
         .filter(models.Lease.start_date < curr_date)
         .filter(models.Reservation.status != status.reservation.PENDING)
-        .group_by(
-            models.FloatingIP.id,
-            models.FloatingIPAllocation.reservation_id,
-            models.Reservation.status,
-            models.Lease.start_date,
-            models.Lease.end_date,
-        )
         .order_by(models.Lease.start_date.desc())
     )
     LOG.info(f"the sql query is {str(query)}")

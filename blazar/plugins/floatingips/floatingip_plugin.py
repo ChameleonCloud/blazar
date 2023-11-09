@@ -500,8 +500,8 @@ class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClien
         def process_fip(fip):
             fip_address = fip["floating_ip_address"]
             fip_curr_reservation = db_utils.get_most_recent_reservation_info_by_fip_id(fip['id'])
-            LOG.info(f"current reservation for {fip_address} is {fip_curr_reservation}")
-            if fip_curr_reservation['status'] == status.reservation.ACTIVE:
+            LOG.info(f"current reservation for {fip_address} with ID {fip['id']} is {fip_curr_reservation}")
+            if fip_curr_reservation and fip_curr_reservation and fip_curr_reservation['status'] == status.reservation.ACTIVE:
                 # This means that FIP works fine and no need to recover
                 return
             fip_pool = neutron.FloatingIPPool(fip['floating_network_id'])
