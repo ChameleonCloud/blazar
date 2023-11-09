@@ -305,27 +305,28 @@ def get_most_recent_reservation_info_by_host_id(host_id):
     curr_date = datetime.now() + timedelta(seconds=300)
     query = (
         session.query(
-            models.ComputeHost.id.label('host_id'),
-            models.ComputeHost.hypervisor_hostname,
             models.Reservation.status.label('reservation_status'),
-            models.Lease.start_date,
-            models.Lease.end_date,
-            models.ComputeHostReservation.aggregate_id,
             models.ComputeHostReservation.reservation_id,
         )
-        .join(models.Lease)
         .filter(models.ComputeHost.id == host_id)
+        .join(
+            models.ComputeHostAllocation,
+            models.ComputeHostAllocation.compute_host_id == models.ComputeHost.id
+        )
+        .join(
+            models.ComputeHostReservation,
+            models.ComputeHostReservation.reservation_id == models.ComputeHostAllocation.reservation_id
+        )
+        .join(
+            models.Reservation,
+            models.Reservation.id == models.ComputeHostReservation.reservation_id
+        )
+        .join(
+            models.Lease,
+            models.Lease.id == models.Reservation.lease_id
+        )
         .filter(models.Lease.start_date < curr_date)
         .filter(models.Reservation.status != status.reservation.PENDING)
-        .group_by(
-            models.ComputeHost.id,
-            models.ComputeHost.hypervisor_hostname,
-            models.Reservation.status,
-            models.Lease.start_date,
-            models.Lease.end_date,
-            models.ComputeHostReservation.aggregate_id,
-            models.ComputeHostReservation.reservation_id,
-        )
         .order_by(models.Lease.start_date.desc())
     )
     return query.first()
