@@ -305,6 +305,7 @@ def get_most_recent_reservation_info_by_host_id(host_id):
     curr_date = datetime.now() + timedelta(seconds=300)
     query = (
         session.query(
+            models.ComputeHost.id.label('host_id'),
             models.Reservation.status.label('reservation_status'),
             models.ComputeHostReservation.reservation_id,
         )
