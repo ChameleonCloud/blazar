@@ -124,4 +124,13 @@ class FloatingIPPool(BlazarNeutronClient):
         self.neutron.delete_floatingip(fip['id'])
 
     def show_floatingip(self, address):
-        return self.neutron.show_floatingip(address)
+        query = {
+            'floating_ip_address': address,
+            'floating_network_id': self.network_id
+        }
+        fips = self.neutron.list_floatingips(**query)['floatingips']
+        if not fips:
+            # The floating ip address already deleted by the user.
+            return None
+
+        fip = next(iter(fips))
