@@ -302,7 +302,7 @@ def get_most_recent_reservation_info_by_host_id(host_id):
         host_id (): Host id - primary key of ComputeHost table
     """
     session = get_session()
-    curr_date = datetime.now() + timedelta(seconds=300)
+    curr_date = datetime.utcnow() + timedelta(seconds=300)
     query = (
         session.query(
             models.ComputeHost.id.label('host_id'),
