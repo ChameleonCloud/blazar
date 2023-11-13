@@ -915,7 +915,7 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
         :return: a list of failed hosts, a list of recovered hosts.
         """
         hosts = db_api.host_get_all_by_filters({})
-
+        dry_run = CONF[plugin.RESOURCE_TYPE].dry_polling_monitor
         ironic_hosts = []
         nova_hosts = []
         for h in hosts:
@@ -987,7 +987,7 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                 reservation = db_utils.get_most_recent_reservation_info_by_host_id(host['id'])
                 # ignore the reservation which is active, as the host must already be in the right pool
                 if reservation and reservation["reservation_status"] == status.reservation.ACTIVE:
-                    LOG.debug(f"{host['hypervisor_hostname']} is in a active reservation"
+                    LOG.debug(f"{host['hypervisor_hostname']} is in an active reservation"
                              f" {reservation['reservation_id']} - skipping aggregate clean up")
                     continue
                 # host not in 'active' or 'pending' reservation should be in freepool
@@ -997,33 +997,29 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                     LOG.warning(f"f{host['hypervisor_hostname']} not found in any aggregate - moving to freepool")
                     # if the host is not in any aggregate and in non-active reservation
                     # it should be moved to freepool
-                    freepool.add_host(host_uuid)
+                    if not dry_run:
+                        freepool.add_host(host_uuid)
                     continue
                 if curr_agg.name == freepool.name:
                     # if the host is already in freepool skip it
                     LOG.debug(f"{host['hypervisor_hostname']} is already in a freepool - skipping aggregate clean up")
                     continue
                 try:
-                    # Remove the host from the reservation's aggregate
-                    if curr_agg.name != reservation['reservation_id']:
-                        LOG.debug(
-                            f"{host['hypervisor_hostname']} current aggregate {curr_agg.name}"
-                            f" is not the same as aggregate from current reservation {reservation['reservation_id']} -"
-                            " skipping aggregate clean up"
-                        )
-                        continue
                     LOG.warning(
                         f"Removing host {host['hypervisor_hostname']} from aggregate"
                         f" {curr_agg.name} Host {host['hypervisor_hostname']} is currently in reservation"
                         f" {reservation['reservation_id']} with status {reservation['reservation_status']}"
                     )
-                    curr_agg.remove_host(host_uuid)
+                    if not dry_run:
+                        curr_agg.remove_host(host_uuid)
+                    LOG.warning(f"Adding host {host['hypervisor_hostname']} to freepool")
+                    if not dry_run:
+                        freepool.add_host(host_uuid)
                     hosts_in_agg = pool.get_computehosts(curr_agg)
                     if not hosts_in_agg:
-                        LOG.info(f"Removing aggregate {curr_agg.name} - No hosts in it")
-                        curr_agg.delete()
-                    LOG.info(f"Adding host {host['hypervisor_hostname']} to freepool")
-                    freepool.add_host(host_uuid)
+                        LOG.warning(f"Removing aggregate {curr_agg.name} - No hosts in it")
+                        if not dry_run:
+                            curr_agg.delete()
                 except Exception as e:
                     LOG.exception(f"Failed to recover host {host}", exc_info=e)
                     failed_hosts.append(host)

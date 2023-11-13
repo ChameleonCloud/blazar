@@ -40,6 +40,10 @@ monitor_opts = [
                 help='Enable polling-based resource monitoring. '
                      'If it is enabled, the blazar-manager monitors states '
                      'of resource by polling the service API.'),
+    cfg.BoolOpt('dry_polling_monitor',
+                default=False,
+                help='If it is enabled, resource monitor plugin only warns '
+                     'about a resource failure but not heal/fix it.'),
     cfg.IntOpt('polling_interval',
                default=60,
                min=1,
