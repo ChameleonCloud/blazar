@@ -497,6 +497,7 @@ class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClien
     def poll_resource_failures(self):
         failed = []
         recovered = []
+        dry_run = CONF[plugin.RESOURCE_TYPE].dry_polling_monitor
         fips = db_api.floatingip_list()
 
         def process_fip(fip):
@@ -544,7 +545,8 @@ class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClien
                         f"deleted or errored reservation {reservation['id']}. Recovering..."
                     )
                     LOG.warning(f"Deleting {fip_address} from neutron.")
-                    fip_pool.delete_reserved_floatingip(fip_address)
+                    if not dry_run:
+                        fip_pool.delete_reserved_floatingip(fip_address)
                     recovered.append(fip)
                 else:
                     LOG.debug(f"FIP {fip_address} in an active reservation {reservation['id']} - skipping")
