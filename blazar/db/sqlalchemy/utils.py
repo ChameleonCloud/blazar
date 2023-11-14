@@ -25,8 +25,6 @@ from blazar.plugins import oshosts as host_plugin
 from blazar import status
 from collections import defaultdict
 import sqlalchemy as sa
-from oslo_log import log as logging
-LOG = logging.getLogger(__name__)
 
 
 get_session = facade_wrapper.get_session
@@ -362,7 +360,7 @@ def get_most_recent_reservation_info_by_fip_id(fip_id):
         host_id (): Host id - primary key of ComputeHost table
     """
     session = get_session()
-    curr_date = datetime.now() + timedelta(seconds=300)
+    curr_date = datetime.utcnow() + timedelta(seconds=300)
     query = (
         session.query(
             models.FloatingIP.id.label('fip_id'),
@@ -389,7 +387,6 @@ def get_most_recent_reservation_info_by_fip_id(fip_id):
         .filter(models.Reservation.status != status.reservation.PENDING)
         .order_by(models.Lease.start_date.desc())
     )
-    LOG.info(f"the sql query is {str(query)}")
     return query.first()
 
 

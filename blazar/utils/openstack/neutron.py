@@ -21,6 +21,7 @@ from oslo_log import log as logging
 
 from blazar.utils.openstack import base
 from blazar.utils.openstack import exceptions
+from blazar.manager import exceptions as manager_ex
 
 LOG = logging.getLogger(__name__)
 
@@ -124,6 +125,8 @@ class FloatingIPPool(BlazarNeutronClient):
         self.neutron.delete_floatingip(fip['id'])
 
     def show_floatingip(self, address):
+        # using list_floatingips with query as show_floatingip()
+        # does not work and raises neutronclient.common.exceptions.NotFound
         query = {
             'floating_ip_address': address,
             'floating_network_id': self.network_id
@@ -131,6 +134,5 @@ class FloatingIPPool(BlazarNeutronClient):
         fips = self.neutron.list_floatingips(**query)['floatingips']
         if not fips:
             # The floating ip address already deleted by the user.
-            return None
-
-        fip = next(iter(fips))
+            raise manager_ex.FloatingIPNotFound(floatingip=address)
+        return next(iter(fips))

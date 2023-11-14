@@ -966,13 +966,63 @@ class FloatingIpMonitorPluginTestCase(tests.TestCase):
         result = self.fip_monitor_plugin.poll_resource_failures()
         self.assertEqual(result, (fips, []))
 
+    def test_poll_fip_with_fip_active_reservation(self):
+        def fake_fetch_subnet(*args, **kwargs):
+            return None
+
+        fips = [
+            {'id': '1',
+             'floating_network_id': 'network1',
+             'floating_ip_address': "10.10.10.1"},
+        ]
+
+        fip_list = self.patch(db_api, 'floatingip_list')
+        fip_list.return_value = fips
+        get_reservations = self.patch(db_utils, 'get_most_recent_reservation_info_by_fip_id')
+        get_reservations.side_effect = [
+            {'id': "1", 'status': status.reservation.ACTIVE}
+        ]
+        result = self.fip_monitor_plugin.poll_resource_failures()
+        self.assertEqual(result, ([], []))
+
+    def test_poll_fip_with_fip_not_in_subnet(self):
+        def fake_fetch_subnet(*args, **kwargs):
+            raise utils_exceptions.FloatingIPSubnetNotFound(floatingip="1", subnet="2")
+
+        fips = [
+            {'id': '1',
+             'floating_network_id': 'network1',
+             'floating_ip_address': "10.10.10.1"},
+        ]
+
+        fip_list = self.patch(db_api, 'floatingip_list')
+        fip_list.return_value = fips
+        get_reservations = self.patch(db_utils, 'get_most_recent_reservation_info_by_fip_id')
+        get_reservations.side_effect = [
+            {'id': "1", 'status': status.reservation.ERROR},
+        ]
+        neutron_client_patch = self.patch(neutron.neutron_client.Client, 'show_network')
+        neutron_client_patch.show_network.return_value = {"subnets": "1"}
+        fetch_subnet = self.patch(neutron.FloatingIPPool, 'fetch_subnet')
+        fetch_subnet.side_effect = fake_fetch_subnet
+        result = self.fip_monitor_plugin.poll_resource_failures()
+        self.assertEqual(result, ([], fips))
+
     def test_poll_fip_without_reservation_tags(self):
         def fake_fetch_subnet(*args, **kwargs):
             return
         def fake_get_reservation(res_id):
-            return {
-                'status': status.reservation.DELETED
-            }
+            if res_id == "1":
+                return {
+                    'id': '1',
+                    'status': status.reservation.DELETED
+                }
+            elif res_id == "2":
+                return {
+                    'id': '2',
+                    'status': status.reservation.ERROR
+                }
+            return
         def fake_show_fip(fip_addr):
             if fip_addr == "1":
                 return {
@@ -996,10 +1046,7 @@ class FloatingIpMonitorPluginTestCase(tests.TestCase):
         fip_list = self.patch(db_api, 'floatingip_list')
         fip_list.return_value = fips
         get_reservations = self.patch(db_utils, 'get_most_recent_reservation_info_by_fip_id')
-        get_reservations.side_effect = [
-            {'id': "1", 'status': status.reservation.ERROR},
-            {'id': "2", 'status': status.reservation.ACTIVE}
-        ]
+        get_reservations.side_effect = fake_get_reservation
         neutron_client_patch = self.patch(neutron.neutron_client.Client, 'show_network')
         neutron_client_patch.show_network.return_value = {"subnets": "1"}
         fetch_subnet = self.patch(neutron.FloatingIPPool, 'fetch_subnet')
@@ -1012,7 +1059,7 @@ class FloatingIpMonitorPluginTestCase(tests.TestCase):
 
         result = self.fip_monitor_plugin.poll_resource_failures()
         self.assertTrue(delete_reserved_patch.called)
-        self.assertEqual(result, ([], [fips[0]]))
+        self.assertEqual(result, ([], fips))
 
 
     def test_poll_fip_with_reservation_status_deleted(self):
@@ -1021,10 +1068,12 @@ class FloatingIpMonitorPluginTestCase(tests.TestCase):
         def fake_get_reservation(res_id):
             if res_id == "1":
                 return {
+                    'id': '1',
                     'status': status.reservation.DELETED
                 }
             elif res_id == "2":
                 return {
+                    'id': '2',
                     'status': status.reservation.ACTIVE
                 }
             return
@@ -1048,10 +1097,7 @@ class FloatingIpMonitorPluginTestCase(tests.TestCase):
         fip_list = self.patch(db_api, 'floatingip_list')
         fip_list.return_value = fips
         get_reservations = self.patch(db_utils, 'get_most_recent_reservation_info_by_fip_id')
-        get_reservations.side_effect = [
-            {'id': "1", 'status': status.reservation.ERROR},
-            {'id': "2", 'status': status.reservation.ACTIVE}
-        ]
+        get_reservations.side_effect = fake_get_reservation
         neutron_client_patch = self.patch(neutron.neutron_client.Client, 'show_network')
         neutron_client_patch.show_network.return_value = {"subnets": "1"}
         fetch_subnet = self.patch(neutron.FloatingIPPool, 'fetch_subnet')
