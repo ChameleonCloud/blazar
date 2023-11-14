@@ -494,8 +494,6 @@ class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClien
             f"{'recovered' if is_reservable else 'failed'} - setting reservable True"
         )
 
-    def _
-
     def poll_resource_failures(self):
         failed = []
         recovered = []
@@ -504,15 +502,10 @@ class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClien
         def process_fip(fip):
             fip_address = fip["floating_ip_address"]
             fip_curr_reservation = db_utils.get_most_recent_reservation_info_by_fip_id(fip['id'])
-            if fip_curr_reservation:
-                LOG.debug(
-                    f"FIP {fip_address} with ID {fip['id']} most recent reservation "
-                    f"{fip_curr_reservation['id']} with status  {fip_curr_reservation['status']}"
-                )
-                if fip_curr_reservation['status'] == status.reservation.ACTIVE:
-                    # This means that FIP works fine and no need to recover
-                    LOG.debug(f"FIP {fip_address} - skipping")
-                    return
+            if fip_curr_reservation and fip_curr_reservation['status'] == status.reservation.ACTIVE:
+                # This means that FIP works fine and no need to recover
+                LOG.debug(f"FIP {fip_address} is in active reservation {fip_curr_reservation['id']} - skipping")
+                return
             fip_pool = neutron.FloatingIPPool(fip['floating_network_id'])
             # check if the FIP is in neutron subnet allocation pools
             try:
