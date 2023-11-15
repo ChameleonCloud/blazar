@@ -526,7 +526,7 @@ class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClien
                 fip_info_from_neutron = fip_pool.show_floatingip(fip["floating_ip_address"])
             except Exception as e:
                 # If the FIP is not registered in neutron that means there is no reservation for this IP
-                LOG.warning("Error getting Floating IP from neutron - {e}, recovering...")
+                LOG.debug("Error getting Floating IP from neutron - {e}, recovering...")
                 recovered.append(fip)
                 return
             # get the reservation ID from neutron tags
@@ -539,10 +539,10 @@ class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClien
                     LOG.debug("Floating IP does not have 'blazar' tag in neutron - skipping", exc_info=e)
                     return
                 reservation = db_api.reservation_get(reservation_id_from_neutron)
-                if reservation["status"] in [status.reservation.DELETED, status.reservation.ERROR]:
+                if not reservation or reservation["status"] in [status.reservation.DELETED, status.reservation.ERROR]:
                     LOG.warning(
                         f"Found floating IP {fip['id']} stuck in "
-                        f"deleted or errored reservation {reservation['id']}. Recovering..."
+                        f"deleted or errored reservation {reservation_id_from_neutron}. Recovering..."
                     )
                     LOG.warning(f"Deleting {fip_address} from neutron.")
                     if not dry_run:
