@@ -1006,7 +1006,7 @@ class FloatingIpMonitorPluginTestCase(tests.TestCase):
         fetch_subnet = self.patch(neutron.FloatingIPPool, 'fetch_subnet')
         fetch_subnet.side_effect = fake_fetch_subnet
         result = self.fip_monitor_plugin.poll_resource_failures()
-        self.assertEqual(result, ([], fips))
+        self.assertEqual(result, ([], []))
 
     def test_poll_fip_without_reservation_tags(self):
         def fake_fetch_subnet(*args, **kwargs):
@@ -1059,7 +1059,7 @@ class FloatingIpMonitorPluginTestCase(tests.TestCase):
 
         result = self.fip_monitor_plugin.poll_resource_failures()
         self.assertTrue(delete_reserved_patch.called)
-        self.assertEqual(result, ([], fips))
+        self.assertEqual(result, ([], [fips[0]]))
 
 
     def test_poll_fip_with_reservation_status_deleted(self):
