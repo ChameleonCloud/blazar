@@ -282,6 +282,8 @@ class ComputeHost(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     trust_id = sa.Column(sa.String(36), nullable=False)
     reservable = sa.Column(sa.Boolean, nullable=False,
                            server_default=sa.true())
+    disabled = sa.Column(sa.Boolean, nullable=False,
+                           server_default=sa.false())
     computehost_extra_capabilities = relationship('ComputeHostExtraCapability',
                                                   cascade="all,delete",
                                                   backref='computehost',
