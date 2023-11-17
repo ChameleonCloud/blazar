@@ -20,7 +20,7 @@ from novaclient import exceptions as nova_exceptions
 from oslo_config import cfg
 from oslo_utils import strutils
 
-from blazar import context, policy
+from blazar import context, policy, exceptions
 from blazar.db import api as db_api
 from blazar.db import exceptions as db_ex
 from blazar.db import utils as db_utils
@@ -534,8 +534,8 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             host_update_values['reservable'] = False
         db_api.host_update(resource["id"], host_update_values)
         LOG.warn(
-            '%s %s.', resource["hypervisor_hostname"],
-            "is set disabled" if is_disabled else "is not disabled"
+            f"{resource['hypervisor_hostname']}",
+            f"is set disabled {is_disabled}"
         )
 
     def list_allocations(self, query, detail=False):
@@ -660,8 +660,10 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
 
     def _is_admin(self):
         ctx = context.current()
-        ctx_dict = ctx.dict()
-        return ctx_dict.get('is_admin', False)
+        if policy.enforce(ctx, 'admin', {}, do_raise=False):
+            return True
+        else:
+            raise exceptions.NotAuthorized("Only admins can perform this operation")
 
     def _matching_hosts(self, hypervisor_properties, resource_properties,
                         count_range, start_date, end_date, project_id):
