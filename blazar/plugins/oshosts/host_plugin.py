@@ -663,7 +663,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         if policy.enforce(ctx, 'admin', {}, do_raise=False):
             return True
         else:
-            raise exceptions.NotAuthorized("Only admins can perform this operation")
+            return False
 
     def _matching_hosts(self, hypervisor_properties, resource_properties,
                         count_range, start_date, end_date, project_id):
@@ -932,15 +932,14 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                     ['reservable == 0',
                      'hypervisor_hostname == ' + data['host']])
                 if recovered_hosts:
-                    db_api.host_update(recovered_hosts[0]['id'],
-                                       {'reservable': True})
+                    self.set_reservable(recovered_hosts[0], True)
                     LOG.warn('%s recovered.',
                              recovered_hosts[0]['hypervisor_hostname'])
 
         return reservation_flags
 
     def set_reservable(self, resource, is_reservable):
-        if resource['disabled']:
+        if resource.get('disabled', False):
             LOG.warn(f"{resource['hypervisor_hostname']} is disabled - cannot set reservable")
             return
         db_api.host_update(resource["id"], {"reservable": is_reservable})
