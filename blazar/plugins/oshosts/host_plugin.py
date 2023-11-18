@@ -524,6 +524,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         # only admin can set/unset 'disabled' flag
         if self._is_admin():
             host_details = self.get_computehost(host_id)
+            # set True if value contains any string other than None
             new_disabled_flag = False if value is None else True
             self.set_disabled(host_details, new_disabled_flag)
 
@@ -940,7 +941,7 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
 
     def set_reservable(self, resource, is_reservable):
         if resource.get('disabled', False):
-            LOG.warn(f"{resource['hypervisor_hostname']} is disabled - cannot set reservable")
+            LOG.debug(f"{resource['hypervisor_hostname']} is disabled - cannot set reservable")
             return
         db_api.host_update(resource["id"], {"reservable": is_reservable})
         LOG.warn('%s %s.', resource["hypervisor_hostname"],
