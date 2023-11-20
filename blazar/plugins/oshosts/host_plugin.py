@@ -660,7 +660,11 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         return host_ids
 
     def _is_admin(self):
-        ctx = context.current()
+        try:
+            # when monitor calls this will raise an error
+            ctx = context.current()
+        except RuntimeError:
+            return False
         if policy.enforce(ctx, 'admin', {}, do_raise=False):
             return True
         else:
