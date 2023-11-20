@@ -1160,6 +1160,12 @@ def reservable_fip_get_all_by_queries(queries):
     return fip_get_all_by_queries(queries)
 
 
+def unreservable_fip_get_all_by_queries(queries):
+    """Returns unreseravable fips filtered by an array of queries"""
+    queries.append("reservable == 0")
+    return fip_get_all_by_queries(queries)
+
+
 def floatingip_get(floatingip_id):
     return _floatingip_get(get_session(), floatingip_id)
 
@@ -1196,6 +1202,16 @@ def floatingip_destroy(floatingip_id):
 
         floatingip.soft_delete(session=session)
 
+
+def floatingip_update(fip_id, values):
+    session = get_session()
+
+    with session.begin():
+        fip = _floatingip_get(session, fip_id)
+        fip.update(values)
+        fip.save(session=session)
+
+    return floatingip_get(fip_id)
 
 # Networks
 

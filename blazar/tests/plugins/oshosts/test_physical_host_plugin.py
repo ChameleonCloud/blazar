@@ -2642,7 +2642,7 @@ class PhysicalHostMonitorPluginTestCase(tests.TestCase):
     def setUp(self):
         super(PhysicalHostMonitorPluginTestCase, self).setUp()
         self.cfg = cfg
-        self.cfg.CONF.set_override('dry_polling_monitor', 'false', group='physical:host')
+        self.cfg.CONF.set_override('enable_polling_monitor_dry_run', 'false', group='physical:host')
         self.patch(nova_client, 'Client')
         self.host_monitor_plugin = host_plugin.PhysicalHostMonitorPlugin()
 
@@ -2967,7 +2967,7 @@ class PhysicalHostMonitorPluginTestCase(tests.TestCase):
         def fake_get_reservations_by_host_id(host_id):
             return {'reservation_status': status.reservation.ERROR, 'reservation_id': 1}
 
-        self.cfg.CONF.set_override('dry_polling_monitor', 'true', group='physical:host')
+        self.cfg.CONF.set_override('enable_polling_monitor_dry_run', 'true', group='physical:host')
 
         # Create a list of hosts
         host_in_errored_res = {'id': 1, 'hypervisor_hostname': 'host-1'}
