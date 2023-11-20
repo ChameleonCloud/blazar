@@ -20,7 +20,7 @@ from novaclient import exceptions as nova_exceptions
 from oslo_config import cfg
 from oslo_utils import strutils
 
-from blazar import context, policy, exceptions
+from blazar import context, policy
 from blazar.db import api as db_api
 from blazar.db import exceptions as db_ex
 from blazar.db import utils as db_utils
@@ -343,9 +343,6 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             # Do not use nova's primary key for this host.
             # Instead, generate a new one.
             del host_details['id']
-        if 'disabled' in host_values:
-            self.handle_disabled_key(host_id, host_values['disabled'])
-            del host_values['disabled']
         # NOTE(sbauza): Only last duplicate name for same extra capability
         # will be stored
         to_store = set(host_values.keys()) - set(host_details.keys())
@@ -423,9 +420,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         # nothing to update
         if not values:
             return self.get_computehost(host_id)
-        if 'disabled' in values:
-            self.handle_disabled_key(host_id, values['disabled'])
-            del values['disabled']
+
         cant_update_extra_capability = []
         cant_delete_extra_capability = []
         previous_capabilities = self._get_extra_capabilities(host_id)
@@ -519,25 +514,6 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             # Nothing so bad, but we need to alert admins
             # they have to rerun
             raise manager_ex.CantDeleteHost(host=host_id, msg=str(e))
-
-    def handle_disabled_key(self, host_id, value):
-        # only admin can set/unset 'disabled' flag
-        if self._is_admin():
-            host_details = self.get_computehost(host_id)
-            # set True if value contains any string other than None
-            new_disabled_flag = False if value is None else True
-            self.set_disabled(host_details, new_disabled_flag)
-
-    def set_disabled(self, resource, is_disabled):
-        host_update_values = {"disabled": is_disabled}
-        # if a host is set as disabled, then it should not be reservable
-        if is_disabled:
-            host_update_values['reservable'] = False
-        db_api.host_update(resource["id"], host_update_values)
-        LOG.warn(
-            f"{resource['hypervisor_hostname']}",
-            f"is set disabled {is_disabled}"
-        )
 
     def list_allocations(self, query, detail=False):
         hosts_id_list = [h['id'] for h in db_api.host_list()]
@@ -693,12 +669,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         if resource_properties:
             filter_array += plugins_utils.convert_requirements(
                 resource_properties)
-        # admin can create a lease for host with 'reservable' False
-        if self._is_admin():
-            hosts = db_api.host_get_all_by_queries(filter_array)
-        else:
-            hosts = db_api.reservable_host_get_all_by_queries(filter_array)
-        for host in hosts:
+        for host in db_api.reservable_host_get_all_by_queries(filter_array):
             if not self.is_project_allowed(project_id, resource_properties):
                 continue
             if not db_api.host_allocation_get_all_by_values(
@@ -937,16 +908,14 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                     ['reservable == 0',
                      'hypervisor_hostname == ' + data['host']])
                 if recovered_hosts:
-                    self.set_reservable(recovered_hosts[0], True)
+                    db_api.host_update(recovered_hosts[0]['id'],
+                                       {'reservable': True})
                     LOG.warn('%s recovered.',
                              recovered_hosts[0]['hypervisor_hostname'])
 
         return reservation_flags
 
     def set_reservable(self, resource, is_reservable):
-        if resource.get('disabled', False):
-            LOG.debug(f"{resource['hypervisor_hostname']} is disabled - cannot set reservable")
-            return
         db_api.host_update(resource["id"], {"reservable": is_reservable})
         LOG.warn('%s %s.', resource["hypervisor_hostname"],
                  "recovered" if is_reservable else "failed")
@@ -957,7 +926,7 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
         :return: a list of failed hosts, a list of recovered hosts.
         """
         hosts = db_api.host_get_all_by_filters({})
-        dry_run = CONF[plugin.RESOURCE_TYPE].dry_polling_monitor
+        dry_run = CONF[plugin.RESOURCE_TYPE].enable_polling_monitor_dry_run
         ironic_hosts = []
         nova_hosts = []
         for h in hosts:
