@@ -157,6 +157,27 @@ def get_reservations_by_device_ids(device_ids, start_date, end_date):
     return query.all()
 
 
+def get_reservations_by_floatingip_ids(floatingip_ids, start_date, end_date):
+    session = get_session()
+    border0 = sa.and_(models.Lease.start_date < start_date,
+                      models.Lease.end_date < start_date)
+    border1 = sa.and_(models.Lease.start_date > end_date,
+                      models.Lease.end_date > end_date)
+    query = (api.model_query(models.Reservation, session=session)
+             .join(
+                models.Lease,
+                models.Lease.id == models.Reservation.lease_id
+             )
+             .join(
+                models.FloatingIPAllocation,
+                models.FloatingIPAllocation.reservation_id == models.Reservation.lease_id
+             )
+             .filter(models.FloatingIPAllocation.deleted.is_(None))
+             .filter(models.FloatingIPAllocation.floatingip_id.in_(floatingip_ids))
+             .filter(~sa.or_(border0, border1)))
+    return query.all()
+
+
 def get_reservations_for_allocations(session, start_date, end_date,
                                      lease_id=None, reservation_id=None):
     fields = ['id', 'status', 'lease_id', 'start_date',
@@ -306,7 +327,11 @@ def get_most_recent_reservation_info_by_host_id(host_id):
     query = (
         session.query(
             models.ComputeHost.id.label('host_id'),
+            models.ComputeHost.hypervisor_hostname,
             models.Reservation.status.label('reservation_status'),
+            models.Lease.start_date,
+            models.Lease.end_date,
+            models.ComputeHostReservation.aggregate_id,
             models.ComputeHostReservation.reservation_id,
         )
         .filter(models.ComputeHost.id == host_id)
@@ -321,6 +346,44 @@ def get_most_recent_reservation_info_by_host_id(host_id):
         .join(
             models.Reservation,
             models.Reservation.id == models.ComputeHostReservation.reservation_id
+        )
+        .join(
+            models.Lease,
+            models.Lease.id == models.Reservation.lease_id
+        )
+        .filter(models.Lease.start_date < curr_date)
+        .filter(models.Reservation.status != status.reservation.PENDING)
+        .order_by(models.Lease.start_date.desc())
+    )
+    return query.first()
+
+
+def get_most_recent_reservation_info_by_fip_id(fip_id):
+    """returns the recent FIP reservation which not in
+    pending status and start_date of the reservation is less than current date
+
+    Args:
+        host_id (): Host id - primary key of ComputeHost table
+    """
+    session = get_session()
+    curr_date = datetime.utcnow() + timedelta(seconds=300)
+    query = (
+        session.query(
+            models.FloatingIP.id.label('fip_id'),
+            models.FloatingIP.floating_ip_address,
+            models.Lease.start_date,
+            models.Lease.end_date,
+            models.Reservation.status.label('status'),
+            models.Reservation.id,
+        )
+        .filter(models.FloatingIP.id == fip_id)
+        .join(
+            models.FloatingIPAllocation,
+            models.FloatingIPAllocation.floatingip_id == models.FloatingIP.id
+        )
+        .join(
+            models.Reservation,
+            models.Reservation.id == models.FloatingIPAllocation.reservation_id
         )
         .join(
             models.Lease,

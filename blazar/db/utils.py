@@ -125,6 +125,11 @@ def get_reservations_by_device_ids(device_ids, start_date, end_date):
                                                end_date)
 
 
+def get_reservations_by_floatingip_ids(floatingip_id, start_date, end_date):
+    return IMPL.get_reservations_by_floatingip_ids(
+        floatingip_id, start_date, end_date)
+
+
 def get_reservation_allocations_by_host_ids(host_ids, start_date, end_date,
                                             lease_id=None,
                                             reservation_id=None):
@@ -154,6 +159,10 @@ def get_reservation_allocations_by_device_ids(device_ids, start_date, end_date,
 
 def get_most_recent_reservation_info_by_host_id(host_id):
     return IMPL.get_most_recent_reservation_info_by_host_id(host_id)
+
+
+def get_most_recent_reservation_info_by_fip_id(host_id):
+    return IMPL.get_most_recent_reservation_info_by_fip_id(host_id)
 
 
 def get_plugin_reservation(resource_type, resource_id):
