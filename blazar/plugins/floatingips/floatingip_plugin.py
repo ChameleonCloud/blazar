@@ -497,7 +497,7 @@ class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClien
     def poll_resource_failures(self):
         failed = []
         recovered = []
-        dry_run = CONF[plugin.RESOURCE_TYPE].dry_polling_monitor
+        dry_run = CONF[plugin.RESOURCE_TYPE].enable_polling_monitor_dry_run
         fips = db_api.floatingip_list()
 
         def process_fip(fip):

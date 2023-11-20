@@ -915,7 +915,7 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
         :return: a list of failed hosts, a list of recovered hosts.
         """
         hosts = db_api.host_get_all_by_filters({})
-        dry_run = CONF[plugin.RESOURCE_TYPE].dry_polling_monitor
+        dry_run = CONF[plugin.RESOURCE_TYPE].enable_polling_monitor_dry_run
         ironic_hosts = []
         nova_hosts = []
         for h in hosts:
