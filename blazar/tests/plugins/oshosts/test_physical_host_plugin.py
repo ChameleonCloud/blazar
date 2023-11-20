@@ -25,7 +25,7 @@ from oslo_config import cfg
 from oslo_config import fixture as conf_fixture
 import testtools
 
-from blazar import context, policy
+from blazar import context
 from blazar import status
 from blazar.db import api as db_api
 from blazar.db import exceptions as db_exceptions
@@ -757,56 +757,6 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         host_allocation_create = self.patch(
             self.db_api,
             'host_allocation_create')
-        self.fake_phys_plugin.reserve_resource(
-            '441c1476-9f8f-4700-9f30-cd9b6fef3509',
-            values)
-        host_values = {
-            'reservation_id': '441c1476-9f8f-4700-9f30-cd9b6fef3509',
-            'aggregate_id': 1,
-            'resource_properties': '',
-            'hypervisor_properties': '["=", "$memory_mb", "256"]',
-            'count_range': '1-1',
-            'status': 'pending',
-            'before_end': 'default',
-            'on_start': 'default'
-        }
-        host_reservation_create.assert_called_once_with(host_values)
-        calls = [
-            mock.call(
-                {'compute_host_id': 'host1',
-                 'reservation_id': '441c1476-9f8f-4700-9f30-cd9b6fef3509',
-                 }),
-            mock.call(
-                {'compute_host_id': 'host2',
-                 'reservation_id': '441c1476-9f8f-4700-9f30-cd9b6fef3509',
-                 }),
-        ]
-        host_allocation_create.assert_has_calls(calls)
-
-    def test_create_reservation_hosts_non_reservable(self):
-        values = {
-            'lease_id': '018c1b43-e69e-4aef-a543-09681539cf4c',
-            'min': 1,
-            'max': 1,
-            'hypervisor_properties': '["=", "$memory_mb", "256"]',
-            'resource_properties': '',
-            'start_date': datetime.datetime(2013, 12, 19, 20, 00),
-            'end_date': datetime.datetime(2013, 12, 19, 21, 00),
-            'resource_type': plugin.RESOURCE_TYPE,
-            'project_id': 'fake-project'
-        }
-        self.rp_create.return_value = mock.MagicMock(id=1)
-        host_reservation_create = self.patch(self.db_api,
-                                             'host_reservation_create')
-        matching_hosts = self.patch(self.fake_phys_plugin, '_matching_hosts')
-        matching_hosts.return_value = ['host1', 'host2']
-        host_allocation_create = self.patch(
-            self.db_api,
-            'host_allocation_create')
-        is_admin = self.patch(
-            policy, 'enforce'
-        )
-        is_admin.return_value = False
         self.fake_phys_plugin.reserve_resource(
             '441c1476-9f8f-4700-9f30-cd9b6fef3509',
             values)
@@ -2406,10 +2356,6 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             (datetime.datetime(2013, 12, 19, 20, 00),
              datetime.datetime(2013, 12, 19, 21, 00)),
         ]
-        is_admin = self.patch(
-            policy, 'enforce'
-        )
-        is_admin.return_value = False
         result = self.fake_phys_plugin._matching_hosts(
             '[]', '[]', '1-3',
             datetime.datetime(2013, 12, 19, 20, 00),
@@ -2441,10 +2387,6 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             (datetime.datetime(2013, 12, 19, 20, 00),
              datetime.datetime(2013, 12, 19, 21, 00)),
         ]
-        is_admin = self.patch(
-            policy, 'enforce'
-        )
-        is_admin.return_value = False
         result = self.fake_phys_plugin._matching_hosts(
             '[]', '[]', '3-3',
             datetime.datetime(2013, 12, 19, 20, 00),
@@ -2479,10 +2421,6 @@ class PhysicalHostPluginTestCase(tests.TestCase):
              datetime.datetime(2013, 12, 19, 21, 00)
              + datetime.timedelta(minutes=5))
         ]
-        is_admin = self.patch(
-            policy, 'enforce'
-        )
-        is_admin.return_value = False
         result = self.fake_phys_plugin._matching_hosts(
             '[]', '[]', '3-3',
             datetime.datetime(2013, 12, 19, 20, 00),
@@ -2496,10 +2434,6 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             self.db_api,
             'reservable_host_get_all_by_queries')
         host_get.return_value = []
-        is_admin = self.patch(
-            policy, 'enforce'
-        )
-        is_admin.return_value = False
         result = self.fake_phys_plugin._matching_hosts(
             '["=", "$memory_mb", "2048"]', '[]', '1-1',
             datetime.datetime(2013, 12, 19, 20, 00),
@@ -2611,31 +2545,6 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         db_resource_property_update.assert_called_once_with(
             'physical:host', 'foo', resource_property_values)
 
-    def test_update_disabled_property_as_admin(self):
-        resource_property_values = {'disabled': 'true'}
-        host_get = self.patch(self.db_api, 'host_get')
-        host_get.return_value = {'id': 'host1', 'hypervisor_hostname': 'host1'}
-        host_update = self.patch(self.db_api, 'host_update')
-        is_admin = self.patch(
-            policy, 'enforce'
-        )
-        is_admin.return_value = True
-        self.fake_phys_plugin.update_computehost(
-            'host1', {'disabled': 'true'})
-        host_update.assert_called_once_with('host1', {"disabled": True, "reservable": False})
-
-    def test_update_disabled_property_as_user(self):
-        resource_property_values = {'disabled': 'true'}
-        host_get = self.patch(self.db_api, 'host_get')
-        host_get.return_value = {'id': 'host1', 'hypervisor_hostname': 'host1'}
-        host_update = self.patch(self.db_api, 'host_update')
-        is_admin = self.patch(
-            policy, 'enforce'
-        )
-        is_admin.return_value = False
-        self.fake_phys_plugin.update_computehost(
-            'host1', {'disabled': 'true'})
-        self.assertFalse(host_update.called)
 
 class PhysicalHostMonitorPluginTestCase(tests.TestCase):
 
@@ -2647,7 +2556,7 @@ class PhysicalHostMonitorPluginTestCase(tests.TestCase):
         self.host_monitor_plugin = host_plugin.PhysicalHostMonitorPlugin()
 
     def test_notification_callback_disabled_true(self):
-        failed_host = {'hypervisor_hostname': 'hypvsr1', 'id': '1', 'disabled': False}
+        failed_host = {'hypervisor_hostname': 'hypvsr1', 'id': '1'}
         event_type = 'service.update'
         payload = {
             'nova_object.namespace': 'nova',
@@ -2676,6 +2585,7 @@ class PhysicalHostMonitorPluginTestCase(tests.TestCase):
                                                                 payload)
         host_get_all.assert_called_once_with(
             ['hypervisor_hostname == ' + payload['nova_object.data']['host']])
+        self.assertEqual({}, result)
 
     def test_notification_callback_no_failure(self):
         event_type = 'service.update'
@@ -2739,42 +2649,6 @@ class PhysicalHostMonitorPluginTestCase(tests.TestCase):
              'hypervisor_hostname == ' + payload['nova_object.data']['host']])
         host_update.assert_called_once_with(recovered_host['id'],
                                             {'reservable': True})
-        self.assertEqual({}, result)
-
-    def test_notification_callback_not_recover_with_blazar_disabled(self):
-        recovered_host = {'hypervisor_hostname': 'hypvsr1', 'id': 1, 'disabled': True}
-        event_type = 'service.update'
-        payload = {
-            'nova_object.namespace': 'nova',
-            'nova_object.name': 'ServiceStatusPayload',
-            'nova_object.version': '1.1',
-            'nova_object.data': {
-                'host': 'compute-1',
-                'disabled': False,
-                'last_seen_up': '2012-10-29T13:42:05Z',
-                'binary': 'nova-compute',
-                'topic': 'compute',
-                'disabled_reason': None,
-                'report_count': 1,
-                'forced_down': False,
-                'version': 22,
-                'availability_zone': None,
-                'uuid': 'fa69c544-906b-4a6a-a9c6-c1f7a8078c73'
-            }
-        }
-        host_get_all = self.patch(db_api, 'host_get_all_by_queries')
-        host_get_all.return_value = [recovered_host]
-        host_update = self.patch(db_api, 'host_update')
-        is_admin = self.patch(
-            policy, 'enforce'
-        )
-        is_admin.return_value = True
-        result = self.host_monitor_plugin.notification_callback(event_type,
-                                                                payload)
-        host_get_all.assert_called_once_with(
-            ['reservable == 0',
-             'hypervisor_hostname == ' + payload['nova_object.data']['host']])
-        self.assertFalse(host_update.called)
         self.assertEqual({}, result)
 
     def test_poll_resource_failures_state_down(self):
