@@ -64,7 +64,7 @@ LOG = logging.getLogger(__name__)
 before_end_options = ['', 'snapshot', 'default', 'email']
 
 QUERY_TYPE_ALLOCATION = 'allocation'
-
+MONITOR_ARGS = {"resource_type": plugin.RESOURCE_TYPE}
 
 def _get_plugins():
     """Return dict of resource-plugin class pairs."""
@@ -107,6 +107,7 @@ class NetworkPlugin(base.BasePlugin):
         super(NetworkPlugin, self).__init__()
         self.plugins = _get_plugins()
         self.periodic_tasks = []
+        self.monitor = NetworkMonitorPlugin(**MONITOR_ARGS)
         for plugin in self.plugins.values():
             if hasattr(plugin, "periodic_tasks"):
                 self.periodic_tasks.extend(plugin.periodic_tasks)
@@ -856,7 +857,7 @@ class NetworkMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClientWr
             network_curr_reservation = db_utils.get_most_recent_reservation_info_by_network_id(network_id_from_blazar)
             if network_curr_reservation and network_curr_reservation['status'] == status.reservation.ACTIVE:
                 # This means that network works fine as the reservation started fine
-                LOG.debug(f"Network {network_id_from_blazar} is in active reservation {network_curr_reservation['id']} - skipping")
+                LOG.debug(f"Network {network_id_from_blazar} - VLAN {segment_id} is in active reservation {network_curr_reservation['id']} - skipping")
                 return
             LOG.info(
                 f"For network segment {network_id_from_blazar} - VLAN {segment_id} found a reservation "
