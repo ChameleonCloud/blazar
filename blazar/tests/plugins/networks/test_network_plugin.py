@@ -27,6 +27,7 @@ from blazar.manager import exceptions as manager_exceptions
 from blazar.manager import service
 from blazar.plugins import networks as plugin
 from blazar.plugins.networks import network_plugin
+from blazar import status
 from blazar import tests
 from blazar.utils.openstack import base
 from blazar.utils.openstack import ironic
@@ -1095,3 +1096,177 @@ class NetworkPluginTestCase(tests.TestCase):
             'foo', resource_property_values)
         db_resource_property_update.assert_called_once_with(
             'network', 'foo', resource_property_values)
+
+
+class NetworkMonitorPluginTestCase(tests.TestCase):
+
+    def setUp(self):
+        super(NetworkMonitorPluginTestCase, self).setUp()
+        self.db_api = db_api
+        self.db_utils = db_utils
+        self.network_plugin = network_plugin
+        self.fake_network_monitor_plugin = self.network_plugin.NetworkMonitorPlugin()
+        self.cfg = cfg
+        self.cfg.CONF.set_override('enable_polling_monitor_dry_run', 'false', group='network')
+
+    def test_network_stuck_in_errored_lease(self):
+        networks_from_blazar = [
+            {
+                'id': 'network1',
+                'segment_id': 'segment1'
+            }
+        ]
+        fake_ports = {
+            'ports': [{"fixed_ips": [{"subnet_id": "subnet1"}],
+            "device_id": "router1",
+            "device_owner": "network:router_interface"}]
+        }
+        fake_neutron_networks = {
+            'networks': [{"id": "neutron1", "provider:segmentation_id": "segment1"}]
+        }
+        fake_subnets = {'subnets': [{"id": "subnet1"}]}
+        network_list = self.patch(db_api, 'network_list')
+        network_list.return_value = networks_from_blazar
+        get_reservations = self.patch(db_utils, 'get_most_recent_reservation_info_by_network_id')
+        get_reservations.side_effect = [
+            {'id': "1", 'status': status.reservation.ERROR},
+        ]
+        neutron_list_networks_patch = self.patch(neutron.neutron_client.Client, 'list_networks')
+        neutron_list_networks_patch.return_value = fake_neutron_networks
+        neutron_list_ports_patch = self.patch(neutron.neutron_client.Client, 'list_ports')
+        neutron_list_ports_patch.return_value = fake_ports
+        neutron_list_subnets_patch = self.patch(neutron.neutron_client.Client, 'list_subnets')
+        neutron_list_subnets_patch.return_value = fake_subnets
+        neutron_remove_interface_patch = self.patch(neutron.neutron_client.Client, 'remove_interface_router')
+        neutron_delete_subnet_patch = self.patch(neutron.neutron_client.Client, 'delete_subnet')
+        neutron_delete_network_patch = self.patch(neutron.neutron_client.Client, 'delete_network')
+        result = self.fake_network_monitor_plugin.poll_resource_failures()
+        neutron_remove_interface_patch.assert_called_once_with(
+            "router1", {
+                'subnet_id': "subnet1"
+            }
+        )
+        neutron_delete_subnet_patch.assert_called_once_with("subnet1")
+        neutron_delete_network_patch.assert_called_once_with("neutron1")
+        self.assertEqual(result, ([], []))
+
+    def test_network_stuck_in_active_lease(self):
+        networks_from_blazar = [
+            {
+                'id': 'network1',
+                'segment_id': 'segment1'
+            }
+        ]
+        fake_ports = {
+            'ports': [{"fixed_ips": [{"subnet_id": "subnet1"}],
+            "device_id": "router1",
+            "device_owner": "network:router_interface"}]
+        }
+        network_list = self.patch(db_api, 'network_list')
+        network_list.return_value = networks_from_blazar
+        get_reservations = self.patch(db_utils, 'get_most_recent_reservation_info_by_network_id')
+        get_reservations.side_effect = [
+            {'id': "1", 'status': status.reservation.ACTIVE},
+        ]
+        neutron_remove_interface_patch = self.patch(neutron.neutron_client.Client, 'remove_interface_router')
+        neutron_delete_subnet_patch = self.patch(neutron.neutron_client.Client, 'delete_subnet')
+        neutron_delete_network_patch = self.patch(neutron.neutron_client.Client, 'delete_network')
+        result = self.fake_network_monitor_plugin.poll_resource_failures()
+        self.assertFalse(neutron_remove_interface_patch.called)
+        self.assertFalse(neutron_delete_subnet_patch.called)
+        self.assertFalse(neutron_delete_network_patch.called)
+        self.assertEqual(result, ([], []))
+
+    def test_network_stuck_in_errored_lease_dry_run(self):
+        self.cfg.CONF.set_override('enable_polling_monitor_dry_run', 'True', group='network')
+        networks_from_blazar = [
+            {
+                'id': 'network1',
+                'segment_id': 'segment1'
+            }
+        ]
+        fake_ports = {
+            'ports': [{"fixed_ips": [{"subnet_id": "subnet1"}],
+            "device_id": "router1",
+            "device_owner": "network:router_interface"}]
+        }
+        network_list = self.patch(db_api, 'network_list')
+        network_list.return_value = networks_from_blazar
+        get_reservations = self.patch(db_utils, 'get_most_recent_reservation_info_by_network_id')
+        get_reservations.side_effect = [
+            {'id': "1", 'status': status.reservation.ACTIVE},
+        ]
+        neutron_remove_interface_patch = self.patch(neutron.neutron_client.Client, 'remove_interface_router')
+        neutron_delete_subnet_patch = self.patch(neutron.neutron_client.Client, 'delete_subnet')
+        neutron_delete_network_patch = self.patch(neutron.neutron_client.Client, 'delete_network')
+        result = self.fake_network_monitor_plugin.poll_resource_failures()
+        self.assertFalse(neutron_remove_interface_patch.called)
+        self.assertFalse(neutron_delete_subnet_patch.called)
+        self.assertFalse(neutron_delete_network_patch.called)
+        self.assertEqual(result, ([], []))
+
+    def test_network_stuck_in_errored_lease_network_not_found(self):
+        networks_from_blazar = [
+            {
+                'id': 'network1',
+                'segment_id': 'segment1'
+            }
+        ]
+        fake_ports = {
+            'ports': [{"fixed_ips": [{"subnet_id": "subnet1"}],
+            "device_id": "router1",
+            "device_owner": "network:router_interface"}]
+        }
+        network_list = self.patch(db_api, 'network_list')
+        network_list.return_value = networks_from_blazar
+        get_reservations = self.patch(db_utils, 'get_most_recent_reservation_info_by_network_id')
+        get_reservations.side_effect = [
+            {'id': "1", 'status': status.reservation.ERROR},
+        ]
+        neutron_list_networks_patch = self.patch(neutron.neutron_client.Client, 'list_networks')
+        neutron_list_networks_patch.return_value = {'networks': []}
+        neutron_remove_interface_patch = self.patch(neutron.neutron_client.Client, 'remove_interface_router')
+        neutron_delete_subnet_patch = self.patch(neutron.neutron_client.Client, 'delete_subnet')
+        neutron_delete_network_patch = self.patch(neutron.neutron_client.Client, 'delete_network')
+        result = self.fake_network_monitor_plugin.poll_resource_failures()
+        self.assertFalse(neutron_remove_interface_patch.called)
+        self.assertFalse(neutron_delete_subnet_patch.called)
+        self.assertFalse(neutron_delete_network_patch.called)
+        self.assertEqual(result, ([], []))
+
+    def test_network_stuck_in_errored_lease_no_router_ports(self):
+        networks_from_blazar = [
+            {
+                'id': 'network1',
+                'segment_id': 'segment1'
+            }
+        ]
+        fake_ports = {
+            'ports': [{"fixed_ips": [{"subnet_id": "subnet1"}],
+            "device_id": "dhcp1",
+            "device_owner": "network:dhcp"}]
+        }
+        fake_neutron_networks = {
+            'networks': [{"id": "neutron1", "provider:segmentation_id": "segment1"}]
+        }
+        fake_subnets = {'subnets': [{"id": "subnet1"}]}
+        network_list = self.patch(db_api, 'network_list')
+        network_list.return_value = networks_from_blazar
+        get_reservations = self.patch(db_utils, 'get_most_recent_reservation_info_by_network_id')
+        get_reservations.side_effect = [
+            {'id': "1", 'status': status.reservation.ERROR},
+        ]
+        neutron_list_networks_patch = self.patch(neutron.neutron_client.Client, 'list_networks')
+        neutron_list_networks_patch.return_value = fake_neutron_networks
+        neutron_list_ports_patch = self.patch(neutron.neutron_client.Client, 'list_ports')
+        neutron_list_ports_patch.return_value = fake_ports
+        neutron_list_subnets_patch = self.patch(neutron.neutron_client.Client, 'list_subnets')
+        neutron_list_subnets_patch.return_value = fake_subnets
+        neutron_remove_interface_patch = self.patch(neutron.neutron_client.Client, 'remove_interface_router')
+        neutron_delete_subnet_patch = self.patch(neutron.neutron_client.Client, 'delete_subnet')
+        neutron_delete_network_patch = self.patch(neutron.neutron_client.Client, 'delete_network')
+        result = self.fake_network_monitor_plugin.poll_resource_failures()
+        self.assertFalse(neutron_remove_interface_patch.called)
+        neutron_delete_subnet_patch.assert_called_once_with("subnet1")
+        neutron_delete_network_patch.assert_called_once_with("neutron1")
+        self.assertEqual(result, ([], []))
