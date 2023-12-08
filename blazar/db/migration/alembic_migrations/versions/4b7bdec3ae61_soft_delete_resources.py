@@ -82,6 +82,6 @@ def downgrade():
     op.drop_column('networksegment_extra_capabilities', 'deleted_at')
     op.drop_column('devices', 'deleted')
     op.drop_column('devices', 'deleted_at')
-    op.drop_column('device_extra_capabilites', 'deleted')
-    op.drop_column('device_extra_capabilites', 'deleted_at')
+    op.drop_column('device_extra_capabilities', 'deleted')
+    op.drop_column('device_extra_capabilities', 'deleted_at')
     # ### end Alembic commands ###
