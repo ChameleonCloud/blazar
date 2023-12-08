@@ -15,6 +15,7 @@
 # under the License.
 
 import datetime
+import concurrent.futures
 from random import shuffle
 
 from keystoneauth1 import exceptions as keystone_excptions
@@ -28,6 +29,7 @@ from blazar.db import exceptions as db_ex
 from blazar.db import utils as db_utils
 from blazar.manager import exceptions as manager_ex
 from blazar.plugins import base
+from blazar.plugins import monitor
 from blazar.plugins import networks as plugin
 from blazar import status
 from blazar.utils.openstack import ironic
@@ -53,6 +55,7 @@ plugin_opts = [
                 help='All plugins to use'),
 ]
 
+plugin_opts.extend(monitor.monitor_opts)
 
 CONF = cfg.CONF
 CONF.register_opts(plugin_opts, group=plugin.RESOURCE_TYPE)
@@ -789,3 +792,117 @@ class NetworkPlugin(base.BasePlugin):
             return db_api.network_get_all_by_queries(filter)
         else:
             return db_api.network_list()
+
+
+class NetworkMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClientWrapper):
+    """
+    Monitor plugin for network resources
+    """
+
+    def __new__(cls, *args, **kwargs):
+        return super(NetworkMonitorPlugin, cls).__new__(cls, *args, **kwargs)
+
+    def filter_allocations(self, reservation, resource_ids):
+        return [alloc for alloc
+                in reservation["network_allocations"]
+                if alloc["network_id"] in resource_ids]
+
+    def get_reservations_by_resource_ids(self, resource_ids,
+                                         interval_begin, interval_end):
+        return db_utils.get_reservations_by_floatingip_ids(resource_ids,
+                                                          interval_begin,
+                                                          interval_end)
+
+    def get_notification_event_types(self):
+        """Get event types of notification messages to handle."""
+        return ['service.update']
+
+    def notification_callback(self, event_type, payload):
+        return {}
+
+    def set_reservable(self, resource, is_reservable):
+        # network segments does not have reservable flag
+        LOG.debug("set_reservable() for network monitor is not implemented")
+        pass
+
+    def get_unreservable_resourses(self):
+        # because network segments does not have reservable flag
+        # there are no unreservable resources
+        return []
+
+    def poll_resource_failures(self):
+        failed = []
+        recovered = []
+        dry_run = CONF[plugin.RESOURCE_TYPE].enable_polling_monitor_dry_run
+        network_segments = db_api.network_list()
+
+        def process_network(network):
+            """
+            For each blazar network, check if the network is not in use by a reservation
+            and get the neutron network based on segment_id
+            Tear down the network, if neutron network is using a vlan when there is no active
+            reservation is blazar
+
+            1. Detach the network's subnets from the router.
+            2. Delete the subnet(s)
+            3. Delete the network
+
+            Args:
+                network (dict): blazar's network_segment row
+            """
+            network_id_from_blazar = network["id"]
+            segment_id = network["segment_id"]
+            # gets the most recent reservation for the blazar network
+            network_curr_reservation = db_utils.get_most_recent_reservation_info_by_network_id(network_id_from_blazar)
+            if network_curr_reservation and network_curr_reservation['status'] == status.reservation.ACTIVE:
+                # This means that network works fine as the reservation started fine
+                LOG.debug(f"Network {network_id_from_blazar} is in active reservation {network_curr_reservation['id']} - skipping")
+                return
+            LOG.info(
+                f"For network segment {network_id_from_blazar} - VLAN {segment_id} found a reservation "
+                f"{network_curr_reservation['id']} with status {network_curr_reservation['status']}"
+            )
+            neutron_client = neutron.BlazarNeutronClient()
+            networks = neutron_client.list_networks()['networks']
+            network_from_neutron = next((
+                network
+                for network in networks
+                if network.get('provider:segmentation_id') == segment_id
+            ), None)
+            if not network_from_neutron:
+                LOG.debug(f"Blazar network - {network_id_from_blazar} is not found in neutron - skipping")
+                return
+            network_id_from_neutron = network_from_neutron['id']
+            ports_from_network = neutron_client.list_ports(network_id=network_id_from_neutron)["ports"]
+            router_ports = [
+                port for port in ports_from_network
+                if port["device_owner"] == "network:router_interface"
+            ]
+            if len(router_ports) == 0:
+                LOG.debug(f"No router ports for neutron network {network_id_from_neutron} - VLAN {segment_id}")
+            for port in router_ports:
+                for fixed_ip in port["fixed_ips"]:
+                    router_id = port["device_id"]
+                    LOG.warning(f"Detaching router {router_id} from Network subnet {fixed_ip['subnet_id']} - VLAN {segment_id}")
+                    if not dry_run:
+                        neutron_client.remove_interface_router(
+                            router_id, {
+                                'subnet_id': fixed_ip["subnet_id"]
+                            }
+                        )
+            for subnet in neutron_client.list_subnets(network_id=network_id_from_neutron)['subnets']:
+                LOG.warning(f"Deleting subnet {subnet['id']} - VLAN {segment_id}")
+                if not dry_run:
+                    neutron_client.delete_subnet(subnet['id'])
+
+            LOG.warning(f"Deleting network {network_id_from_neutron} - VLAN {segment_id}")
+            if not dry_run:
+                neutron_client.delete_network(network_id_from_neutron)
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            futures = executor.map(process_network, network_segments)
+        try:
+            results = list(futures)
+        except Exception as e:
+            LOG.exception('Skipping health check. %s', str(e))
+        return failed, recovered
