@@ -859,10 +859,6 @@ class NetworkMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClientWr
                 # This means that network works fine as the reservation started fine
                 LOG.debug(f"Network {network_id_from_blazar} - VLAN {segment_id} is in active reservation {network_curr_reservation['id']} - skipping")
                 return
-            LOG.info(
-                f"For network segment {network_id_from_blazar} - VLAN {segment_id} found a reservation "
-                f"{network_curr_reservation['id']} with status {network_curr_reservation['status']}"
-            )
             neutron_client = neutron.BlazarNeutronClient()
             networks = neutron_client.list_networks()['networks']
             network_from_neutron = next((
