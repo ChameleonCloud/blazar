@@ -289,6 +289,44 @@ def get_reservation_allocations_by_network_ids(network_ids, start_date,
     return reservations
 
 
+def get_most_recent_reservation_info_by_network_id(network_id):
+    """returns the recent network reservation which not in
+    pending status and start_date of the reservation is less than current date
+
+    Args:
+        network_id (): network id - primary key of NetworkSegment table
+    """
+    session = get_session()
+    curr_date = datetime.utcnow() + timedelta(seconds=300)
+    query = (
+        session.query(
+            models.NetworkSegment.id.label('network_id'),
+            models.NetworkSegment.segment_id,
+            models.Lease.start_date,
+            models.Lease.end_date,
+            models.Reservation.status.label('status'),
+            models.Reservation.id,
+        )
+        .filter(models.NetworkSegment.id == network_id)
+        .join(
+            models.NetworkAllocation,
+            models.NetworkAllocation.network_id == models.NetworkSegment.id
+        )
+        .join(
+            models.Reservation,
+            models.Reservation.id == models.NetworkAllocation.reservation_id
+        )
+        .join(
+            models.Lease,
+            models.Lease.id == models.Reservation.lease_id
+        )
+        .filter(models.Lease.start_date < curr_date)
+        .filter(models.Reservation.status != status.reservation.PENDING)
+        .order_by(models.Lease.start_date.desc())
+    )
+    return query.first()
+
+
 def get_reservation_allocations_by_device_ids(device_ids, start_date, end_date,
                                               lease_id=None,
                                               reservation_id=None):
