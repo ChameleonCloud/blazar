@@ -820,6 +820,7 @@ def remove_subnet_route_from_router(router_id, subnet_id, dry_run):
     except neutron_ex.NotFound as e:
         raise e
     # Check if any of the routes in router are pointing to subnet
+    routes = router.get('routes', [])
     subnet_routes = [route for route in routes if is_route_pointing_to_subnet(route)]
     for route in subnet_routes:
         LOG.warning(
@@ -830,7 +831,7 @@ def remove_subnet_route_from_router(router_id, subnet_id, dry_run):
         if not dry_run:
             neutron_client.remove_extra_routes_from_router(
                 router_id,
-                {'router': {'routes': route}}
+                {'router': {'routes': [route]}}
             )
 
 
