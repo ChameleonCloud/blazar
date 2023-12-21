@@ -1117,7 +1117,7 @@ class NetworkMonitorPluginTestCase(tests.TestCase):
             }
         ]
         fake_ports = {
-            'ports': [{"fixed_ips": [{"subnet_id": "subnet1"}],
+            'ports': [{"id":"port1", "fixed_ips": [{"subnet_id": "subnet1"}],
             "device_id": "router1",
             "device_owner": "network:router_interface"}]
         }
@@ -1137,6 +1137,12 @@ class NetworkMonitorPluginTestCase(tests.TestCase):
         neutron_list_ports_patch.return_value = fake_ports
         neutron_list_subnets_patch = self.patch(neutron.neutron_client.Client, 'list_subnets')
         neutron_list_subnets_patch.return_value = fake_subnets
+        neutron_show_subnet_patch = self.patch(neutron.neutron_client.Client, 'show_subnet')
+        neutron_show_subnet_patch.return_value = {'subnet': {'id': 'subnet1', 'cidr': '192.168.1.0/24'}}
+        neutron_show_router_patch = self.patch(neutron.neutron_client.Client, 'show_router')
+        neutron_show_router_patch.return_value = {'router': {'id': 'router1', 'routes': [{'gateway': '192.168.1.1'}]}}
+        neutron_remove_route_patch = self.patch(neutron.neutron_client.Client, 'remove_extra_routes_from_router')
+        neutron_delete_port_patch = self.patch(neutron.neutron_client.Client, 'delete_port')
         neutron_remove_interface_patch = self.patch(neutron.neutron_client.Client, 'remove_interface_router')
         neutron_delete_subnet_patch = self.patch(neutron.neutron_client.Client, 'delete_subnet')
         neutron_delete_network_patch = self.patch(neutron.neutron_client.Client, 'delete_network')
@@ -1148,6 +1154,10 @@ class NetworkMonitorPluginTestCase(tests.TestCase):
         )
         neutron_delete_subnet_patch.assert_called_once_with("subnet1")
         neutron_delete_network_patch.assert_called_once_with("neutron1")
+        neutron_remove_route_patch.assert_called_once_with(
+            'router1',
+            {'router': {'routes': [{'gateway': '192.168.1.1'}]}}
+        )
         self.assertEqual(result, ([], []))
 
     def test_network_stuck_in_active_lease(self):
@@ -1158,7 +1168,7 @@ class NetworkMonitorPluginTestCase(tests.TestCase):
             }
         ]
         fake_ports = {
-            'ports': [{"fixed_ips": [{"subnet_id": "subnet1"}],
+            'ports': [{"id":"port1", "fixed_ips": [{"subnet_id": "subnet1"}],
             "device_id": "router1",
             "device_owner": "network:router_interface"}]
         }
@@ -1186,7 +1196,7 @@ class NetworkMonitorPluginTestCase(tests.TestCase):
             }
         ]
         fake_ports = {
-            'ports': [{"fixed_ips": [{"subnet_id": "subnet1"}],
+            'ports': [{"id":"port1", "fixed_ips": [{"subnet_id": "subnet1"}],
             "device_id": "router1",
             "device_owner": "network:router_interface"}]
         }
@@ -1213,7 +1223,7 @@ class NetworkMonitorPluginTestCase(tests.TestCase):
             }
         ]
         fake_ports = {
-            'ports': [{"fixed_ips": [{"subnet_id": "subnet1"}],
+            'ports': [{"id":"port1", "fixed_ips": [{"subnet_id": "subnet1"}],
             "device_id": "router1",
             "device_owner": "network:router_interface"}]
         }
@@ -1242,7 +1252,7 @@ class NetworkMonitorPluginTestCase(tests.TestCase):
             }
         ]
         fake_ports = {
-            'ports': [{"fixed_ips": [{"subnet_id": "subnet1"}],
+            'ports': [{"id":"port1", "fixed_ips": [{"subnet_id": "subnet1"}],
             "device_id": "dhcp1",
             "device_owner": "network:dhcp"}]
         }
@@ -1265,8 +1275,101 @@ class NetworkMonitorPluginTestCase(tests.TestCase):
         neutron_remove_interface_patch = self.patch(neutron.neutron_client.Client, 'remove_interface_router')
         neutron_delete_subnet_patch = self.patch(neutron.neutron_client.Client, 'delete_subnet')
         neutron_delete_network_patch = self.patch(neutron.neutron_client.Client, 'delete_network')
+        neutron_delete_port_patch = self.patch(neutron.neutron_client.Client, 'delete_port')
         result = self.fake_network_monitor_plugin.poll_resource_failures()
         self.assertFalse(neutron_remove_interface_patch.called)
         neutron_delete_subnet_patch.assert_called_once_with("subnet1")
         neutron_delete_network_patch.assert_called_once_with("neutron1")
+        neutron_delete_port_patch.assert_called()
         self.assertEqual(result, ([], []))
+
+    def test_network_stuck_in_errored_lease_subnet_routes(self):
+        networks_from_blazar = [
+            {
+                'id': 'network1',
+                'segment_id': 'segment1'
+            }
+        ]
+        fake_ports = {
+            "ports": [{"id":"port1", "fixed_ips": [{"subnet_id": "subnet1"}],
+            "device_id": "router1",
+            "device_owner": "network:router_interface"}],
+        }
+        fake_neutron_networks = {
+            'networks': [{"id": "neutron1", "provider:segmentation_id": "segment1"}]
+        }
+        fake_subnets = {'subnets': [{"id": "subnet1"}]}
+        network_list = self.patch(db_api, 'network_list')
+        network_list.return_value = networks_from_blazar
+        get_reservations = self.patch(db_utils, 'get_most_recent_reservation_info_by_network_id')
+        get_reservations.side_effect = [
+            {'id': "1", 'status': status.reservation.ERROR},
+        ]
+        neutron_list_networks_patch = self.patch(neutron.neutron_client.Client, 'list_networks')
+        neutron_list_networks_patch.return_value = fake_neutron_networks
+        neutron_list_ports_patch = self.patch(neutron.neutron_client.Client, 'list_ports')
+        neutron_list_ports_patch.return_value = fake_ports
+        neutron_list_subnets_patch = self.patch(neutron.neutron_client.Client, 'list_subnets')
+        neutron_list_subnets_patch.return_value = fake_subnets
+        neutron_show_subnet_patch = self.patch(neutron.neutron_client.Client, 'show_subnet')
+        neutron_show_subnet_patch.return_value = {'subnet': {'id': 'subnet1', 'cidr': '192.168.1.0/24'}}
+        neutron_show_router_patch = self.patch(neutron.neutron_client.Client, 'show_router')
+        neutron_show_router_patch.return_value = {'router': {'id': 'router1', 'routes': [{'gateway': '192.168.1.1'}]}}
+        neutron_remove_route_patch = self.patch(neutron.neutron_client.Client, 'remove_extra_routes_from_router')
+        neutron_remove_interface_patch = self.patch(neutron.neutron_client.Client, 'remove_interface_router')
+        neutron_delete_subnet_patch = self.patch(neutron.neutron_client.Client, 'delete_subnet')
+        neutron_delete_network_patch = self.patch(neutron.neutron_client.Client, 'delete_network')
+        neutron_delete_port_patch = self.patch(neutron.neutron_client.Client, 'delete_port')
+        result = self.fake_network_monitor_plugin.poll_resource_failures()
+        neutron_remove_interface_patch.assert_called_once_with(
+            "router1", {
+                'subnet_id': "subnet1"
+            }
+        )
+        neutron_delete_subnet_patch.assert_called_once_with("subnet1")
+        neutron_delete_network_patch.assert_called_once_with("neutron1")
+        neutron_delete_port_patch.assert_called_once_with("port1")
+        neutron_remove_route_patch.assert_called_once_with(
+            'router1',
+            {'router': {'routes': [{'gateway': '192.168.1.1'}]}}
+        )
+        self.assertEqual(result, ([], []))
+
+
+class TestRemoveSubnetRouteFromRouter(tests.TestCase):
+    def test_remove_subnet_route_from_router_same_cidr(self):
+        neutron_show_subnet_patch = self.patch(neutron.neutron_client.Client, 'show_subnet')
+        neutron_show_subnet_patch.return_value = {'subnet': {'id': 'subnet1', 'cidr': '192.168.1.0/24'}}
+        neutron_show_router_patch = self.patch(neutron.neutron_client.Client, 'show_router')
+        neutron_show_router_patch.return_value = {'router': {'id': 'router1', 'routes': [{'gateway': '192.168.1.1'}]}}
+        neutron_remove_route_patch = self.patch(neutron.neutron_client.Client, 'remove_extra_routes_from_router')
+
+        router_id = 'router123'
+        subnet_id = 'subnet456'
+        dry_run = False
+
+        network_plugin.remove_subnet_route_from_router(router_id, subnet_id, dry_run)
+
+        neutron_show_subnet_patch.assert_called_once_with(subnet_id)
+        neutron_show_router_patch.assert_called_once_with(router_id)
+        neutron_remove_route_patch.assert_called_once_with(
+            router_id,
+            {'router': {'routes': [{'gateway': '192.168.1.1'}]}}
+        )
+
+    def test_remove_subnet_route_from_router_diff_cidr(self):
+        neutron_show_subnet_patch = self.patch(neutron.neutron_client.Client, 'show_subnet')
+        neutron_show_subnet_patch.return_value = {'subnet': {'id': 'subnet1', 'cidr': '192.168.1.0/24'}}
+        neutron_show_router_patch = self.patch(neutron.neutron_client.Client, 'show_router')
+        neutron_show_router_patch.return_value = {'router': {'id': 'router1', 'routes': [{'gateway': '192.168.2.1'}]}}
+        neutron_remove_route_patch = self.patch(neutron.neutron_client.Client, 'remove_extra_routes_from_router')
+
+        router_id = 'router123'
+        subnet_id = 'subnet456'
+        dry_run = False
+
+        network_plugin.remove_subnet_route_from_router(router_id, subnet_id, dry_run)
+
+        neutron_show_subnet_patch.assert_called_once_with(subnet_id)
+        neutron_show_router_patch.assert_called_once_with(router_id)
+        neutron_remove_route_patch.assert_not_called()

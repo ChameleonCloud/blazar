@@ -17,6 +17,7 @@
 import datetime
 import concurrent.futures
 from random import shuffle
+import ipaddress
 
 from keystoneauth1 import exceptions as keystone_excptions
 from neutronclient.common import exceptions as neutron_ex
@@ -795,6 +796,47 @@ class NetworkPlugin(base.BasePlugin):
             return db_api.network_list()
 
 
+def remove_subnet_route_from_router(router_id, subnet_id, dry_run):
+    """Removes the route in the router pointing to the subnet
+
+    Args:
+        router_id (str): The router in which routes need to be checked and removed
+        subnet_id (str): the subnet to which routes should be removed
+    """
+    neutron_client = neutron.BlazarNeutronClient()
+    def is_route_pointing_to_subnet(route):
+        if 'gateway' in route:
+            next_hop_ip = ipaddress.ip_address(route['gateway'])
+        elif 'nexthop' in route:
+            next_hop_ip = ipaddress.ip_address(route['nexthop'])
+        subnet_cidr = ipaddress.ip_network(subnet['cidr'])
+        return next_hop_ip in subnet_cidr
+    try:
+        subnet = neutron_client.show_subnet(subnet_id).get('subnet', {})
+    except neutron_ex.NotFound as e:
+        LOG.exception(f"Could not get subnet {subnet_id} - {e}")
+        raise e
+    try:
+        router = neutron_client.show_router(router_id).get('router', {})
+    except neutron_ex.NotFound as e:
+        LOG.exception(f"Could not get router {router_id} - {e}")
+        raise e
+    # Check if any of the routes in router are pointing to subnet
+    routes = router.get('routes', [])
+    subnet_routes = [route for route in routes if is_route_pointing_to_subnet(route)]
+    for route in subnet_routes:
+        LOG.warning(
+            f"Removing the route {route} from router {router['id']} "
+            f"as it is pointing to {subnet['id']}"
+        )
+        # remove this subnet route
+        if not dry_run:
+            neutron_client.remove_extra_routes_from_router(
+                router_id,
+                {'router': {'routes': [route]}}
+            )
+
+
 class NetworkMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClientWrapper):
     """
     Monitor plugin for network resources
@@ -875,23 +917,28 @@ class NetworkMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClientWr
                 port for port in ports_from_network
                 if port["device_owner"] == "network:router_interface"
             ]
-            if len(router_ports) == 0:
-                LOG.debug(f"No router ports for neutron network {network_id_from_neutron} - VLAN {segment_id}")
             for port in router_ports:
                 for fixed_ip in port["fixed_ips"]:
                     router_id = port["device_id"]
-                    LOG.warning(f"Detaching router {router_id} from Network subnet {fixed_ip['subnet_id']} - VLAN {segment_id}")
+                    subnet_id = fixed_ip["subnet_id"]
+                    try:
+                        remove_subnet_route_from_router(router_id, subnet_id, dry_run)
+                    except Exception as e:
+                        LOG.exception(f"Cannot remove subnet {subnet_id} route in router {router_id} - {e}")
+                    LOG.warning(f"Detaching router {router_id} from Network subnet {subnet_id} - VLAN {segment_id}")
                     if not dry_run:
-                        neutron_client.remove_interface_router(
-                            router_id, {
-                                'subnet_id': fixed_ip["subnet_id"]
-                            }
-                        )
-            for subnet in neutron_client.list_subnets(network_id=network_id_from_neutron)['subnets']:
+                        neutron_client.remove_interface_router(router_id, {'subnet_id': subnet_id})
+            for port in ports_from_network:
+                if not dry_run:
+                    try:
+                        neutron_client.delete_port(port['id'])
+                    except neutron_ex.PortNotFoundClient:
+                        LOG.debug(f"Port {port['id']} not found in neutron")
+            subnets = neutron_client.list_subnets(network_id=network_id_from_neutron)['subnets']
+            for subnet in subnets:
                 LOG.warning(f"Deleting subnet {subnet['id']} - VLAN {segment_id}")
                 if not dry_run:
                     neutron_client.delete_subnet(subnet['id'])
-
             LOG.warning(f"Deleting network {network_id_from_neutron} - VLAN {segment_id}")
             if not dry_run:
                 neutron_client.delete_network(network_id_from_neutron)
