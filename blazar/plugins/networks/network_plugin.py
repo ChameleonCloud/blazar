@@ -814,10 +814,12 @@ def remove_subnet_route_from_router(router_id, subnet_id, dry_run):
     try:
         subnet = neutron_client.show_subnet(subnet_id).get('subnet', {})
     except neutron_ex.NotFound as e:
+        LOG.exception(f"Could not get subnet {subnet_id} - {e}")
         raise e
     try:
         router = neutron_client.show_router(router_id).get('router', {})
     except neutron_ex.NotFound as e:
+        LOG.exception(f"Could not get router {router_id} - {e}")
         raise e
     # Check if any of the routes in router are pointing to subnet
     routes = router.get('routes', [])
