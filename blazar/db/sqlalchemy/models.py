@@ -188,7 +188,7 @@ class Event(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
         return super(Event, self).to_dict()
 
 
-class ResourceProperty(mb.BlazarBase):
+class ResourceProperty(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     """Defines an resource property by resource type."""
 
     __tablename__ = 'resource_properties'
