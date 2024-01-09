@@ -130,7 +130,9 @@ function create_blazar_accounts {
         "reservation" "Blazar Reservation Service")
     get_or_create_endpoint $BLAZAR_SERVICE \
         "$REGION_NAME" \
-        "$blazar_api_url/v1"
+        "${KEYSTONE_SERVICE_PROTOCOL}://${KEYSTONE_SERVICE_HOST}/identity" \
+        "${KEYSTONE_SERVICE_PROTOCOL}://${KEYSTONE_SERVICE_HOST}/identity" \
+        "${KEYSTONE_SERVICE_PROTOCOL}://${KEYSTONE_SERVICE_HOST}/identity"
 }
 
 
