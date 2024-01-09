@@ -15,7 +15,6 @@
 
 from collections import defaultdict
 import datetime
-from operator import itemgetter
 
 from functools import lru_cache
 
@@ -37,7 +36,6 @@ from blazar import status
 from blazar.utils.openstack import placement
 from blazar.utils import service as service_utils
 from blazar.utils import trusts
-from collections import defaultdict
 import eventlet
 from oslo_log import log as logging
 
