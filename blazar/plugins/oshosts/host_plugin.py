@@ -521,7 +521,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             host_update_values['reservable'] = False
         db_api.host_update(resource["id"], host_update_values)
         LOG.warn(
-            f"{resource['hypervisor_hostname']}",
+            f"{resource['hypervisor_hostname']}"
             f"is set disabled {is_disabled}"
         )
 
@@ -854,12 +854,19 @@ class PhysicalHostMonitorPlugin(base.BaseMonitorPlugin,
                     ['reservable == 0',
                      'hypervisor_hostname == ' + data['host']])
                 if recovered_hosts:
-                    db_api.host_update(recovered_hosts[0]['id'],
-                                       {'reservable': True})
+                    self.set_reservable(recovered_hosts[0], True)
                     LOG.warning('%s recovered.',
                                 recovered_hosts[0]['hypervisor_hostname'])
 
         return reservation_flags
+
+    def set_reservable(self, resource, is_reservable):
+        if resource.get('disabled', False):
+            LOG.debug(f"{resource['hypervisor_hostname']} is disabled - cannot set reservable")
+            return
+        db_api.host_update(resource["id"], {"reservable": is_reservable})
+        LOG.warn('%s %s.', resource["hypervisor_hostname"],
+                 "recovered" if is_reservable else "failed")
 
     def is_polling_enabled(self):
         """Check if the polling monitor is enabled."""
@@ -886,7 +893,7 @@ class PhysicalHostMonitorPlugin(base.BaseMonitorPlugin,
             reservation_flags = self._handle_failures(failed_hosts)
         if recovered_hosts:
             for host in recovered_hosts:
-                db_api.host_update(host['id'], {'reservable': True})
+                self.set_reservable(host, True)
                 LOG.warning('%s recovered.', host['hypervisor_hostname'])
 
         return reservation_flags
