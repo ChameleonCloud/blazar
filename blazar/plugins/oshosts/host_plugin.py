@@ -22,12 +22,14 @@ from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import strutils
 
+from blazar import context
 from blazar.db import api as db_api
 from blazar.db import exceptions as db_ex
 from blazar.db import utils as db_utils
 from blazar.manager import exceptions as manager_ex
 from blazar.plugins import base
 from blazar.plugins import oshosts as plugin
+from blazar import policy
 from blazar import status
 from blazar.utils.openstack import nova
 from blazar.utils.openstack import placement
@@ -425,6 +427,9 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         # nothing to update
         if not values:
             return self.get_computehost(host_id)
+        if 'disabled' in values:
+            self.handle_disabled_key(host_id, values['disabled'])
+            del values['disabled']
 
         cant_update_extra_capability = []
         previous_capabilities = self._get_extra_capabilities(host_id)
@@ -502,6 +507,24 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                 # they have to rerun
                 raise manager_ex.CantDeleteHost(host=host_id, msg=str(e))
 
+    def handle_disabled_key(self, host_id, value):
+        # only admin can set/unset 'disabled' flag
+        host_details = self.get_computehost(host_id)
+        # set True if value contains any string other than None
+        new_disabled_flag = False if value is None else True
+        self.set_disabled(host_details, new_disabled_flag)
+
+    def set_disabled(self, resource, is_disabled):
+        host_update_values = {"disabled": is_disabled}
+        # if a host is set as disabled, then it should not be reservable
+        if is_disabled:
+            host_update_values['reservable'] = False
+        db_api.host_update(resource["id"], host_update_values)
+        LOG.warn(
+            f"{resource['hypervisor_hostname']}",
+            f"is set disabled {is_disabled}"
+        )
+
     def list_allocations(self, query):
         hosts_id_list = [h['id'] for h in db_api.host_list()]
         options = self.get_query_options(query, QUERY_TYPE_ALLOCATION)
@@ -560,6 +583,13 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             values['start_date'],
             values['end_date'])
 
+    def _is_admin(self):
+        ctx = context.current()
+        if policy.enforce(ctx, 'admin', {}, do_raise=False):
+            return True
+        else:
+            return False
+
     def _matching_hosts(self, hypervisor_properties, resource_properties,
                         count_range, start_date, end_date):
         """Return the matching hosts (preferably not allocated)
@@ -583,7 +613,12 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         if resource_properties:
             filter_array += plugins_utils.convert_requirements(
                 resource_properties)
-        for host in db_api.reservable_host_get_all_by_queries(filter_array):
+        # admin can create a lease for host with 'reservable' False
+        if self._is_admin():
+            hosts = db_api.host_get_all_by_queries(filter_array)
+        else:
+            hosts = db_api.reservable_host_get_all_by_queries(filter_array)
+        for host in hosts:
             if not db_api.host_allocation_get_all_by_values(
                     compute_host_id=host['id']):
                 not_allocated_host_ids.append(host['id'])

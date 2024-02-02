@@ -25,7 +25,7 @@ from oslo_config import fixture as conf_fixture
 import random
 import testtools
 
-from blazar import context
+from blazar import context, policy
 from blazar.db import api as db_api
 from blazar.db import exceptions as db_exceptions
 from blazar.db import utils as db_utils
@@ -869,6 +869,55 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             'count_range': '1-1',
             'status': 'pending',
             'before_end': 'default'
+        }
+        host_reservation_create.assert_called_once_with(host_values)
+        calls = [
+            mock.call(
+                {'compute_host_id': 'host1',
+                 'reservation_id': '441c1476-9f8f-4700-9f30-cd9b6fef3509',
+                 }),
+            mock.call(
+                {'compute_host_id': 'host2',
+                 'reservation_id': '441c1476-9f8f-4700-9f30-cd9b6fef3509',
+                 }),
+        ]
+        host_allocation_create.assert_has_calls(calls)
+
+    def test_create_reservation_hosts_non_reservable(self):
+        values = {
+            'lease_id': '018c1b43-e69e-4aef-a543-09681539cf4c',
+            'min': 1,
+            'max': 1,
+            'hypervisor_properties': '["=", "$memory_mb", "256"]',
+            'resource_properties': '',
+            'start_date': datetime.datetime(2013, 12, 19, 20, 00),
+            'end_date': datetime.datetime(2013, 12, 19, 21, 00),
+            'resource_type': plugin.RESOURCE_TYPE,
+            'project_id': 'fake-project'
+        }
+        self.rp_create.return_value = mock.MagicMock(id=1)
+        host_reservation_create = self.patch(self.db_api,
+                                             'host_reservation_create')
+        matching_hosts = self.patch(self.fake_phys_plugin, '_matching_hosts')
+        matching_hosts.return_value = ['host1', 'host2']
+        host_allocation_create = self.patch(
+            self.db_api,
+            'host_allocation_create')
+        is_admin = self.patch(
+            policy, 'enforce'
+        )
+        is_admin.return_value = False
+        self.fake_phys_plugin.reserve_resource(
+            '441c1476-9f8f-4700-9f30-cd9b6fef3509',
+            values)
+        host_values = {
+            'reservation_id': '441c1476-9f8f-4700-9f30-cd9b6fef3509',
+            'aggregate_id': 1,
+            'resource_properties': '',
+            'hypervisor_properties': '["=", "$memory_mb", "256"]',
+            'count_range': '1-1',
+            'status': 'pending',
+            'before_end': 'default',
         }
         host_reservation_create.assert_called_once_with(host_values)
         calls = [
@@ -2269,6 +2318,10 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             (datetime.datetime(2013, 12, 19, 20, 00),
              datetime.datetime(2013, 12, 19, 21, 00)),
         ]
+        is_admin = self.patch(
+            policy, 'enforce'
+        )
+        is_admin.return_value = False
         result = self.fake_phys_plugin._matching_hosts(
             '[]', '[]', '1-3',
             datetime.datetime(2013, 12, 19, 20, 00),
@@ -2298,6 +2351,10 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             (datetime.datetime(2013, 12, 19, 20, 00),
              datetime.datetime(2013, 12, 19, 21, 00)),
         ]
+        is_admin = self.patch(
+            policy, 'enforce'
+        )
+        is_admin.return_value = False
         result = self.fake_phys_plugin._matching_hosts(
             '[]', '[]', '3-3',
             datetime.datetime(2013, 12, 19, 20, 00),
@@ -2330,6 +2387,10 @@ class PhysicalHostPluginTestCase(tests.TestCase):
              datetime.datetime(2013, 12, 19, 21, 00)
              + datetime.timedelta(minutes=5))
         ]
+        is_admin = self.patch(
+            policy, 'enforce'
+        )
+        is_admin.return_value = False
         result = self.fake_phys_plugin._matching_hosts(
             '[]', '[]', '3-3',
             datetime.datetime(2013, 12, 19, 20, 00),
@@ -2363,6 +2424,10 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             (datetime.datetime(2013, 12, 19, 20, 00),
              datetime.datetime(2013, 12, 19, 21, 00)),
         ]
+        is_admin = self.patch(
+            policy, 'enforce'
+        )
+        is_admin.return_value = False
         self.fake_phys_plugin._matching_hosts(
             '[]', '[]', '1-3',
             datetime.datetime(2013, 12, 19, 20, 00),
@@ -2397,6 +2462,10 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             (datetime.datetime(2013, 12, 19, 20, 00),
              datetime.datetime(2013, 12, 19, 21, 00)),
         ]
+        is_admin = self.patch(
+            policy, 'enforce'
+        )
+        is_admin.return_value = False
         self.fake_phys_plugin._matching_hosts(
             '[]', '[]', '3-3',
             datetime.datetime(2013, 12, 19, 20, 00),
@@ -2434,6 +2503,10 @@ class PhysicalHostPluginTestCase(tests.TestCase):
              datetime.datetime(2013, 12, 19, 21, 00)
              + datetime.timedelta(minutes=5))
         ]
+        is_admin = self.patch(
+            policy, 'enforce'
+        )
+        is_admin.return_value = False
         self.fake_phys_plugin._matching_hosts(
             '[]', '[]', '3-3',
             datetime.datetime(2013, 12, 19, 20, 00),
@@ -2448,6 +2521,10 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             self.db_api,
             'reservable_host_get_all_by_queries')
         host_get.return_value = []
+        is_admin = self.patch(
+            policy, 'enforce'
+        )
+        is_admin.return_value = False
         result = self.fake_phys_plugin._matching_hosts(
             '["=", "$memory_mb", "2048"]', '[]', '1-1',
             datetime.datetime(2013, 12, 19, 20, 00),
