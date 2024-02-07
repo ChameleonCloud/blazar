@@ -1276,7 +1276,7 @@ def network_destroy(network_id):
         network.soft_delete(session=session)
 
         # Also delete this network's extra capabilities
-        for capability in network_extra_capability_get_all_per_network(network_id):
+        for capability, platform_version in network_extra_capability_get_all_per_network(network_id):
             capability.soft_delete(session=session)
 
 
