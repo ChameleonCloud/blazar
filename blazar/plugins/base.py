@@ -106,15 +106,16 @@ class BasePlugin(object, metaclass=abc.ABCMeta):
         detail = False if not query else query.get('detail', False)
         resource_properties = collections.defaultdict(list)
 
-        for name, private, value in db_api.resource_properties_list(
+        for name, private, value, is_unique in db_api.resource_properties_list(
                 self.resource_type):
 
             if not private:
                 resource_properties[name].append(value)
+                resource_properties[name].append(is_unique)
 
         if detail:
             return [
-                dict(property=k, private=False, values=v)
+                dict(property=k, private=False, values=v[0], is_unique=v[1])
                 for k, v in resource_properties.items()]
         else:
             return [dict(property=k) for k, v in resource_properties.items()]

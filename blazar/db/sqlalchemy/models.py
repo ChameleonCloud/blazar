@@ -19,7 +19,7 @@ from oslo_utils import uuidutils
 from blazar.db.sqlalchemy import model_base as mb
 import sqlalchemy as sa
 from sqlalchemy.dialects.mysql import MEDIUMTEXT
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, validates
 
 
 # Helpers
@@ -198,6 +198,8 @@ class ExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     capability_name = sa.Column(sa.String(255), nullable=False)
     private = sa.Column(sa.Boolean, nullable=False,
                         server_default=sa.false())
+    is_unique = sa.Column(sa.Boolean, nullable=False,
+                           server_default=sa.false())
 
     __table_args__ = (sa.UniqueConstraint('resource_type', 'capability_name'),)
 
@@ -311,6 +313,25 @@ class ComputeHostExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
 
     def to_dict(self):
         return super(ComputeHostExtraCapability, self).to_dict()
+
+    @validates('capability_value')
+    def validate_capability_value(self, key, capability_value):
+        from blazar.db.sqlalchemy import facade_wrapper
+        session = facade_wrapper.get_session()
+        extra_capability = session.query(ExtraCapability).filter_by(id=self.capability_id).first()
+        if extra_capability and extra_capability.is_unique:
+            existing_capability = (
+                session.query(ComputeHostExtraCapability).filter_by(computehost_id=self.computehost_id,
+                                     capability_id=self.capability_id).first()
+            )
+            if existing_capability:
+                raise ValueError(
+                    f"{extra_capability.capability_name} must be unique. "
+                    f"Please select unique {extra_capability.capability_name} for "
+                    f"{self.computehost_id}"
+                )
+        return capability_value
+
 
 
 # Floating IP
@@ -467,7 +488,7 @@ class Device(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     __tablename__ = 'devices'
 
     id = _id_column()
-    name = sa.Column(sa.String(255), nullable=False)
+    name = sa.Column(sa.String(255), unique=True, nullable=False)
     device_type = sa.Column(sa.Enum('container', 'vm', 'shell',
                                     name='allowed_device_types'),
                             nullable=False)
