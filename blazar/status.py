@@ -227,12 +227,12 @@ class LeaseStatus(BaseStatus):
                         [isinstance(e, non_fatal_type)
                          for non_fatal_type in non_fatal_exceptions])
                     if is_non_fatal:
-                        LOG.info('Non-fatal exception during transition '
+                        LOG.warn('Non-fatal exception during transition '
                                       'of lease %s', lease_id)
                         db_api.lease_update(lease_id,
                                             {'status': original_status})
                     else:
-                        LOG.warn('Lease %s went into ERROR status. %s',
+                        LOG.error('Lease %s went into ERROR status. %s',
                                       lease_id, str(e))
                         db_api.lease_update(lease_id,
                                             {'status': cls.ERROR})
