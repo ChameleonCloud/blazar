@@ -227,7 +227,7 @@ class LeaseStatus(BaseStatus):
                         [isinstance(e, non_fatal_type)
                          for non_fatal_type in non_fatal_exceptions])
                     if is_non_fatal:
-                        LOG.warn('Non-fatal exception during transition '
+                        LOG.warning('Non-fatal exception during transition '
                                       'of lease %s', lease_id)
                         db_api.lease_update(lease_id,
                                             {'status': original_status})
