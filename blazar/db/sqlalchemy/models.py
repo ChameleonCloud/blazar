@@ -316,16 +316,19 @@ class ComputeHostExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
 
     @validates('capability_value')
     def validate_capability_value(self, key, capability_value):
-        extra_capability = ExtraCapability.query.filter_by(id=self.capability_id).first()
+        from blazar.db.sqlalchemy import facade_wrapper
+        session = facade_wrapper.get_session()
+        extra_capability = session.query(ExtraCapability).filter_by(id=self.capability_id).first()
         if extra_capability and extra_capability.is_unique:
             existing_capability = (
-                self.query.filter_by(computehost_id=self.computehost_id,
+                session.query(ComputeHostExtraCapability).filter_by(computehost_id=self.computehost_id,
                                      capability_id=self.capability_id).first()
             )
             if existing_capability:
                 raise ValueError(
-                    f"{extra_capability.capability_name} is not unique "
-                    f"for compute_host {self.computehost_id}"
+                    f"{extra_capability.capability_name} must be unique. "
+                    f"Please select unique {extra_capability.capability_name} for "
+                    f"{self.computehost_id}"
                 )
         return capability_value
 

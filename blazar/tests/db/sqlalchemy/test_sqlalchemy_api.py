@@ -551,7 +551,7 @@ class SQLAlchemyDBApiTestCase(tests.DBTestCase):
 
         result = db_api.resource_properties_list('physical:host')
 
-        self.assertListEqual(result, [('vgpu', False, '2')])
+        self.assertListEqual(result, [('vgpu', False, '2', False)])
 
     def test_search_for_hosts_by_composed_queries(self):
         """Create one host and test composed queries."""
