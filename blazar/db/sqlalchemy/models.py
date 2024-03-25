@@ -315,7 +315,8 @@ class ComputeHostExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
         return super(ComputeHostExtraCapability, self).to_dict()
 
     @validates('capability_id')
-    def validate_capability_value(self, key, capability_id):
+    def validate_capability_id(self, key, capability_id):
+        # this validation occurs only upon creating the capability
         from blazar.db.sqlalchemy import facade_wrapper
         session = facade_wrapper.get_session()
         extra_capability = session.query(ExtraCapability).filter_by(id=capability_id).first()
@@ -332,6 +333,31 @@ class ComputeHostExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
                 )
         return capability_id
 
+    @validates('capability_value')
+    def validate_capability_value(self, key, capability_value):
+        # this validation occurs when updating the capability value
+        # this is important when for Eg: node_name capability's value is updated
+        from blazar.db.sqlalchemy import facade_wrapper
+        session = facade_wrapper.get_session()
+        extra_capability = session.query(ExtraCapability).filter_by(id=self.capability_id).first()
+        if extra_capability and extra_capability.is_unique:
+            # exclude the current compute_host
+            # we should allow updating the node_name with current name
+            existing_capability = (
+                session.query(ComputeHostExtraCapability).filter(
+                       ComputeHostExtraCapability.computehost_id!=self.computehost_id,
+                       ComputeHostExtraCapability.capability_id==extra_capability.id,
+                       ComputeHostExtraCapability.capability_value==capability_value,
+                       ComputeHostExtraCapability.deleted==None
+                )
+            ).first()
+            if existing_capability:
+                raise ValueError(
+                    f"{extra_capability.capability_name} must be unique. "
+                    f"Please select unique {extra_capability.capability_name} for "
+                    f"{self.computehost_id}"
+                )
+        return capability_value
 
 
 # Floating IP
