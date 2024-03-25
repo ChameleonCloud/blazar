@@ -326,7 +326,7 @@ class ComputeHostExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
             ).first()
             if existing_capability:
                 raise ValueError(
-                    f"{extra_capability.capability_name} must be unique. "
+                    f"Values for {extra_capability.capability_name} must be unique. "
                     f"Please select unique {extra_capability.capability_name} for "
                     f"{self.computehost_id}"
                 )
