@@ -2045,6 +2045,7 @@ def resource_properties_list(resource_type):
             models.ExtraCapability.capability_name,
             models.ExtraCapability.private,
             resource_model.capability_value,
+            models.ExtraCapability.is_unique,
         ).join(resource_model), resource_model, deleted=False).distinct()
 
         return query.all()

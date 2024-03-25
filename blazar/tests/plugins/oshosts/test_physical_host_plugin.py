@@ -2549,16 +2549,16 @@ class PhysicalHostPluginTestCase(tests.TestCase):
 
         # Expecting a list of (Reservation, Allocation)
         self.db_list_resource_properties.return_value = [
-            ('prop1', False, 'aaa'),
-            ('prop1', False, 'bbb'),
-            ('prop2', False, 'aaa'),
-            ('prop2', False, 'aaa'),
-            ('prop3', True, 'aaa')
+            ('prop1', False, 'aaa', False),
+            ('prop1', False, 'bbb', False),
+            ('prop2', False, 'aaa', False),
+            ('prop2', False, 'aaa', False),
+            ('prop3', True, 'aaa', False)
         ]
 
         expected = [
-            {'property': 'prop1'},
-            {'property': 'prop2'}
+            {'property': 'prop1',},
+            {'property': 'prop2',}
         ]
 
         ret = self.fake_phys_plugin.list_resource_properties(
@@ -2577,15 +2577,15 @@ class PhysicalHostPluginTestCase(tests.TestCase):
 
         # Expecting a list of (Reservation, Allocation)
         self.db_list_resource_properties.return_value = [
-            ('prop1', False, 'aaa'),
-            ('prop1', False, 'bbb'),
-            ('prop2', False, 'ccc'),
-            ('prop3', True, 'aaa')
+            ('prop1', False, 'aaa', False),
+            ('prop1', False, 'bbb', False),
+            ('prop2', False, 'ccc', False),
+            ('prop3', True, 'aaa', False)
         ]
 
         expected = [
-            {'property': 'prop1', 'private': False, 'values': ['aaa', 'bbb']},
-            {'property': 'prop2', 'private': False, 'values': ['ccc']}
+            {'property': 'prop1', 'private': False, 'values': ['aaa', 'bbb'], 'is_unique': False},
+            {'property': 'prop2', 'private': False, 'values': ['ccc'], 'is_unique': False}
         ]
 
         ret = self.fake_phys_plugin.list_resource_properties(
