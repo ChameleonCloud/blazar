@@ -68,20 +68,20 @@ def leases_delete(req, lease_id):
     return api_utils.render(status=200)
 
 
-@rest.get('/leases/<lease_id>/nodes')
-def nodes_in_lease_get(req, lease_id):
-    """Get nodes in lease by its ID."""
-    return api_utils.render(nodes=_api.nodes_in_lease(lease_id))
+@rest.get('/leases/<lease_id>/hosts')
+def hosts_in_lease_get(req, lease_id):
+    """Get hosts in lease by its ID."""
+    return api_utils.render(hosts=_api.hosts_in_lease(lease_id))
 
 @rest.get('/leases/<lease_id>/networks')
 def networks_in_lease_get(req, lease_id):
     """Get networks in lease by its ID."""
-    return api_utils.render(nodes=_api.networks_in_lease(lease_id))
+    return api_utils.render(networks=_api.networks_in_lease(lease_id))
 
 @rest.get('/leases/<lease_id>/devices')
 def devices_in_lease_get(req, lease_id):
     """Get devices in lease by its ID."""
-    return api_utils.render(nodes=_api.devices_in_lease(lease_id))
+    return api_utils.render(devices=_api.devices_in_lease(lease_id))
 
 
 # Plugins operations

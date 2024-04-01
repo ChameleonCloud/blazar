@@ -179,9 +179,9 @@ def lease_get(lease_id):
 
 
 @to_dict
-def nodes_in_lease(lease_id):
-    """Return nodes in a lease."""
-    return IMPL.nodes_in_lease(lease_id)
+def hosts_in_lease(lease_id):
+    """Return hosts in a lease."""
+    return IMPL.hosts_in_lease(lease_id)
 
 
 @to_dict

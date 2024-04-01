@@ -66,13 +66,13 @@ class API(object):
         return self.manager_service.get_lease(lease_id)
 
     @policy.authorize('leases', 'get')
-    def nodes_in_lease(self, lease_id):
-        """List all nodes in lease by its ID.
+    def hosts_in_lease(self, lease_id):
+        """List all hosts in lease by its ID.
 
         :param lease_id: ID of the lease in Blazar DB.
         :type lease_id: str
         """
-        return self.manager_service.nodes_in_lease(lease_id)
+        return self.manager_service.hosts_in_lease(lease_id)
 
     @policy.authorize('leases', 'get')
     def networks_in_lease(self, lease_id):

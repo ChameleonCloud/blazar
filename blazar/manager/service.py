@@ -321,8 +321,8 @@ class ManagerService(service_utils.RPCServer):
     def get_lease(self, lease_id):
         return db_api.lease_get(lease_id)
 
-    def nodes_in_lease(self, lease_id):
-        return db_api.nodes_in_lease(lease_id)
+    def hosts_in_lease(self, lease_id):
+        return db_api.hosts_in_lease(lease_id)
 
     def networks_in_lease(self, lease_id):
         return db_api.networks_in_lease(lease_id)

@@ -256,7 +256,7 @@ def lease_get_all_by_user(user_id):
     raise NotImplementedError
 
 
-def nodes_in_lease(lease_id):
+def hosts_in_lease(lease_id):
     query = model_query(models.ComputeHost, get_session())
     query = query.join(
         models.ComputeHostAllocation,
