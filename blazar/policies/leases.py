@@ -33,6 +33,14 @@ leases_policies = [
             {
                 'path': '/{api_version}/leases/{lease_id}/nodes',
                 'method': 'GET'
+            },
+            {
+                'path': '/{api_version}/leases/{lease_id}/networks',
+                'method': 'GET'
+            },
+            {
+                'path': '/{api_version}/leases/{lease_id}/devices',
+                'method': 'GET'
             }
         ]
     ),

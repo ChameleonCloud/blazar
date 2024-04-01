@@ -67,12 +67,30 @@ class API(object):
 
     @policy.authorize('leases', 'get')
     def nodes_in_lease(self, lease_id):
-        """Get lease by its ID.
+        """List all nodes in lease by its ID.
 
         :param lease_id: ID of the lease in Blazar DB.
         :type lease_id: str
         """
         return self.manager_service.nodes_in_lease(lease_id)
+
+    @policy.authorize('leases', 'get')
+    def networks_in_lease(self, lease_id):
+        """List all networks in lease by its ID.
+
+        :param lease_id: ID of the lease in Blazar DB.
+        :type lease_id: str
+        """
+        return self.manager_service.networks_in_lease(lease_id)
+
+    @policy.authorize('leases', 'get')
+    def devices_in_lease(self, lease_id):
+        """List all devices in lease by its ID.
+
+        :param lease_id: ID of the lease in Blazar DB.
+        :type lease_id: str
+        """
+        return self.manager_service.devices_in_lease(lease_id)
 
     @policy.authorize('leases', 'put')
     def update_lease(self, lease_id, data):

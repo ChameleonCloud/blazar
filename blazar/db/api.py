@@ -185,6 +185,18 @@ def nodes_in_lease(lease_id):
 
 
 @to_dict
+def networks_in_lease(lease_id):
+    """Return networks in a lease."""
+    return IMPL.networks_in_lease(lease_id)
+
+
+@to_dict
+def devices_in_lease(lease_id):
+    """Return devices in a lease."""
+    return IMPL.devices_in_lease(lease_id)
+
+
+@to_dict
 def lease_list(project_id=None):
     """Return a list of all existing leases."""
     return IMPL.lease_list(project_id)
