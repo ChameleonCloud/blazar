@@ -68,6 +68,12 @@ def leases_delete(req, lease_id):
     return api_utils.render(status=200)
 
 
+@rest.get('/leases/<lease_id>/nodes')
+def nodes_in_lease_get(req, lease_id):
+    """Get nodes in lease by its ID."""
+    return api_utils.render(nodes=_api.nodes_in_lease(lease_id))
+
+
 # Plugins operations
 
 @rest.get('/plugins')

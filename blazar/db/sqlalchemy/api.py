@@ -256,6 +256,24 @@ def lease_get_all_by_user(user_id):
     raise NotImplementedError
 
 
+def nodes_in_lease(lease_id):
+    query = model_query(models.ComputeHost, get_session())
+    query = query.join(
+        models.ComputeHostAllocation,
+        models.ComputeHostAllocation.compute_host_id == models.ComputeHost.id
+    ).join(
+        models.ComputeHostReservation,
+        models.ComputeHostReservation.reservation_id == models.ComputeHostAllocation.reservation_id
+    ).join(
+        models.Reservation,
+        models.Reservation.id == models.ComputeHostReservation.reservation_id
+    ).join(
+        models.Lease,
+        models.Lease.id == models.Reservation.lease_id
+    ).filter(models.Lease.id == lease_id)
+    return query.all()
+
+
 def lease_list(project_id=None):
     query = model_query(models.Lease, get_session())
     if project_id is not None:

@@ -179,6 +179,12 @@ def lease_get(lease_id):
 
 
 @to_dict
+def nodes_in_lease(lease_id):
+    """Return nodes in a lease."""
+    return IMPL.nodes_in_lease(lease_id)
+
+
+@to_dict
 def lease_list(project_id=None):
     """Return a list of all existing leases."""
     return IMPL.lease_list(project_id)

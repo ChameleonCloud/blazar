@@ -29,6 +29,10 @@ leases_policies = [
             {
                 'path': '/{api_version}/leases/{lease_id}',
                 'method': 'GET'
+            },
+            {
+                'path': '/{api_version}/leases/{lease_id}/nodes',
+                'method': 'GET'
             }
         ]
     ),
