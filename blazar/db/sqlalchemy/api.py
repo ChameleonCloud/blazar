@@ -278,7 +278,7 @@ def devices_in_lease(lease_id):
     query = model_query(models.Device, get_session())
     query = query.join(
         models.DeviceAllocation,
-        models.DeviceAllocation.compute_host_id == models.Device.id
+        models.DeviceAllocation.device_id == models.Device.id
     ).join(
         models.DeviceReservation,
         models.DeviceReservation.reservation_id == models.DeviceAllocation.reservation_id
@@ -296,7 +296,7 @@ def networks_in_lease(lease_id):
     query = model_query(models.NetworkSegment, get_session())
     query = query.join(
         models.NetworkAllocation,
-        models.NetworkAllocation.compute_host_id == models.NetworkSegment.id
+        models.NetworkAllocation.network_id == models.NetworkSegment.id
     ).join(
         models.NetworkReservation,
         models.NetworkReservation.reservation_id == models.NetworkAllocation.reservation_id
