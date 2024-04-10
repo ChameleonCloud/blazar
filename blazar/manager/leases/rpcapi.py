@@ -45,3 +45,15 @@ class ManagerRPCAPI(service.RPCClient):
     def delete_lease(self, lease_id):
         """Delete specified lease."""
         return self.call('delete_lease', lease_id=lease_id)
+
+    def hosts_in_lease(self, lease_id):
+        """List all hosts in lease by its ID."""
+        return self.call('hosts_in_lease', lease_id=lease_id)
+
+    def networks_in_lease(self, lease_id):
+        """List all networks in lease by its ID."""
+        return self.call('networks_in_lease', lease_id=lease_id)
+
+    def devices_in_lease(self, lease_id):
+        """List all devices in lease by its ID."""
+        return self.call('devices_in_lease', lease_id=lease_id)
