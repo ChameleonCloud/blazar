@@ -322,13 +322,31 @@ class ManagerService(service_utils.RPCServer):
         return db_api.lease_get(lease_id)
 
     def hosts_in_lease(self, lease_id):
-        return db_api.hosts_in_lease(lease_id)
+        hosts = db_api.hosts_in_lease(lease_id)
+        from blazar.plugins.oshosts import RESOURCE_TYPE as resource_type
+        for host in hosts:
+            extra_capabilities = self.plugins[resource_type]._get_extra_capabilities(host['id'])
+            if host is not None and extra_capabilities:
+                host.update(extra_capabilities)
+        return hosts
 
     def networks_in_lease(self, lease_id):
-        return db_api.networks_in_lease(lease_id)
+        networks = db_api.networks_in_lease(lease_id)
+        from blazar.plugins.networks import RESOURCE_TYPE as resource_type
+        for network in networks:
+            extra_capabilities = self.plugins[resource_type]._get_extra_capabilities(network['id'])
+            if network is not None and extra_capabilities:
+                network.update(extra_capabilities)
+        return networks
 
     def devices_in_lease(self, lease_id):
-        return db_api.devices_in_lease(lease_id)
+        devices = db_api.devices_in_lease(lease_id)
+        from blazar.plugins.devices import RESOURCE_TYPE as resource_type
+        for device in devices:
+            extra_capabilities = self.plugins[resource_type]._get_extra_capabilities(device['id'])
+            if device is not None and extra_capabilities:
+                device.update(extra_capabilities)
+        return devices
 
     def list_leases(self, project_id=None, query=None):
         return db_api.lease_list(project_id)
