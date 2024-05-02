@@ -1048,6 +1048,13 @@ def host_resource_inventory_create(values):
     return None
 
 
+def host_resource_inventory_get_all_per_host(host_id):
+    session = get_session()
+    with session.begin():
+        query = session.query(models.ComputeHostResourceInventory)
+        return query.filter_by(computehost_id=host_id).all()
+
+
 # ComputeHostTrait
 
 def host_trait_create(values):
