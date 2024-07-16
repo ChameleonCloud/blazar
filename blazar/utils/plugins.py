@@ -122,9 +122,13 @@ def send_lease_extension_reminder(lease, region_name):
                   '--lease-id "{lease_id}" '
                   '--end-datetime "{end_datetime}" '
                   '--site "{site}"')
-    if not user.email:
-        LOG.error('Email address not found for user {username}'.format(
-            username=user.name))
+    try:
+        if not user.email:
+            LOG.error('Email address not found for user {username}'.format(
+                username=user.name))
+            return
+    except AttributeError:
+        LOG.error(f"User does not have email attribute - username: {user.name}")
         return
     params = params_tmp.format(recipient=user.email,
                                username=user.name,

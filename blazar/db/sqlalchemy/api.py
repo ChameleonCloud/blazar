@@ -257,6 +257,60 @@ def lease_get_all_by_user(user_id):
     raise NotImplementedError
 
 
+def hosts_in_lease(lease_id):
+    query = model_query(models.ComputeHost, get_session())
+    query = query.join(
+        models.ComputeHostAllocation,
+        models.ComputeHostAllocation.compute_host_id == models.ComputeHost.id
+    ).join(
+        models.ComputeHostReservation,
+        models.ComputeHostReservation.reservation_id == models.ComputeHostAllocation.reservation_id
+    ).join(
+        models.Reservation,
+        models.Reservation.id == models.ComputeHostReservation.reservation_id
+    ).join(
+        models.Lease,
+        models.Lease.id == models.Reservation.lease_id
+    ).filter(models.Lease.id == lease_id)
+    return query.all()
+
+
+def devices_in_lease(lease_id):
+    query = model_query(models.Device, get_session())
+    query = query.join(
+        models.DeviceAllocation,
+        models.DeviceAllocation.device_id == models.Device.id
+    ).join(
+        models.DeviceReservation,
+        models.DeviceReservation.reservation_id == models.DeviceAllocation.reservation_id
+    ).join(
+        models.Reservation,
+        models.Reservation.id == models.DeviceReservation.reservation_id
+    ).join(
+        models.Lease,
+        models.Lease.id == models.Reservation.lease_id
+    ).filter(models.Lease.id == lease_id)
+    return query.all()
+
+
+def networks_in_lease(lease_id):
+    query = model_query(models.NetworkSegment, get_session())
+    query = query.join(
+        models.NetworkAllocation,
+        models.NetworkAllocation.network_id == models.NetworkSegment.id
+    ).join(
+        models.NetworkReservation,
+        models.NetworkReservation.reservation_id == models.NetworkAllocation.reservation_id
+    ).join(
+        models.Reservation,
+        models.Reservation.id == models.NetworkReservation.reservation_id
+    ).join(
+        models.Lease,
+        models.Lease.id == models.Reservation.lease_id
+    ).filter(models.Lease.id == lease_id)
+    return query.all()
+
+
 def lease_list(project_id=None):
     query = model_query(models.Lease, get_session())
     if project_id is not None:
@@ -2046,6 +2100,7 @@ def resource_properties_list(resource_type):
             models.ResourceProperty.property_name,
             models.ResourceProperty.private,
             resource_model.capability_value,
+            models.ExtraCapability.is_unique,
         ).join(resource_model), resource_model, deleted=False).distinct()
 
         return query.all()
