@@ -165,6 +165,31 @@ class BlazarPlacementClient(object):
 
     def create_resource_provider(self, rp_name, rp_uuid=None,
                                  parent_uuid=None):
+        """Calls _create_resource_provider idempotently."""
+
+        def rp_matches_current(rp_name,rp_uuid,parent_uuid,existing_rp) -> bool:
+            name_match = existing_rp.get("name")==rp_name
+            uuid_match = (existing_rp.get("uuid")==rp_name) or rp_uuid==None
+            parent_match = existing_rp.get("parent_provider_uuid")==parent_uuid
+            return name_match and uuid_match and parent_match
+
+        try:
+            response = self._create_resource_provider(rp_name=rp_name,
+                                                      rp_uuid=rp_uuid,
+                                                      parent_uuid=parent_uuid)
+        except exceptions.ResourceProviderCreationConflict as e:
+            existing_rp = self.get_reservation_provider(host_name=parent_uuid)
+            if rp_matches_current(rp_name,rp_uuid,parent_uuid,existing_rp):
+                LOG.warn(f"Found existing RP when creating {rp_name}, reusing it as name and parent match")
+                return existing_rp
+            else:
+                """Case where there's a conflict on resource name, and either parent_uuid or our chosen UUID's don't match"""
+                raise(e)
+        else:
+            return response
+
+    def _create_resource_provider(self, rp_name, rp_uuid=None,
+                                 parent_uuid=None):
         """Calls the placement API to create a new resource provider record.
 
         :param rp_name: Name of the resource provider
