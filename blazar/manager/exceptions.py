@@ -59,6 +59,8 @@ class AggregateNotFound(exceptions.NotFound):
 class HostNotFound(exceptions.NotFound):
     msg_fmt = _("Host '%(host)s' not found!")
 
+class DuplicateHost(exceptions.Conflict):
+    msg_fmt = _("Host %(host)s already exists")
 
 class InvalidHost(exceptions.NotAuthorized):
     msg_fmt = _("Invalid values for host %(host)s")
