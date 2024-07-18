@@ -315,19 +315,19 @@ class ComputeHostExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
         return super(ComputeHostExtraCapability, self).to_dict()
 
 
-    @validates('capability_id', 'capability_value')
-    def validate_capability(self, key, value):
-        """Validates the capability ID and value before assigning
+    @validates('property_id', 'capability_value')
+    def validate_property(self, key, value):
+        """Validates the proeprty ID and value before assigning
         them to a ComputeHostExtraCapability instance.
 
         This validation method is called for two scenarios:
         1. When a capability ID is first assigned to a compute host.
-            both capability_id and capability_value are validated in this case
+            both property_id and capability_value are validated in this case
         2. When a capability value is updated for an existing capability ID.
 
         Args:
             key (str): The attribute key being validated
-                ('capability_id' or 'capability_value').
+                ('property_id' or 'capability_value').
             value (str)
 
         Raises:
@@ -339,26 +339,26 @@ class ComputeHostExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
         from blazar.db.sqlalchemy import facade_wrapper
         session = facade_wrapper.get_session()
 
-        # Determine the capability ID and value to validate based on the key
-        capability_id = value if key == "capability_id" else self.capability_id
+        # Determine the property ID and value to validate based on the key
+        property_id = value if key == "property_id" else self.property_id
         capability_value = value if key == "capability_value" else self.capability_value
 
-        extra_capability = session.query(ExtraCapability).filter_by(id=capability_id).first()
-        if extra_capability and extra_capability.is_unique:
+        resource_property = session.query(ResourceProperty).filter_by(id=property_id).first()
+        if resource_property and resource_property.is_unique:
             # exclude the current compute_host
             # we should allow updating the node_name with current name
             existing_capability = (
                 session.query(ComputeHostExtraCapability).filter(
                        ComputeHostExtraCapability.computehost_id!=self.computehost_id,
-                       ComputeHostExtraCapability.capability_id==extra_capability.id,
+                       ComputeHostExtraCapability.property_id==resource_property.id,
                        ComputeHostExtraCapability.capability_value==capability_value,
                        ComputeHostExtraCapability.deleted==None
                 )
             ).first()
             if existing_capability:
                 raise ValueError(
-                    f"{extra_capability.capability_name} must be unique. "
-                    f"Please select unique {extra_capability.capability_name} for "
+                    f"{resource_property.capability_name} must be unique. "
+                    f"Please select unique {resource_property.capability_name} for "
                     f"{self.computehost_id}"
                 )
         return value
