@@ -1594,7 +1594,7 @@ def network_extra_capability_create(values):
         get_session(), 'network', values.get('capability_name'))
 
     del values['capability_name']
-    values['capability_id'] = resource_property.id
+    values['property_id'] = resource_property.id
 
     network_extra_capability = models.NetworkSegmentExtraCapability()
     network_extra_capability.update(values)
@@ -2002,7 +2002,7 @@ def device_extra_capability_create(values):
         get_session(), 'device', values.get('capability_name'))
 
     del values['capability_name']
-    values['capability_id'] = resource_property.id
+    values['property_id'] = resource_property.id
 
     device_extra_capability = models.DeviceExtraCapability()
     device_extra_capability.update(values)
@@ -2100,7 +2100,7 @@ def resource_properties_list(resource_type):
             models.ResourceProperty.property_name,
             models.ResourceProperty.private,
             resource_model.capability_value,
-            models.ExtraCapability.is_unique,
+            models.ResourceProperty.is_unique,
         ).join(resource_model), resource_model, deleted=False).distinct()
 
         return query.all()
