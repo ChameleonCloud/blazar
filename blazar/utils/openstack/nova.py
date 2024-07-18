@@ -270,8 +270,7 @@ class ReservationPool(NovaClientWrapper):
                 except nova_exception.NotFound:
                     raise manager_exceptions.HostNotFound(host=host)
                 except nova_exception.Conflict as e:
-                    raise manager_exceptions.AggregateAlreadyHasHost(
-                        pool=pool, host=host, nova_exception=str(e))
+                    LOG.warning(f"Host {host} is already in aggregate id {agg.id}, continuing anyway")
 
                 # remove preemptible instances
                 for server in self.nova.servers.list(
