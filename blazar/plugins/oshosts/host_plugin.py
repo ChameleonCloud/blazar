@@ -1010,7 +1010,7 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                                      in failed_bm_ids])
                 active_bm_ids = [n.uuid for n in nodes
                                  if not n.maintenance
-                                 and n.provision_state in ['available']]
+                                 and n.provision_state in ['available', 'active']]
                 recovered_hosts.extend([host for host in unreservable_hosts
                                         if host['hypervisor_hostname']
                                         in active_bm_ids])
