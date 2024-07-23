@@ -23,6 +23,7 @@ from blazar.enforcement.exceptions import ExternalServiceFilterException
 from blazar.enforcement.filters import base_filter
 from blazar.exceptions import BlazarException
 from blazar.i18n import _
+from blazar.utils.openstack.keystone import BlazarKeystoneClient
 
 from oslo_config import cfg
 from oslo_log import log as logging
@@ -96,7 +97,12 @@ class ExternalServiceFilter(base_filter.BaseFilter):
             raise ExternalServiceMisconfigured(
                 message=_("ExternalService has no endpoints set."))
 
-        self.token = conf.enforcement.external_service_token
+        if conf.enforcement.external_service_token:
+            self.token = (self.external_service_token)
+        else:
+            client = BlazarKeystoneClient()
+            self.token = client.session.get_token()
+
 
     @staticmethod
     def _validate_url(url):
