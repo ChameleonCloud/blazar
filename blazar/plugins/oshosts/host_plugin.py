@@ -335,6 +335,12 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         for host in raw_host_list:
             host_list.append(self.get_computehost(host['id']))
         return host_list
+    
+    def _host_exists(self, host_name_or_id):
+        # TODO: This is where we need to decide what a conflict is
+        # are different UUIDs with same "name" OK? what about different names, but 
+        # referring to the same placement resource?
+        raise NotImplementedError
 
     def create_computehost(self, host_values):
         # TODO(sbauza):
@@ -349,6 +355,13 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         host_ref = host_id or host_name
         if host_ref is None:
             raise manager_ex.InvalidHost(host=host_values)
+        elif(self._host_exists(host_ref)):
+            # TODO: this exception should probably contain the existing host, 
+            # not the one we're trying to make
+            # TODO if we don't make a check here, nothing guarantees we can't have 
+            # multiple reservation hosts for the same placement resource.
+            # the DB should probably enforce this, 
+            raise manager_ex.DuplicateHost(host=host_values)            
 
         inventory = nova.NovaInventory()
         servers = inventory.get_servers_per_host(host_ref)

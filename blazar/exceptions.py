@@ -62,6 +62,9 @@ class NotAuthorized(BlazarException):
     msg_fmt = _("Not authorized")
     code = 403
 
+class Conflict(BlazarException):
+    msg_fmt = _("Conflict with %(object)s")
+    code = 409
 
 class PolicyNotAuthorized(NotAuthorized):
     msg_fmt = _("Policy doesn't allow %(action)s to be performed")
