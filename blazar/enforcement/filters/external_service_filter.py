@@ -97,12 +97,7 @@ class ExternalServiceFilter(base_filter.BaseFilter):
             raise ExternalServiceMisconfigured(
                 message=_("ExternalService has no endpoints set."))
 
-        if conf.enforcement.external_service_token:
-            self.token = (self.external_service_token)
-        else:
-            client = BlazarKeystoneClient()
-            self.token = client.session.get_token()
-
+        self.token = conf.enforcement.external_service_token
 
     @staticmethod
     def _validate_url(url):
@@ -132,6 +127,10 @@ class ExternalServiceFilter(base_filter.BaseFilter):
 
         if self.token:
             headers['X-Auth-Token'] = self.token
+        else:
+            client = BlazarKeystoneClient()
+            headers['X-Auth-Token'] = client.session.get_token()
+
 
         return headers
 
