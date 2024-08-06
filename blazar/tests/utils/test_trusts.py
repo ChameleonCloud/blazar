@@ -75,7 +75,7 @@ class TestTrusts(tests.TestCase):
             'system_scope': None,
             'user': None,
             'user_domain': None}
-        self.assertDictContainsSubset(fake_ctx_dict, ctx.to_dict())
+        self.assertLessEqual(fake_ctx_dict.items(), ctx.to_dict().items())
 
     def test_create_ctx_from_trust_preserves_admin(self):
         """Regression: trust context must preserve admin roles.
