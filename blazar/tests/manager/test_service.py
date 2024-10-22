@@ -764,6 +764,7 @@ class ServiceTestCase(tests.DBTestCase):
 
     def test_create_lease_with_filter_exception(self):
         lease_values = self.lease_values.copy()
+        self.lease_create.return_value = self.lease
 
         self.enforcement.check_create.side_effect = (
             enforcement_ex.MaxLeaseDurationException(lease_duration=200,
@@ -772,7 +773,7 @@ class ServiceTestCase(tests.DBTestCase):
         self.assertRaises(exceptions.NotAuthorized,
                           self.manager.create_lease,
                           lease_values=lease_values)
-        self.lease_create.assert_not_called()
+        self.assertEqual(1, self.lease_create.call_count)
 
     def test_update_lease_completed_lease_rename(self):
         lease_values = {'name': 'renamed'}
