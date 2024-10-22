@@ -375,12 +375,6 @@ class ManagerService(service_utils.RPCServer):
 
             allocations = self._allocation_candidates(
                 lease_values, reservations)
-            try:
-                self.enforcement.check_create(
-                    context.current(), lease_values, reservations, allocations)
-            except common_ex.NotAuthorized as e:
-                LOG.error("Enforcement checks failed. %s", str(e))
-                raise common_ex.NotAuthorized(e)
 
             events.append({'event_type': 'start_lease',
                            'time': start_date,
@@ -438,6 +432,13 @@ class ManagerService(service_utils.RPCServer):
                                       "lease. Rollback the lease and "
                                       "associated reservations")
                         db_api.lease_destroy(lease_id)
+
+                try:
+                    self.enforcement.check_create(
+                        context.current(), lease_values, reservations, allocations)
+                except common_ex.NotAuthorized as e:
+                    LOG.error("Enforcement checks failed. %s", str(e))
+                    raise common_ex.NotAuthorized(e)
 
                 try:
                     for event in events:
