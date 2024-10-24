@@ -425,7 +425,7 @@ class ManagerService(service_utils.RPCServer):
                         reservation['start_date'] = lease['start_date']
                         reservation['end_date'] = lease['end_date']
                         reservation['project_id'] = lease['project_id']
-                        self._create_reservation(reservation)
+                        reservation["id"] = self._create_reservation(reservation)
                 except Exception:
                     with save_and_reraise_exception():
                         LOG.exception("Failed to create reservation for a "
@@ -809,6 +809,7 @@ class ManagerService(service_utils.RPCServer):
         )
         db_api.reservation_update(reservation['id'],
                                   {'resource_id': resource_id})
+        return reservation["id"]
 
     def _allocation_candidates(self, lease, reservations):
         """Returns dict by resource type of reservation candidates."""
