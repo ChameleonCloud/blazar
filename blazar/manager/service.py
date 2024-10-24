@@ -375,12 +375,6 @@ class ManagerService(service_utils.RPCServer):
 
             allocations = self._allocation_candidates(
                 lease_values, reservations)
-            try:
-                self.enforcement.check_create(
-                    context.current(), lease_values, reservations, allocations)
-            except common_ex.NotAuthorized as e:
-                LOG.error("Enforcement checks failed. %s", str(e))
-                raise common_ex.NotAuthorized(e)
 
             events.append({'event_type': 'start_lease',
                            'time': start_date,
@@ -431,13 +425,20 @@ class ManagerService(service_utils.RPCServer):
                         reservation['start_date'] = lease['start_date']
                         reservation['end_date'] = lease['end_date']
                         reservation['project_id'] = lease['project_id']
-                        self._create_reservation(reservation)
+                        reservation["id"] = self._create_reservation(reservation)
                 except Exception:
                     with save_and_reraise_exception():
                         LOG.exception("Failed to create reservation for a "
                                       "lease. Rollback the lease and "
                                       "associated reservations")
                         db_api.lease_destroy(lease_id)
+
+                try:
+                    self.enforcement.check_create(
+                        context.current(), lease_values, reservations, allocations)
+                except common_ex.NotAuthorized as e:
+                    LOG.error("Enforcement checks failed. %s", str(e))
+                    raise common_ex.NotAuthorized(e)
 
                 try:
                     for event in events:
@@ -808,6 +809,7 @@ class ManagerService(service_utils.RPCServer):
         )
         db_api.reservation_update(reservation['id'],
                                   {'resource_id': resource_id})
+        return reservation["id"]
 
     def _allocation_candidates(self, lease, reservations):
         """Returns dict by resource type of reservation candidates."""
