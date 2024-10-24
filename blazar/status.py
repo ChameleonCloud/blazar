@@ -224,7 +224,10 @@ class LeaseStatus(BaseStatus):
                 try:
                     result = func(*args, **kwargs)
                 except Exception as e:
-                    if type(e) in non_fatal_exceptions:
+                    is_non_fatal = any(
+                        [isinstance(e, non_fatal_type)
+                         for non_fatal_type in non_fatal_exceptions])
+                    if is_non_fatal:
                         LOG.exception('Non-fatal exception during transition '
                                       'of lease %s', lease_id)
                         db_api.lease_update(lease_id,
