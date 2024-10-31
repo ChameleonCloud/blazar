@@ -438,6 +438,7 @@ class ManagerService(service_utils.RPCServer):
                         context.current(), lease_values, reservations, allocations)
                 except common_ex.NotAuthorized as e:
                     LOG.error("Enforcement checks failed. %s", str(e))
+                    db_api.lease_destroy(lease_id)
                     raise common_ex.NotAuthorized(e)
 
                 try:
