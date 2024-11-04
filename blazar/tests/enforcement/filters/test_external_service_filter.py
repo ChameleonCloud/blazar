@@ -140,6 +140,8 @@ class ExternalServiceFilterTestCase(TestCase):
         CONF.set_override(
             'external_service_base_endpoint', 'http://localhost',
             group='enforcement')
+        CONF.set_override(
+            'external_service_token', 'test_token', group='enforcement')
         self.addCleanup(CONF.clear_override, 'external_service_base_endpoint',
                         group='enforcement')
 
@@ -163,7 +165,7 @@ class ExternalServiceFilterTestCase(TestCase):
         self.filter.check_create(self.ctx, self.lease)
         post_mock.assert_called_with(
             "http://localhost/check-create",
-            headers={'Content-Type': 'application/json'},
+            headers={'Content-Type': 'application/json', 'X-Auth-Token': 'test_token'},
             data='{"context": {"is_context": true}, '
                  '"lease": {"is_lease": true}}')
 
@@ -175,7 +177,7 @@ class ExternalServiceFilterTestCase(TestCase):
                           self.ctx, self.lease)
         post_mock.assert_called_with(
             "http://localhost/check-create",
-            headers={'Content-Type': 'application/json'},
+            headers={'Content-Type': 'application/json', 'X-Auth-Token': 'test_token'},
             data='{"context": {"is_context": true}, '
                  '"lease": {"is_lease": true}}')
 
@@ -187,7 +189,7 @@ class ExternalServiceFilterTestCase(TestCase):
                           self.ctx, self.lease)
         post_mock.assert_called_with(
             "http://localhost/check-create",
-            headers={'Content-Type': 'application/json'},
+            headers={'Content-Type': 'application/json', 'X-Auth-Token': 'test_token'},
             data='{"context": {"is_context": true}, '
                  '"lease": {"is_lease": true}}')
 
@@ -197,7 +199,7 @@ class ExternalServiceFilterTestCase(TestCase):
         self.filter.check_update(self.ctx, self.old_lease, self.lease)
         post_mock.assert_called_with(
             "http://localhost/check-update",
-            headers={'Content-Type': 'application/json'},
+            headers={'Content-Type': 'application/json', 'X-Auth-Token': 'test_token'},
             data='{"context": {"is_context": true}, '
                  '"current_lease": {"is_old_lease": true}, '
                  '"lease": {"is_lease": true}}')
@@ -210,7 +212,7 @@ class ExternalServiceFilterTestCase(TestCase):
                           self.ctx, self.old_lease, self.lease)
         post_mock.assert_called_with(
             "http://localhost/check-update",
-            headers={'Content-Type': 'application/json'},
+            headers={'Content-Type': 'application/json', 'X-Auth-Token': 'test_token'},
             data='{"context": {"is_context": true}, '
                  '"current_lease": {"is_old_lease": true}, '
                  '"lease": {"is_lease": true}}')
@@ -224,7 +226,7 @@ class ExternalServiceFilterTestCase(TestCase):
                           self.ctx, self.old_lease, self.lease)
         post_mock.assert_called_with(
             "http://localhost/check-update",
-            headers={'Content-Type': 'application/json'},
+            headers={'Content-Type': 'application/json', 'X-Auth-Token': 'test_token'},
             data='{"context": {"is_context": true}, '
                  '"current_lease": {"is_old_lease": true}, '
                  '"lease": {"is_lease": true}}')
@@ -235,18 +237,20 @@ class ExternalServiceFilterTestCase(TestCase):
         self.filter.on_end(self.ctx, self.lease)
         post_mock.assert_called_with(
             "http://localhost/on-end",
-            headers={'Content-Type': 'application/json'},
+            headers={'Content-Type': 'application/json', 'X-Auth-Token': 'test_token'},
             data='{"context": {"is_context": true}, '
                  '"lease": {"is_lease": true}}')
 
     @mock.patch("requests.post")
     def test_on_end_failure(self, post_mock):
+        CONF.set_override(
+            'external_service_token', 'test_token', group='enforcement')
         post_mock.return_value = FakeResponse500()
         self.assertRaises(ExternalServiceFilterException,
                           self.filter.on_end,
                           self.ctx, self.lease)
         post_mock.assert_called_with(
             "http://localhost/on-end",
-            headers={'Content-Type': 'application/json'},
+            headers={'Content-Type': 'application/json', 'X-Auth-Token': 'test_token'},
             data='{"context": {"is_context": true}, '
                  '"lease": {"is_lease": true}}')

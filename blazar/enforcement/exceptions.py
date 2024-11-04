@@ -29,7 +29,7 @@ class MaxLeaseUpdateWindowException(exceptions.NotAuthorized):
                 'seconds of the leases current end time.')
 
 
-class ExternalServiceFilterException(exceptions.BlazarException):
+class ExternalServiceFilterException(exceptions.NotAuthorized):
     code = 400
     msg_fmt = _('%(message)s')
 

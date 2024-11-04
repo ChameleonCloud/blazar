@@ -85,7 +85,7 @@ class MaxLeaseDurationTestCase(tests.TestCase):
             dict(
                 type='identity', endpoints=[
                     dict(
-                        interface='internal', region=self.region,
+                        interface='public', region=self.region,
                         url='https://fakeauth.com')
                 ]
             )
