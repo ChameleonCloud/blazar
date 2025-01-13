@@ -1,31 +1,47 @@
 name: Unit tests
 
-env:
-  # This should match the default python_version build arg
-  PYTHON_VERSION: 3.8
-  TOX_ENV: py38
-
 on:
   push:
     branches:
-      - "*"
+      - "chameleoncloud/*"
   pull_request:
-    types: [opened, reopened]
+
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-
+  run_linting:
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+      - uses: astral-sh/ruff-action@v3
 
-      - name: Set up Python 3.x
-        uses: actions/setup-python@v1
+
+  run_tests:
+    strategy:
+      matrix:
+        include:
+          - python_version: "3.9"
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install tox
-        run: pip install tox
-
-      - name: Run tests
-        run: tox -e ${{ env.TOX_ENV }}
+          python-version: ${{ matrix.python_version }}
+      - name: install uv for speedup
+        run: pip install uv
+      - name: install test tools
+        run: |
+          uv pip install \
+            --system \
+            -r requirements.txt \
+            -r test-requirements.txt \
+            .
+      - name: init stestr repo
+        run: stestr init
+      - name: run stestr tests
+        run: |
+          stestr run \
+          --exclude-list stestr_known_failing.txt
+      - name: list failing tests
+        run: stestr failing --list
+        if: always() #run even if tests fail
