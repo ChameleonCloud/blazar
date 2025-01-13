@@ -717,7 +717,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         else:
             hosts = db_api.reservable_host_get_all_by_queries(filter_array)
         for host in hosts:
-            if not self.is_project_allowed(project_id, resource_properties):
+            if not self.is_project_allowed(project_id, self.get_computehost(host["id"])):
                 continue
             if not db_api.host_allocation_get_all_by_values(
                     compute_host_id=host['id']):
