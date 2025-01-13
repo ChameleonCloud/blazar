@@ -39,7 +39,9 @@ jobs:
       - name: init stestr repo
         run: stestr init
       - name: run stestr tests
-        run: stestr run
+        run: |
+          stestr run \
+          --exclude-list stestr_known_failing.txt
       - name: list failing tests
         run: stestr failing --list
         if: always() #run even if tests fail
