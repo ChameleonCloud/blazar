@@ -41,5 +41,5 @@ jobs:
       - name: run stestr tests
         run: stestr run
       - name: list failing tests
-        run: stestr list --failing
+        run: stestr failing --list
         if: always() #run even if tests fail

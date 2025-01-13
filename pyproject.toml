@@ -15,12 +15,13 @@ select = [
 
 
 ignore = [
+    "E402", # many files monkeypatch eventlet, so imports not at top of file
     "E501", # line too long
+    "E741", # Ambiguous variable name
+    "F401", # imported but unused
+    "F841", # Local variable is assigned to but never used
     "G001", # logging statement uses str.format
     "G002", # Logging statement uses `%`
     "G004", # logging statement uses f-string
     "G010", # Logging statement uses `warn` instead of `warning`
-    "E741", # Ambiguous variable name
-    "F401", # imported but unused
-    "E402", # many files monkeypatch eventlet, so imports not at top of file
 ]
