@@ -16,14 +16,14 @@
 """Add compute host inventory and traits
 
 Revision ID: 553383923ca0
-Revises: 02e2f2186d98
+Revises: ee3b2513b59f
 Create Date: 2024-04-29 17:40:05.148493
 
 """
 
 # revision identifiers, used by Alembic.
 revision = '553383923ca0'
-down_revision = '02e2f2186d98'
+down_revision = 'ee3b2513b59f'
 
 from alembic import op
 import sqlalchemy as sa
