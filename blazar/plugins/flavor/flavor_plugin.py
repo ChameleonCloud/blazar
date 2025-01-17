@@ -27,9 +27,19 @@ from blazar.plugins import flavor as plugin
 from blazar.plugins.instances import instance_plugin
 from blazar.plugins.oshosts import host_plugin
 from blazar.utils.openstack import nova
+from blazar.utils import plugins as plugins_utils
 from blazar.utils.openstack import placement
 
+plugin_opts = [
+    cfg.StrOpt('before_end',
+               default='',
+               help='Actions which we will be taken before the end of '
+                    'the lease'),
+]
+
 CONF = cfg.CONF
+CONF.register_opts(plugin_opts, group=plugin.RESOURCE_TYPE)
+
 LOG = logging.getLogger(__name__)
 
 QUERY_TYPE_ALLOCATION = 'allocation'
@@ -371,7 +381,7 @@ class FlavorPlugin(base.BasePlugin):
             # [scheduler]placement_aggregate_required_for_tenants=True
             'filter_tenant_id': ctx.project_id,
         }
-        agg = pool.create(name=reservation_id, metadata=pool_metadata)
+        agg = pool.create(name=reservation_id, metadata=pool_metadata, project_id=ctx.project_id)
 
         # TODO(johngarbutt) maybe add inventory here, but mark
         # then inventory as reserved to start with?
@@ -414,8 +424,20 @@ class FlavorPlugin(base.BasePlugin):
         raise mgr_exceptions.NotImplemented(
             error="Flavor-based reservation update not yet supported")
 
-    def on_start(self, resource_id):
-        self._instance_plugin.on_start(resource_id)
+    def on_start(self, resource_id, lease=None):
+        self._instance_plugin.on_start(resource_id, lease)
 
-    def on_end(self, resource_id):
-        self._instance_plugin.on_end(resource_id)
+    def on_end(self, resource_id, lease=None):
+        self._instance_plugin.on_end(resource_id, lease)
+
+    def before_end(self, resource_id, lease=None):
+        """Take an action before the end of a lease."""
+        instance_reservation = db_api.instance_reservation_get(resource_id)
+
+        action = instance_reservation['before_end']
+        if action == 'default':
+            action = CONF[plugin.RESOURCE_TYPE].before_end
+
+        if action == 'email':
+            plugins_utils.send_lease_extension_reminder(
+                lease, CONF.os_region_name)

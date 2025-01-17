@@ -1004,7 +1004,9 @@ def host_resource_inventory_create(values):
     host_resource_inventory = models.ComputeHostResourceInventory()
     host_resource_inventory.update(values)
 
-    with facade_wrapper.session_for_write() as session:
+    session = get_session()
+
+    with session.begin():
         try:
             host_resource_inventory.save(session=session)
         except common_db_exc.DBDuplicateEntry as e:
@@ -1017,7 +1019,9 @@ def host_resource_inventory_create(values):
 
 
 def host_resource_inventory_get_all_per_host(host_id):
-    with facade_wrapper.session_for_read() as session:
+    session = get_session()
+
+    with session.begin():
         query = session.query(models.ComputeHostResourceInventory)
         return query.filter_by(computehost_id=host_id).all()
 
@@ -1030,7 +1034,9 @@ def host_trait_create(values):
     host_trait = models.ComputeHostTrait()
     host_trait.update(values)
 
-    with facade_wrapper.session_for_write() as session:
+    session = get_session()
+
+    with session.begin():
         try:
             host_trait.save(session=session)
         except common_db_exc.DBDuplicateEntry as e:
