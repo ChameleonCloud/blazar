@@ -434,8 +434,12 @@ class ManagerService(service_utils.RPCServer):
                         db_api.lease_destroy(lease_id)
 
                 try:
+                    # NOTE: We fetch this again as the plugin's reserve_resource
+                    # may have updated the reservation usefully. (such as fetching flavor info)
+                    db_reservations = (
+                        db_api.reservation_get_all_by_lease_id(lease_id))
                     self.enforcement.check_create(
-                        context.current(), lease_values, reservations, allocations)
+                        context.current(), lease_values, db_reservations, allocations)
                 except common_ex.NotAuthorized as e:
                     LOG.error("Enforcement checks failed. %s", str(e))
                     db_api.lease_destroy(lease_id)
