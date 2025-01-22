@@ -208,6 +208,9 @@ class ServiceTestCase(tests.DBTestCase):
         self.reservation_update = self.patch(self.db_api, 'reservation_update')
         self.event_create = self.patch(self.db_api, 'event_create')
         self.event_update = self.patch(self.db_api, 'event_update')
+        self.reservation_get_all_by_lease_id = self.patch(
+            self.db_api, "reservation_get_all_by_lease_id"
+        )
         self.manager.plugins = {'virtual:instance': self.fake_plugin}
         self.manager.resource_actions = (
             {'virtual:instance':
@@ -498,6 +501,29 @@ class ServiceTestCase(tests.DBTestCase):
         self.fake_notifier.assert_called_once_with(
             {}, notifier_api.format_lease_payload(lease),
             'lease.create')
+
+    def test_create_lease_enforcement_gets_db_reservations(self):
+        lease_values = copy.deepcopy(self.lease_values)
+        lease_values['reservations'] = [{'resource_type': 'virtual:instance',
+                                         'flavor_id': 'm1.xsmall',
+                                         'amount': 1}]
+        self.lease_create.return_value = self.lease
+
+        db_reservations = [{'id': '111',
+                            'resource_type': 'virtual:instance',
+                            'flavor_id': 'm1.xsmall',
+                            'amount': 1,
+                            'vcpus': 4,
+                            'memory_mb': 8192,
+                            'disk_gb': 40}]
+        self.reservation_get_all_by_lease_id.return_value = db_reservations
+
+        self.manager.create_lease(lease_values)
+
+        self.reservation_get_all_by_lease_id.assert_called_once_with(
+            self.lease_id)
+        passed = self.enforcement.check_create.call_args[0][2]
+        self.assertEqual(db_reservations, passed)
 
     def test_create_lease_some_time(self):
         lease_values = self.lease_values.copy()

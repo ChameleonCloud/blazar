@@ -450,8 +450,19 @@ class ManagerService(service_utils.RPCServer):
                         db_api.lease_destroy(lease_id)
 
                 try:
+                    # Plugins may take the reservation request and add extra 
+                    # data before persisting to the DB. Ensure that enforcement
+                    # acts on the version from the DB, rather than the request 
+                    # body from lease_values
+                    db_reservations = db_api.reservation_get_all_by_lease_id(
+                        lease_id
+                    )
                     self.enforcement.check_create(
-                        context.current(), lease_values, reservations, allocations)
+                        context.current(),
+                        lease_values,
+                        db_reservations,
+                        allocations,
+                    )
                 except common_ex.NotAuthorized as e:
                     LOG.warning("Enforcement checks failed. %s", str(e))
                     db_api.lease_destroy(lease_id)
