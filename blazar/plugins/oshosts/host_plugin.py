@@ -76,6 +76,11 @@ plugin_opts = [
     cfg.BoolOpt('randomize_host_selection',
                 default=False,
                 help='Allocate hosts for reservations randomly.'),
+    cfg.BoolOpt('allow_reservation',
+        default=True,
+        help='Allow users to create host reservations. This plugin must be enabled '
+             'for flavor reservations, but it may not be desirable to allow an '
+             'entire host to be reserved.'),
 ]
 
 plugin_opts.extend(monitor.monitor_opts)
@@ -112,6 +117,9 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
 
     def reserve_resource(self, reservation_id, values):
         """Create reservation."""
+        if not CONF[self.resource_type].allow_reservation:
+            raise manager_ex.UnsupportedResourceType(resource_type=self.resource_type)
+
         ctx = context.current()
         host_ids = self.allocation_candidates(values)
 
@@ -1088,6 +1096,9 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
             for host in all_hosts:
                 # get the most recent reservation for the host_id and check if we need to move to freepool
                 reservation = db_utils.get_most_recent_reservation_info_by_host_id(host['id'])
+                # Ignore host if no host reservation exists for it
+                if not reservation:
+                    continue
                 # ignore the reservation which is active, as the host must already be in the right pool
                 if reservation and reservation["reservation_status"] == status.reservation.ACTIVE:
                     LOG.debug(f"{host['hypervisor_hostname']} is in an active reservation"
