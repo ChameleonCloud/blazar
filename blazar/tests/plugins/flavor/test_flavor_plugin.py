@@ -310,11 +310,14 @@ class TestFlavorPlugin(tests.DBTestCase):
         mock_pool_create.assert_called_once_with(
             name="12345",
             metadata={'reservation': '12345',
-                      'filter_tenant_id': 'fake-project-id'}
+                      'filter_tenant_id': 'fake-project-id'},
+            project_id='fake-project-id',
         ),
 
     @mock.patch.object(flavors.FlavorManager, 'create')
-    def test_create_flavor(self, mock_create):
+    @mock.patch.object(db_api, "reservation_get")
+    @mock.patch.object(db_api, "lease_get")
+    def test_create_flavor(self, mock_lease_get, mock_reservation_get, mock_create):
         plugin = flavor_plugin.FlavorPlugin()
         fake_flavor = {
             "disk": 10,  # GiB
@@ -337,6 +340,14 @@ class TestFlavorPlugin(tests.DBTestCase):
         }
         mock_flavor = mock.Mock()
         mock_create.return_value = mock_flavor
+        class FakeRes:
+            def to_dict(self):
+                return {"lease_id": 1}
+        mock_reservation_get.return_value = FakeRes()
+        class FakeLease:
+            def to_dict(self):
+                return {"name": "my_lease"}
+        mock_lease_get.return_value = FakeLease()
 
         plugin._create_flavor(fake_reservation)
 
@@ -347,7 +358,7 @@ class TestFlavorPlugin(tests.DBTestCase):
         })
         mock_create.assert_called_once_with(
             flavorid='12345', name='reservation:12345', vcpus=2, ram=1024,
-            disk=10, is_public=False)
+            disk=10, is_public=False, description="my_lease")
 
     def test__query_available_hosts(self):
         get_reservations = self.patch(db_utils,

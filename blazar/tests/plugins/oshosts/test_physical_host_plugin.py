@@ -119,7 +119,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         self.db_utils = db_utils
 
         self.db_host_get = self.patch(self.db_api, 'host_get')
-        self.db_host_get.return_value = self.fake_host
+        self.db_host_get.return_value = self.fake_host.copy()
         self.db_host_list = self.patch(self.db_api, 'host_list')
         self.db_host_create = self.patch(self.db_api, 'host_create')
         self.db_host_update = self.patch(self.db_api, 'host_update')
@@ -149,7 +149,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
                                               'remove_computehost')
         self.get_host_details = self.patch(self.nova.NovaInventory,
                                            'get_host_details')
-        self.get_host_details.return_value = self.fake_host
+        self.get_host_details.return_value = self.fake_host.copy()
         self.get_servers_per_host = self.patch(
             self.nova.NovaInventory, 'get_servers_per_host')
         self.get_servers_per_host.return_value = None
@@ -248,7 +248,9 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         host = self.fake_phys_plugin.create_computehost(fake_request)
 
         self.assertEqual(self.fake_host, host)
-        self.db_host_create.assert_called_once_with(self.fake_host)
+        fake_db_return = self.fake_host.copy()
+        fake_db_return.pop("id")
+        self.db_host_create.assert_called_once_with(fake_db_return)
         self.prov_create.assert_called_once_with('hypvsr1')
         mock_get_inventory.assert_called_once_with("fake_rp_uuid")
         mock_get_traits.assert_called_once_with("fake_rp_uuid")
@@ -306,11 +308,12 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         host = self.fake_phys_plugin.create_computehost(fake_request)
 
         self.assertEqual(fake_host, host)
-        self.db_host_create.assert_called_once_with(self.fake_host)
+        expected_fake_host = self.fake_host.copy()
+        expected_fake_host.pop("id")
+        self.db_host_create.assert_called_once_with(expected_fake_host)
         self.prov_create.assert_called_once_with('hypvsr1')
         self.db_host_extra_capability_create.assert_called_once_with(fake_capa)
         # the returned host will not have id
-        fake_host.pop('id')
         self.assertEqual(fake_host, host)
         mock_get_inventory.assert_called_once_with("fake_rp_uuid")
         mock_get_traits.assert_called_once_with("fake_rp_uuid")
