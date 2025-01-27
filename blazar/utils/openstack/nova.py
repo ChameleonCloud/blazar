@@ -34,7 +34,7 @@ nova_opts = [
                     'looked up in the keystone catalog and should be one of '
                     'public, internal or admin.'),
     cfg.StrOpt('nova_client_version',
-               default='2',
+               default='2.55',
                deprecated_group='DEFAULT',
                help='Novaclient version'),
     cfg.StrOpt('compute_service',

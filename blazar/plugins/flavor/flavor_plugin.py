@@ -394,6 +394,8 @@ class FlavorPlugin(base.BasePlugin):
         if not source_flavor:
             raise mgr_exceptions.ReservationTypeConflict()
 
+        res = db_api.reservation_get(instance_reservation['reservation_id'])
+        lease = db_api.lease_get(res["lease_id"])
         reservation_id = instance_reservation['reservation_id']
         flavor_details = {
             'flavorid': reservation_id,
@@ -401,7 +403,8 @@ class FlavorPlugin(base.BasePlugin):
             'vcpus': source_flavor['vcpus'],
             'ram': source_flavor['ram'],
             'disk': source_flavor['disk'],
-            'is_public': False
+            'is_public': False,
+            'description': lease["name"],
         }
         # create flavor using admin access
         reserved_flavor = self._instance_plugin.nova.nova.flavors.create(
