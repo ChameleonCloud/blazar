@@ -76,6 +76,11 @@ plugin_opts = [
     cfg.BoolOpt('randomize_host_selection',
                 default=False,
                 help='Allocate hosts for reservations randomly.'),
+    cfg.BoolOpt('allow_reservation',
+        default=True,
+        help='Allow users to create host reservations. This plugin must be enabled '
+             'for flavor reservations, but it may not be desirable to allow an '
+             'entire host to be reserved.'),
 ]
 
 plugin_opts.extend(monitor.monitor_opts)
@@ -112,6 +117,9 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
 
     def reserve_resource(self, reservation_id, values):
         """Create reservation."""
+        if not CONF[self.resource_type].allow_reservation:
+            raise manager_ex.UnsupportedResourceType(resource_type=self.resource_type)
+
         ctx = context.current()
         host_ids = self.allocation_candidates(values)
 
