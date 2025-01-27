@@ -245,6 +245,7 @@ class InstanceReservations(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     flavor_id = sa.Column(sa.String(36), nullable=True)
     aggregate_id = sa.Column(sa.Integer, nullable=True)
     server_group_id = sa.Column(sa.String(36), nullable=True)
+    before_end = sa.Column(sa.String(36))
 
 
 class ComputeHostAllocation(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
