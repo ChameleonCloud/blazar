@@ -352,7 +352,7 @@ class ComputeHostExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
                        ComputeHostExtraCapability.computehost_id!=self.computehost_id,
                        ComputeHostExtraCapability.property_id==resource_property.id,
                        ComputeHostExtraCapability.capability_value==capability_value,
-                       ComputeHostExtraCapability.deleted==None
+                       ComputeHostExtraCapability.deleted.is_(None)
                 )
             ).first()
             if existing_capability:

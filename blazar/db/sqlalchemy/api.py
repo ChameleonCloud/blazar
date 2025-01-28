@@ -2171,9 +2171,6 @@ def _resource_property_get_or_create(session, resource_type, property_name):
         return resource_property_create(rp_values)
 
 
-def resource_property_get_or_create(resource_type, capability_name):
-    return _resource_property_get_or_create(
-        get_session(), resource_type, capability_name)
 def resource_property_get_or_create(resource_type, property_name):
     return _resource_property_get_or_create(
         get_session(), resource_type, property_name)
