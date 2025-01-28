@@ -489,6 +489,7 @@ class ManagerService(service_utils.RPCServer):
             exceptions.InvalidDate,
             exceptions.CantUpdateParameter,
             exceptions.InvalidPeriod,
+            exceptions.NotImplemented,
             enforcement.exceptions.MaxLeaseDurationException,
             enforcement.exceptions.MaxLeaseUpdateWindowException,
             enforcement.exceptions.ExternalServiceUnsupportedHTTPResponse,
