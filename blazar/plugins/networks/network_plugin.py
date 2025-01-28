@@ -109,9 +109,9 @@ class NetworkPlugin(base.BasePlugin):
         self.plugins = _get_plugins()
         self.periodic_tasks = []
         self.monitor = NetworkMonitorPlugin(**MONITOR_ARGS)
-        for plugin in self.plugins.values():
-            if hasattr(plugin, "periodic_tasks"):
-                self.periodic_tasks.extend(plugin.periodic_tasks)
+        for p in self.plugins.values():
+            if hasattr(p, "periodic_tasks"):
+                self.periodic_tasks.extend(p.periodic_tasks)
 
     def filter_networks_by_reservation(self, networks, start_date, end_date):
         free = []
