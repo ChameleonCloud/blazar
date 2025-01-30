@@ -13,6 +13,7 @@
 import collections
 import datetime
 import json
+import random
 
 from novaclient import exceptions as nova_exceptions
 from oslo_config import cfg
@@ -35,6 +36,9 @@ plugin_opts = [
                default='',
                help='Actions which we will be taken before the end of '
                     'the lease'),
+    cfg.BoolOpt('randomize_host_selection',
+            default=False,
+            help='Allocate hosts for reservations randomly.'),
 ]
 
 CONF = cfg.CONF
@@ -108,7 +112,9 @@ class FlavorPlugin(base.BasePlugin):
             raise mgr_exceptions.NotImplemented(
                 error="Affinity not supported yet")
 
-        # TODO shuffle candidates optionally
+        if CONF[self.resource_type].randomize_host_selection:
+            random.shuffle(candidates)
+
         # return just enough hosts to satisfy the request
         while len(candidates) > req_amount:
             candidates.pop()
