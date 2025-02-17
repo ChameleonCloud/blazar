@@ -305,6 +305,10 @@ def instance_reservation_get(instance_reservation_id):
     return IMPL.instance_reservation_get(instance_reservation_id)
 
 
+def instance_reservation_get_by_reservation_id(reservation_id, session=None):
+    return IMPL.instance_reservation_get_by_reservation_id(reservation_id, session=session)
+
+
 def instance_reservation_update(instance_reservation_id,
                                 instance_reservation_values):
     """Update instance reservation."""
