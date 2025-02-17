@@ -652,6 +652,20 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                                                         **options)
         self.add_extra_allocation_info(hosts_allocations)
         self.add_allocation_cleaning_time(hosts_allocations, CONF.cleaning_time)
+        inst_res_map = {}
+        for allocation_list in hosts_allocations.values():
+            for allocation in allocation_list:
+                # This is allocation id :()
+                if not inst_res_map.get(allocation["id"]):
+                    inst_res_map[allocation["id"]] = db_api.instance_reservation_get_by_reservation_id(allocation["id"])
+                inst_res = inst_res_map[allocation["id"]]
+                # inst_res will be None if the allocation is not from a flavor/instance reservation
+                if inst_res:
+                    data = {}
+                    data["vcpus"] = inst_res.vcpus
+                    data["memory_mb"] = inst_res.memory_mb
+                    data["disk_gb"] = inst_res.disk_gb
+                    allocation["usage"] = data
         return [{"resource_id": host, "reservations": allocs}
                 for host, allocs in hosts_allocations.items()]
 
