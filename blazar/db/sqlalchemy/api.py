@@ -628,6 +628,13 @@ def instance_reservation_get(instance_reservation_id, session=None):
     return query.filter_by(id=instance_reservation_id).first()
 
 
+def instance_reservation_get_by_reservation_id(reservation_id, session=None):
+    if not session:
+        session = get_session()
+    query = model_query(models.InstanceReservations, session)
+    return query.filter_by(reservation_id=reservation_id).first()
+
+
 def instance_reservation_update(instance_reservation_id, values):
     session = get_session()
 
