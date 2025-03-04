@@ -564,6 +564,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         hosts_allocations = self.query_host_allocations(hosts_id_list,
                                                         **options)
         self.add_extra_allocation_info(hosts_allocations)
+        self.add_allocation_cleaning_time(hosts_allocations, CONF.cleaning_time)
         return [{"resource_id": host, "reservations": allocs}
                 for host, allocs in hosts_allocations.items()]
 

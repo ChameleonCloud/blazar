@@ -431,6 +431,7 @@ class DevicePlugin(base.BasePlugin):
         devices_allocations = self.query_device_allocations(devices_id_list,
                                                             **options)
         self.add_extra_allocation_info(devices_allocations)
+        self.add_allocation_cleaning_time(devices_allocations, CONF.cleaning_time)
         return [{"resource_id": device, "reservations": allocs}
                 for device, allocs in devices_allocations.items()]
 

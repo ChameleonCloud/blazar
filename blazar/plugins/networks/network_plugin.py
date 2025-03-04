@@ -572,6 +572,7 @@ class NetworkPlugin(base.BasePlugin):
         network_allocations = self.query_network_allocations(network_id_list,
                                                              **options)
         self.add_extra_allocation_info(network_allocations)
+        self.add_allocation_cleaning_time(network_allocations, CONF.cleaning_time)
         return [{"resource_id": network, "reservations": allocs}
                 for network, allocs in network_allocations.items()]
 
