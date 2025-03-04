@@ -184,7 +184,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
     def reservation_allocation_dict(self, r_id, l_id, p_id, h_ids):
         return {
             'id': r_id, 'status': 'active', 'lease_id': l_id,
-            'start_date': '2015-01-01', 'end_date': '2015-01-02',
+            'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+            'end_date': datetime.datetime(2015, 1, 2, 0, 0),
             'lease_name': l_id, 'project_id': p_id,
             'host_ids': h_ids}
 
@@ -472,10 +473,10 @@ class PhysicalHostPluginTestCase(tests.TestCase):
                 'reservations': [
                     {'id': 'reservation-1',
                         'lease_id': 'lease-1', 'extras': {},
-                        'start_date': '2015-01-01', 'end_date': '2015-01-02'},
+                        'start_date': datetime.datetime(2015, 1, 1), 'end_date': datetime.datetime(2015, 1, 2)},
                     {'id': 'reservation-3',
                         'lease_id': 'lease-2', 'extras': {},
-                        'start_date': '2015-01-01', 'end_date': '2015-01-02'},
+                        'start_date': datetime.datetime(2015, 1, 1), 'end_date': datetime.datetime(2015, 1, 2)},
                 ]
             },
             {
@@ -483,10 +484,10 @@ class PhysicalHostPluginTestCase(tests.TestCase):
                 'reservations': [
                     {'id': 'reservation-1',
                         'lease_id': 'lease-1', 'extras': {},
-                        'start_date': '2015-01-01', 'end_date': '2015-01-02'},
+                        'start_date': datetime.datetime(2015, 1, 1), 'end_date': datetime.datetime(2015, 1, 2)},
                     {'id': 'reservation-2',
                         'lease_id': 'lease-1', 'extras': {},
-                        'start_date': '2015-01-01', 'end_date': '2015-01-02'},
+                        'start_date': datetime.datetime(2015, 1, 1), 'end_date': datetime.datetime(2015, 1, 2)},
                 ]
             },
             {
@@ -494,7 +495,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
                 'reservations': [
                     {'id': 'reservation-2',
                         'lease_id': 'lease-1', 'extras': {},
-                        'start_date': '2015-01-01', 'end_date': '2015-01-02'},
+                        'start_date': datetime.datetime(2015, 1, 1), 'end_date': datetime.datetime(2015, 1, 2)},
                 ]
             }
         ]
@@ -655,7 +656,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             'resource_id': 'host-1',
             'reservations': [
                 {'id': 'reservation-1', 'lease_id': 'lease-1',
-                    'start_date': '2015-01-01', 'end_date': '2015-01-02'}]}
+                    'start_date': datetime.datetime(2015, 1, 1, 0, 0), 'end_date': datetime.datetime(2015, 1, 2, 0, 0)}]}
 
         ret = self.fake_phys_plugin.get_allocations('host-1',
                                                     {'lease_id': 'lease-1'})
@@ -681,7 +682,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             'resource_id': 'host-1',
             'reservations': [
                 {'id': 'reservation-1', 'lease_id': 'lease-1',
-                    'start_date': '2015-01-01', 'end_date': '2015-01-02'}]}
+                    'start_date': datetime.datetime(2015, 1, 1, 0, 0), 'end_date': datetime.datetime(2015, 1, 2, 0, 0)}]}
 
         ret = self.fake_phys_plugin.get_allocations(
             'host-1', {'reservation_id': 'reservation-1'})
