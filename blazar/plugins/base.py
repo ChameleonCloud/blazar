@@ -15,6 +15,7 @@
 
 import abc
 import collections
+import datetime
 
 from blazar import context
 from blazar import policy
@@ -205,6 +206,11 @@ class BasePlugin(object, metaclass=abc.ABCMeta):
                     alloc["extras"]["user_name"] = \
                         lease_to_name[alloc["lease_id"]]
 
+    def add_allocation_cleaning_time(self, resource_allocations, cleaning_time):
+        for allocs in resource_allocations.values():
+            for alloc in allocs:
+                alloc["start_date"] = alloc["start_date"] - datetime.timedelta(minutes=cleaning_time)
+                alloc["end_date"] = alloc["end_date"] + datetime.timedelta(minutes=cleaning_time)
 
 class BaseMonitorPlugin(metaclass=abc.ABCMeta):
     """Base class of monitor plugin."""
