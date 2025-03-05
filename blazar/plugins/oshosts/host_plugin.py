@@ -467,7 +467,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                         db_api.host_extra_capability_destroy(
                             raw_capability['id'])
                     except db_ex.BlazarDBException:
-                        cant_delete_extra_capability.append(cap_name)
+                        cant_delete_extra_capability.append(property_name)
             else:
                 LOG.info("Capability %s can't be updated because "
                          "existing reservations require it.",
