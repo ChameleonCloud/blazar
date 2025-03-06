@@ -2387,7 +2387,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         alloc_destroy.assert_called_once_with(dummy_allocation['id'])
         self.assertEqual(False, result)
 
-    def test_reallocate_missing_resources(self):
+    def test_reallocate_missing_resources_no_force(self):
         failed_host = {'id': '1'}
         dummy_allocation = {
             'id': 'alloc-1',
