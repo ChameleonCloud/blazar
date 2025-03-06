@@ -253,7 +253,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         except manager_ex.AggregateNotFound:
             pass
 
-    def _reallocate(self, allocation, force=False, reallocate_to=None):
+    def _reallocate(self, allocation, force=False):
         """Allocate an alternative host.
 
         :param allocation: allocation to change.
@@ -286,12 +286,6 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             lease['project_id'],
             allow_unreservable=False, # Don't reallocate to an unreservable host in this case
         )
-        # If the user specifies a "to" host, only consider that
-        if reallocate_to:
-            if reallocate_to in new_hostids:
-                new_hostids = [reallocate_to]
-            else:
-                new_hostids = []
         ret = None
         if not new_hostids:
             # Only delete the failed re-allocation if forced
@@ -589,7 +583,6 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
     def reallocate_computehost(self, host_id, data):
         lease_id = data.get('lease_id')
         force = data.get("force", False)
-        reallocate_to = data.get("reallocate_to", None)
         if lease_id:
             # If we're only reallocating a host for a single lease,
             # then we allow non-admin users to perform this action,
@@ -614,7 +607,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                 compute_host_id=host_id,
                 reservation_id=alloc['id'])[0]
 
-            if self._reallocate(host_allocation, force=force, reallocate_to=reallocate_to):
+            if self._reallocate(host_allocation, force=force):
                 if alloc['status'] == status.reservation.ACTIVE:
                     reservation_flags.update(dict(resources_changed=True))
                     db_api.lease_update(alloc['lease_id'], dict(degraded=True))
