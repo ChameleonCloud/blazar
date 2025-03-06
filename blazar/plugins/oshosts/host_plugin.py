@@ -253,10 +253,11 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         except manager_ex.AggregateNotFound:
             pass
 
-    def _reallocate(self, allocation):
+    def _reallocate(self, allocation, force=False, reallocate_to=None):
         """Allocate an alternative host.
 
         :param allocation: allocation to change.
+        :param force: Force reallocation off a host even if no other host is available
         :return: True if an alternative host was successfully allocated.
         """
         reservation = db_api.reservation_get(allocation['reservation_id'])
@@ -265,20 +266,16 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         lease = db_api.lease_get(reservation['lease_id'])
         pool = nova.ReservationPool()
 
-        # Remove the old host from the aggregate.
+        # Check for servers. We cannot reallocate active servers
+        old_host = db_api.host_get(allocation['compute_host_id'])
         if reservation['status'] == status.reservation.ACTIVE:
-            host = db_api.host_get(allocation['compute_host_id'])
-
             servers = self.nova.servers.list(search_opts={
-                "node": host['hypervisor_hostname'], "all_tenants": 1})
+                "node": old_host['hypervisor_hostname'], "all_tenants": 1})
             if len(servers) != 0:
                 raise manager_ex.HostHavingServers(
                     servers=[s.name for s in servers],
-                    host=host['hypervisor_hostname']
+                    host=old_host['hypervisor_hostname']
                 )
-
-            pool.remove_computehost(h_reservation['aggregate_id'],
-                                    host['hypervisor_hostname'])
 
         # Allocate an alternative host.
         start_date = max(datetime.datetime.utcnow(), lease['start_date'])
@@ -287,12 +284,22 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             reservation['resource_properties'],
             '1-1', start_date, lease['end_date'],
             lease['project_id'],
+            allow_unreservable=False, # Don't reallocate to an unreservable host in this case
         )
+        # If the user specifies a "to" host, only consider that
+        if reallocate_to:
+            if reallocate_to in new_hostids:
+                new_hostids = [reallocate_to]
+            else:
+                new_hostids = []
+        ret = None
         if not new_hostids:
-            db_api.host_allocation_destroy(allocation['id'])
+            # Only delete the failed re-allocation if forced
+            if force:
+                db_api.host_allocation_destroy(allocation['id'])
             LOG.warn('Could not find alternative host for reservation %s '
                      '(lease: %s).', reservation['id'], lease['name'])
-            return False
+            ret = False
         else:
             new_hostid = new_hostids.pop()
             db_api.host_allocation_update(allocation['id'],
@@ -304,8 +311,13 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                 new_host = db_api.host_get(new_hostid)
                 pool.add_computehost(h_reservation['aggregate_id'],
                                      new_host['hypervisor_hostname'])
+            ret = True
+        if force or ret:
+            # Remove the old host from the pool
+            pool.remove_computehost(h_reservation['aggregate_id'],
+                                    old_host['hypervisor_hostname'])
 
-            return True
+        return ret
 
     def _get_extra_capabilities(self, host_id):
         extra_capabilities = {}
@@ -576,6 +588,8 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
 
     def reallocate_computehost(self, host_id, data):
         lease_id = data.get('lease_id')
+        force = data.get("force", False)
+        reallocate_to = data.get("reallocate_to", None)
         if lease_id:
             # If we're only reallocating a host for a single lease,
             # then we allow non-admin users to perform this action,
@@ -600,11 +614,12 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                 compute_host_id=host_id,
                 reservation_id=alloc['id'])[0]
 
-            if self._reallocate(host_allocation):
+            if self._reallocate(host_allocation, force=force, reallocate_to=reallocate_to):
                 if alloc['status'] == status.reservation.ACTIVE:
                     reservation_flags.update(dict(resources_changed=True))
                     db_api.lease_update(alloc['lease_id'], dict(degraded=True))
-            else:
+            elif force:
+                # Resources are only missing if reallocated failed, and force was used
                 reservation_flags.update(dict(missing_resources=True))
                 db_api.lease_update(alloc['lease_id'], dict(degraded=True))
 
@@ -689,7 +704,8 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             return False
 
     def _matching_hosts(self, hypervisor_properties, resource_properties,
-                        count_range, start_date, end_date, project_id):
+                        count_range, start_date, end_date, project_id,
+                        allow_unreservable=True):
         """Return the matching hosts (preferably not allocated)
 
         """
@@ -712,7 +728,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             filter_array += plugins_utils.convert_requirements(
                 resource_properties)
         # admin can create a lease for host with 'reservable' False
-        if self._is_admin():
+        if self._is_admin() and allow_unreservable:
             hosts = db_api.host_get_all_by_queries(filter_array)
         else:
             hosts = db_api.reservable_host_get_all_by_queries(filter_array)
