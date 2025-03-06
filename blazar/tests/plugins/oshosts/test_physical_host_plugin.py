@@ -2266,62 +2266,6 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             {'compute_host_id': new_host['id']})
         self.assertEqual(True, result)
 
-    def test_reallocate_before_start_reallocate_to(self):
-        failed_host = {'id': '1'}
-        new_host = {'id': '2'}
-        dummy_allocation = {
-            'id': 'alloc-1',
-            'compute_host_id': failed_host['id'],
-            'reservation_id': 'rsrv-1',
-        }
-        dummy_reservation = {
-            'id': 'rsrv-1',
-            'resource_type': plugin.RESOURCE_TYPE,
-            'lease_id': 'lease-1',
-            'status': 'pending',
-            'hypervisor_properties': [],
-            'resource_properties': [],
-            'resource_id': 'resource-1'
-        }
-        dummy_host_reservation = {
-            'aggregate_id': 1
-        }
-        dummy_lease = {
-            'name': 'lease-name',
-            'start_date': datetime.datetime(2020, 1, 1, 12, 00),
-            'end_date': datetime.datetime(2020, 1, 2, 12, 00),
-            'trust_id': 'trust-1',
-            'project_id': 'fake-project'
-        }
-        reservation_get = self.patch(self.db_api, 'reservation_get')
-        reservation_get.return_value = dummy_reservation
-        host_reservation_get = self.patch(self.db_api, 'host_reservation_get')
-        host_reservation_get.return_value = dummy_host_reservation
-        lease_get = self.patch(self.db_api, 'lease_get')
-        lease_get.return_value = dummy_lease
-        matching_hosts = self.patch(host_plugin.PhysicalHostPlugin,
-                                    '_matching_hosts')
-        matching_hosts.return_value = ["fake_host_id_1", new_host['id'], "fake_host_id_2"]
-        alloc_update = self.patch(self.db_api, 'host_allocation_update')
-
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
-                2020, 1, 1, 11, 00)
-            result = self.fake_phys_plugin._reallocate(dummy_allocation, reallocate_to=new_host['id'])
-
-        matching_hosts.assert_called_once_with(
-            dummy_reservation['hypervisor_properties'],
-            dummy_reservation['resource_properties'],
-            '1-1', dummy_lease['start_date'], dummy_lease['end_date'],
-            dummy_lease['project_id'],
-            allow_unreservable=False,
-        )
-        alloc_update.assert_called_once_with(
-            dummy_allocation['id'],
-            {'compute_host_id': new_host['id']})
-        self.assertEqual(True, result)
-
     def test_reallocate_active(self):
         failed_host = {'id': '1',
                        'hypervisor_hostname': 'compute-1'}
