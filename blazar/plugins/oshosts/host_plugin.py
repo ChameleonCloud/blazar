@@ -286,15 +286,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             lease['project_id'],
             allow_unreservable=False, # Don't reallocate to an unreservable host in this case
         )
-        ret = None
-        if not new_hostids:
-            # Only delete the failed re-allocation if forced
-            if force:
-                db_api.host_allocation_destroy(allocation['id'])
-            LOG.warn('Could not find alternative host for reservation %s '
-                     '(lease: %s).', reservation['id'], lease['name'])
-            ret = False
-        else:
+        if new_hostids:
             new_hostid = new_hostids.pop()
             db_api.host_allocation_update(allocation['id'],
                                           {'compute_host_id': new_hostid})
@@ -305,13 +297,22 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                 new_host = db_api.host_get(new_hostid)
                 pool.add_computehost(h_reservation['aggregate_id'],
                                      new_host['hypervisor_hostname'])
-            ret = True
-        if force or ret:
-            # Remove the old host from the pool
+                pool.remove_computehost(h_reservation['aggregate_id'],
+                            old_host['hypervisor_hostname'])
+            return True
+        elif force:
+            # If we are forcing reallocation from this host,
+            # destroy the old allocation and update pool.
+            LOG.warn('Forcing reservation %s off host %s'
+                '(lease: %s).', reservation['id'], old_host['hypervisor_hostname'], lease['name'])
+            db_api.host_allocation_destroy(allocation['id'])
             pool.remove_computehost(h_reservation['aggregate_id'],
                                     old_host['hypervisor_hostname'])
-
-        return ret
+            return False
+        else:
+            LOG.warn('Could not find alternative host for reservation %s '
+                     '(lease: %s).', reservation['id'], lease['name'])
+            return False
 
     def _get_extra_capabilities(self, host_id):
         extra_capabilities = {}
