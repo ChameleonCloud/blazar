@@ -573,6 +573,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         options['detail'] = detail
         host_allocations = self.query_host_allocations([host_id], **options)
         allocs = host_allocations.get(host_id, [])
+        self.add_allocation_cleaning_time({host_id: allocs}, CONF.cleaning_time)
         return {"resource_id": host_id, "reservations": allocs}
 
     def reallocate_computehost(self, host_id, data):
