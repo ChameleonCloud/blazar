@@ -22,6 +22,7 @@ from blazar.db.sqlalchemy import models
 from blazar.manager import exceptions as mgr_exceptions
 from blazar.plugins import instances as instance_plugin
 from blazar.plugins import oshosts as host_plugin
+from blazar.plugins import devices as device_plugin
 from collections import defaultdict
 import sqlalchemy as sa
 
@@ -307,6 +308,8 @@ def get_plugin_reservation(resource_type, resource_id):
         return api.host_reservation_get(resource_id)
     elif resource_type == instance_plugin.RESOURCE_TYPE:
         return api.instance_reservation_get(resource_id)
+    elif resource_type == device_plugin.RESOURCE_TYPE:
+        return api.device_reservation_get(resource_id)
     else:
         raise mgr_exceptions.UnsupportedResourceType(
             resource_type=resource_type)
