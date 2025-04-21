@@ -1003,8 +1003,11 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
         try:
             if ironic_hosts:
                 invalid_power_states = ['error']
-                invalid_provision_states = ['error', 'clean failed',
-                                            'manageable', 'deploy failed']
+                invalid_provision_states = [
+                    'error', 'clean failed', 'manageable', 'deploy failed',
+                    'inspect failed', 'clean failed', 'adopt failed',
+                    'rescue failed', 'unrescue failed', 'enroll',
+                ]
                 reservable_hosts = [h for h in ironic_hosts
                                     if h['reservable'] is True]
                 unreservable_hosts = [h for h in ironic_hosts
