@@ -45,7 +45,7 @@ class ContextTestCase(tests.TestCase):
             self.fake_headers)
 
     def test_ctx_from_headers_wrong_format(self):
-        catalog = '["etc"]'
+        catalog = ['etc']
         self.fake_headers['X-Service-Catalog'] = catalog
         self.assertRaises(
             exceptions.WrongFormat,
