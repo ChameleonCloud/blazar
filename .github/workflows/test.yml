@@ -35,6 +35,7 @@ jobs:
             --system \
             -r requirements.txt \
             -r test-requirements.txt \
+            -c https://releases.openstack.org/constraints/upper/2023.1 \
             .
       - name: init stestr repo
         run: stestr init
