@@ -350,6 +350,26 @@ class SQLAlchemyDBUtilsTestCase(tests.DBTestCase):
         db_utils.get_plugin_reservation('virtual:instance', 'id-1')
         patch_inst_reservation_get.assert_called_once_with('id-1')
 
+    def test_get_plugin_reservation_with_device(self):
+        patch_dev_reservation_get = self.patch(db_api,
+                                                'device_reservation_get')
+        patch_dev_reservation_get.return_value = {
+            'id': 'id',
+            'reservation_id': 'reservation-id',
+        }
+        db_utils.get_plugin_reservation('device', 'id-1')
+        patch_dev_reservation_get.assert_called_once_with('id-1')
+
+    def test_get_plugin_reservation_with_network(self):
+        patch_net_reservation_get = self.patch(db_api,
+                                                'network_reservation_get')
+        patch_net_reservation_get.return_value = {
+            'id': 'id',
+            'reservation_id': 'reservation-id',
+        }
+        db_utils.get_plugin_reservation('network', 'id-1')
+        patch_net_reservation_get.assert_called_once_with('id-1')
+
     def test_get_plugin_reservation_with_invalid(self):
         self.assertRaises(mgr_exceptions.UnsupportedResourceType,
                           db_utils.get_plugin_reservation, 'invalid', 'id1')
