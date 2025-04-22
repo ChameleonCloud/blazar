@@ -44,7 +44,7 @@ class ValidationTestCase(tests.TestCase):
 
     def test_check_false(self):
         fake_get = self.patch(
-            self.s_api.API, 'get_lease').side_effect = self.exc.NotFound()
+            self.s_api.API, 'get_lease').side_effect = self.exc.NotFound(message="test message")
 
         @self.v_api.check_exists(fake_get, self.fake_id)
         def trap(fake_id):

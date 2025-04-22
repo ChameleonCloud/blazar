@@ -15,6 +15,7 @@
 
 """Base classes for API tests."""
 from keystonemiddleware import fixture
+from oslo_log import log as logging
 from oslo_utils import uuidutils
 import pecan
 import pecan.testing
@@ -24,6 +25,8 @@ from blazar import context
 from blazar.manager.leases import rpcapi as leases_api
 from blazar.manager.oshosts import rpcapi as hosts_rpcapi
 from blazar import tests
+
+LOG = logging.getLogger(__name__)
 
 PATH_PREFIX = '/v2'
 
@@ -127,7 +130,7 @@ class APITest(tests.TestCase):
         :param path_prefix: prefix of the url path
         """
         full_path = path_prefix + path
-        print('%s: %s %s' % (method.upper(), full_path, params))
+        LOG.debug('%s: %s %s' % (method.upper(), full_path, params))
         response = getattr(self.app, "%s_json" % method)(
             str(full_path),
             params=params,
@@ -136,7 +139,7 @@ class APITest(tests.TestCase):
             extra_environ=extra_environ,
             expect_errors=expect_errors
         )
-        print('GOT:%s' % response)
+        LOG.debug('GOT:%s' % response)
         return response
 
     def put_json(self, path, params, expect_errors=False, headers=None,
@@ -189,13 +192,13 @@ class APITest(tests.TestCase):
         :param path_prefix: prefix of the url path
         """
         full_path = path_prefix + path
-        print('DELETE: %s' % (full_path))
+        LOG.debug('DELETE: %s' % (full_path))
         response = self.app.delete(str(full_path),
                                    headers=headers,
                                    status=status,
                                    extra_environ=extra_environ,
                                    expect_errors=expect_errors)
-        print('GOT:%s' % response)
+        LOG.debug('GOT:%s' % response)
         return response
 
     def get_json(self, path, expect_errors=False, headers=None,
@@ -225,7 +228,7 @@ class APITest(tests.TestCase):
         all_params.update(params)
         if q:
             all_params.update(query_params)
-        print('GET: %s %r' % (full_path, all_params))
+        LOG.debug('GET: %s %r' % (full_path, all_params))
         response = self.app.get(full_path,
                                 params=all_params,
                                 headers=headers,
@@ -233,5 +236,5 @@ class APITest(tests.TestCase):
                                 expect_errors=expect_errors)
         if not expect_errors:
             response = response.json
-        print('GOT:%s' % response)
+        LOG.debug('GOT:%s' % response)
         return response
