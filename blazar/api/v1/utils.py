@@ -296,11 +296,11 @@ def get_request_args():
 
 def abort_and_log(status_code, descr, exc=None):
     """Process occurred errors."""
-    LOG.error("Request aborted with status code %(code)s and "
+    LOG.warning("Request aborted with status code %(code)s and "
               "message '%(msg)s'", {'code': status_code, 'msg': descr})
 
     if exc is not None:
-        LOG.error(traceback.format_exc())
+        LOG.warning(traceback.format_exc())
 
     flask.abort(status_code, description=descr)
 

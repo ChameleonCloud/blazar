@@ -1599,7 +1599,7 @@ class ServiceTestCase(tests.DBTestCase):
         self.event_update.assert_called_once_with('1', {'status': 'DONE'})
 
     def test_basic_action_raise_exception(self):
-        def raiseBlazarException(resource_id):
+        def raiseBlazarException(resource_id, lease):
             raise exceptions.BlazarException(resource_id)
 
         self.manager.resource_actions = (
@@ -1619,7 +1619,7 @@ class ServiceTestCase(tests.DBTestCase):
         self.event_update.assert_called_once_with('1', {'status': 'ERROR'})
 
     def test_basic_action_raise_exception_no_reservation_status(self):
-        def raiseBlazarException(resource_id):
+        def raiseBlazarException(resource_id, lease):
             raise exceptions.BlazarException(resource_id)
 
         self.manager.resource_actions = (
