@@ -202,11 +202,9 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         self.db_host_get.assert_called_once_with('1')
         self.assertEqual(self.fake_host, host)
 
-    @testtools.skip('incorrect decorator')
     def test_list_hosts(self):
         self.fake_phys_plugin.list_computehosts({})
         self.db_host_list.assert_called_once_with()
-        del self.service_utils
 
     def test_create_host_without_extra_capabilities(self):
         self.get_extra_capabilities.return_value = {}
@@ -2722,6 +2720,9 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         }
         self.fake_phys_plugin._check_params(values)
         self.assertEqual(values['before_end'], 'default')
+        self.addCleanup(self.cfg.CONF.clear_override, 'before_end',
+                        group='physical:host')
+
 
     def test_list_resource_properties(self):
         self.db_list_resource_properties = self.patch(
@@ -3181,3 +3182,6 @@ class PhysicalHostMonitorPluginTestCase(tests.TestCase):
         self.assertFalse(freepool.add_host.called)
         self.assertFalse(aggregate1.remove_host.called)
         self.assertFalse(aggregate1.delete.called)
+
+        self.addCleanup(self.cfg.CONF.clear_override, 'enable_polling_monitor_dry_run',
+                group='physical:host')
