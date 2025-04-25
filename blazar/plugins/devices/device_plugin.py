@@ -31,7 +31,7 @@ from blazar.plugins import monitor
 from blazar import status
 from blazar.utils import plugins as plugins_utils
 from oslo_log import log as logging
-from random import shuffle
+import random
 
 
 plugin_opts = [
@@ -40,7 +40,7 @@ plugin_opts = [
                help='Actions which we will be taken before the end of '
                     'the lease'),
     cfg.ListOpt('plugins',
-                default=['zun.plugin'],
+                default=['zun.plugin', 'k8s.plugin'],
                 help='All plugins to use (one for every device driver to '
                      'support.)'),
     cfg.IntOpt('cleaning_time',
@@ -93,6 +93,7 @@ def _get_plugins():
             LOG.warning("Could not load {0} plugin "
                         "for resource type {1} '{2}'".format(
                             ext.name, ext.plugin.device_driver, e))
+            LOG.exception(e)
         else:
             if plugin_obj.device_driver in plugins:
                 msg = ("You have provided several plugins for "
@@ -501,7 +502,7 @@ class DevicePlugin(base.BasePlugin):
         min_devices, _ = [int(n) for n in values['count_range'].split('-')]
 
         if len(device_ids) < min_devices:
-            raise manager_ex.NotEnoughHostsAvailable()
+            raise manager_ex.NotEnoughDevicesAvailable()
 
         return device_ids
 
@@ -576,11 +577,11 @@ class DevicePlugin(base.BasePlugin):
             ]:
                 allocated_device_ids.append(device['id'])
         if len(not_allocated_device_ids) >= int(min_device):
-            shuffle(not_allocated_device_ids)
+            random.shuffle(not_allocated_device_ids)
             return not_allocated_device_ids[:int(max_device)]
         all_device_ids = allocated_device_ids + not_allocated_device_ids
         if len(all_device_ids) >= int(min_device):
-            shuffle(all_device_ids)
+            random.shuffle(all_device_ids)
             return all_device_ids[:int(max_device)]
         else:
             return []
@@ -605,7 +606,7 @@ class DevicePlugin(base.BasePlugin):
 
         if (allocs_to_remove and
                 reservation_status == status.reservation.ACTIVE):
-            raise manager_ex.NotEnoughHostsAvailable()
+            raise manager_ex.NotEnoughDevicesAvailable()
 
         kept_devices = len(allocs) - len(allocs_to_remove)
         if kept_devices < max_devices:
@@ -625,11 +626,12 @@ class DevicePlugin(base.BasePlugin):
                     new_device = db_api.device_get(device_id)
                     if reservation_status == status.reservation.ACTIVE:
                         # Add new device into the trait.
+
                         self.plugins[new_device["device_driver"]].\
                             add_active_device(
                                 new_device, device_reservation, lease)
             else:
-                raise manager_ex.NotEnoughHostsAvailable()
+                raise manager_ex.NotEnoughDevicesAvailable()
 
         for allocation in allocs_to_remove:
             db_api.device_allocation_destroy(allocation['id'])
@@ -641,7 +643,6 @@ class DevicePlugin(base.BasePlugin):
                                 self._filter_devices_by_properties(
                                     resource_properties
         )]
-
         for alloc in allocs:
             if alloc['device_id'] not in requested_device_ids:
                 allocs_to_remove.append(alloc)
@@ -664,7 +665,6 @@ class DevicePlugin(base.BasePlugin):
                          reserved_periods[0][0] == max_start and
                          reserved_periods[0][1] == min_end)):
                     allocs_to_remove.append(alloc)
-
         kept_devices = len(allocs) - len(allocs_to_remove)
         if kept_devices > max_devices:
             allocs_to_remove.extend(
