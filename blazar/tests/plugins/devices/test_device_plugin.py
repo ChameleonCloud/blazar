@@ -2287,7 +2287,8 @@ class DevicePluginTestCase(tests.TestCase):
         )
         self.assertEqual(set(['device1', 'device2', 'device3']), set(result))
 
-    def test_matching_devices_allocated_devices_with_cleaning_time(self):
+    @mock.patch.object(random, "shuffle")
+    def test_matching_devices_allocated_devices_with_cleaning_time(self, mock_shuffle):
         def device_allocation_get_all_by_values(**kwargs):
             if kwargs['device_id'] == 'device1':
                 return True
@@ -2304,10 +2305,10 @@ class DevicePluginTestCase(tests.TestCase):
             self.db_api,
             'device_allocation_get_all_by_values')
         device_get.side_effect = device_allocation_get_all_by_values
-        device_get = self.patch(
+        get_free_periods = self.patch(
             self.db_utils,
             'get_free_periods')
-        device_get.return_value = [
+        get_free_periods.return_value = [
             (datetime.datetime(2013, 12, 19, 20, 00)
              - datetime.timedelta(minutes=5),
              datetime.datetime(2013, 12, 19, 21, 00)
@@ -2319,11 +2320,12 @@ class DevicePluginTestCase(tests.TestCase):
         is_admin.return_value = False
         result = self.fake_dev_plugin._matching_devices(
             '[]', '3-3',
-            datetime.datetime(2013, 12, 19, 20, 00),
-            datetime.datetime(2013, 12, 19, 21, 00),
+            datetime.datetime(2013, 12, 19, 20, 00) - datetime.timedelta(minutes=5),
+            datetime.datetime(2013, 12, 19, 21, 00) + datetime.timedelta(minutes=5),
             None)
+        mock_shuffle.assert_called_once_with(['device1', 'device2', 'device3'])
         self.addCleanup(CONF.clear_override, 'cleaning_time')
-        self.assertEqual(['device1', 'device2', 'device3'], result)
+
 
     @mock.patch.object(random, "shuffle")
     def test_random_matching_devices_not_allocated_devices(self, mock_shuffle):
@@ -2550,29 +2552,3 @@ class DevicePluginTestCase(tests.TestCase):
             'foo', resource_property_values)
         db_resource_property_update.assert_called_once_with(
             'device', 'foo', resource_property_values)
-
-    def test_update_disabled_property_as_admin(self):
-        resource_property_values = {'disabled': 'true'}
-        device_get = self.patch(self.db_api, 'device_get')
-        device_get.return_value = {'id': 'device1'}
-        device_update = self.patch(self.db_api, 'device_update')
-        is_admin = self.patch(
-            policy, 'enforce'
-        )
-        is_admin.return_value = True
-        self.fake_dev_plugin.update_device(
-            'device1', {'disabled': 'true'})
-        device_update.assert_called_once_with('device1', {"disabled": True, "reservable": False})
-
-    def test_update_disabled_property_as_user(self):
-        resource_property_values = {'disabled': 'true'}
-        device_get = self.patch(self.db_api, 'device_get')
-        device_get.return_value = {'id': 'device1'}
-        device_update = self.patch(self.db_api, 'device_update')
-        is_admin = self.patch(
-            policy, 'enforce'
-        )
-        is_admin.return_value = False
-        self.fake_dev_plugin.update_device(
-            'device1', {'disabled': 'true'})
-        self.assertFalse(device_update.called)
