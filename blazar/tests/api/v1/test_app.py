@@ -89,6 +89,10 @@ class AppTestCaseForHostsPlugin(tests.TestCase):
         self.fake_blueprint = self.patch(self.flask.Flask,
                                          'register_blueprint')
 
+    def tearDown(self):
+        super(AppTestCaseForHostsPlugin, self).tearDown()
+        cfg.CONF.clear_override('plugins', 'manager')
+
     def test_make_app_with_host_plugin(self):
         self.app.make_app()
         self.fake_blueprint.assert_any_call(self.lease_api_v1_0.rest,
