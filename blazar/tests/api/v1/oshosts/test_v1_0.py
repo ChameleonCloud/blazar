@@ -121,6 +121,10 @@ class OsHostAPITestCase(tests.TestCase):
         self.update_resource_property = self.patch(service_api.API,
                                                    'update_resource_property')
 
+    def tearDown(self):
+        super(OsHostAPITestCase, self).tearDown()
+        cfg.CONF.clear_override('plugins', 'manager')
+
     def _assert_response(self, actual_resp, expected_status_code,
                          expected_resp_body, key='host',
                          expected_api_version='reservation 1.0'):
