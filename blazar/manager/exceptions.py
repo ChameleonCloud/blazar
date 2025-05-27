@@ -317,3 +317,8 @@ class InvalidDevice(exceptions.NotAuthorized):
 class HostHavingContainers(exceptions.BlazarException):
     code = 409
     msg_fmt = _("Containers found for host %(host)s")
+
+
+# Flavor plugin related exceptions
+class InvalidFlavor(exceptions.NotAuthorized):
+    msg_fmt = _("Flavor %(flavor)s is not reservable")
