@@ -85,11 +85,6 @@ class FlavorPlugin(base.BasePlugin):
 
     def allocation_candidates(self, reservation):
         """Return a list of candidate host_ids."""
-        if 'before_end' not in reservation:
-            reservation['before_end'] = 'default'
-        if reservation['before_end'] not in before_end_options:
-            raise mgr_exceptions.MalformedParameter(param='before_end')
-
         host_ids, _ = self._pick_hosts(reservation)
         return host_ids
 
@@ -354,6 +349,11 @@ class FlavorPlugin(base.BasePlugin):
     def reserve_resource(self, reservation_id, values):
         host_ids, source_flavor = self._pick_hosts(values)
 
+        if 'before_end' not in values:
+            values['before_end'] = 'default'
+        if values['before_end'] not in before_end_options:
+            raise mgr_exceptions.MalformedParameter(param='before_end')
+
         instance_reservation_val = {
             'reservation_id': reservation_id,
             # use flavor display values,
@@ -363,7 +363,8 @@ class FlavorPlugin(base.BasePlugin):
             'disk_gb': source_flavor["disk"],
             'amount': values['amount'],
             'affinity': None,
-            'resource_properties': json.dumps(source_flavor)
+            'resource_properties': json.dumps(source_flavor),
+            'before_end': values['before_end'],
         }
         instance_reservation = db_api.instance_reservation_create(
             instance_reservation_val)
