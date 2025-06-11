@@ -28,8 +28,6 @@ from oslo_log import log as logging
 import sqlalchemy as sa
 from sqlalchemy.sql.expression import asc
 from sqlalchemy.sql.expression import desc
-from blazar.db.sqlalchemy import facade_wrapper
-from oslo_config import cfg
 
 
 RESOURCE_PROPERTY_MODELS = {
