@@ -43,7 +43,7 @@ FORBIDDEN_RESOURCE_PROPERTY_NAMES = ["id", "reservable"]
 LOG = logging.getLogger(__name__)
 
 get_engine = facade_wrapper.get_engine
-# Add a new configuration option
+
 cfg.CONF.register_opt(cfg.BoolOpt(
     'include_deleted', default=False, help='Include deleted in queries (used by scripts)'))
 
