@@ -28,6 +28,8 @@ from oslo_log import log as logging
 import sqlalchemy as sa
 from sqlalchemy.sql.expression import asc
 from sqlalchemy.sql.expression import desc
+from blazar.db.sqlalchemy import facade_wrapper
+from oslo_config import cfg
 
 
 RESOURCE_PROPERTY_MODELS = {
@@ -41,8 +43,11 @@ FORBIDDEN_RESOURCE_PROPERTY_NAMES = ["id", "reservable"]
 LOG = logging.getLogger(__name__)
 
 get_engine = facade_wrapper.get_engine
-get_session = facade_wrapper.get_session
+# Add a new configuration option
+cfg.CONF.register_opt(cfg.BoolOpt(
+    'include_deleted', default=False, help='Include deleted in queries (used by scripts)'))
 
+get_session = facade_wrapper.get_session
 
 def get_backend():
     """The backend is this module itself."""
@@ -54,7 +59,7 @@ def _read_deleted_filter(query, db_model, deleted):
         return query
 
     default_deleted_value = None
-    if not deleted:
+    if not deleted and not cfg.CONF.include_deleted:
         query = query.filter(db_model.deleted == default_deleted_value)
     return query
 
