@@ -7,7 +7,7 @@ CONF = cfg.CONF
 
 
 def list_leases(args):
-    print("start,end,hours_before_start,number_of_hosts,numer_of_networks,id,project_id,host_id,hypervisor_hostname,node_name,node_type")
+    print("start,end,created_at,hours_before_start,number_of_hosts,numer_of_networks,id,user_id,project_id,host_id,hypervisor_hostname,node_name,node_type")
     since_datetime = None
     if args.since:
         since_datetime = datetime.strptime(args.since, "%Y-%m-%d %H:%M")
@@ -41,10 +41,12 @@ def list_leases(args):
                 print(
                     lease["start_date"],
                     lease["end_date"],
+                    lease["created_at"],
                     td,
                     len(db_api.hosts_in_lease(lease["id"])),
                     len(db_api.networks_in_lease(lease["id"])),
                     lease["id"],
+                    lease["user_id"],
                     lease["project_id"],
                     host["id"],
                     host["hypervisor_hostname"],
