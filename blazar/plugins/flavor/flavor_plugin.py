@@ -39,10 +39,6 @@ plugin_opts = [
     cfg.BoolOpt('randomize_host_selection',
             default=False,
             help='Allocate hosts for reservations randomly.'),
-    cfg.StrOpt('placement_reservation_permitted_trait',
-            default=None,
-            help='If set, only permit flavor reservation for flavors with this trait.'),
-
 ]
 
 CONF = cfg.CONF
@@ -141,7 +137,8 @@ class FlavorPlugin(base.BasePlugin):
         # resource requests, e.g. baremetal vs virtual
         # or missing traits
         if resource_traits:
-            LOG.warning("Resource traits not supported yet. Ignoring.")
+            raise mgr_exceptions.NotImplemented(
+                error="Resource traits not supported yet")
         hosts = db_api.reservable_host_get_all_by_queries([])
 
         # find reservations for each host in our time period
@@ -295,14 +292,6 @@ class FlavorPlugin(base.BasePlugin):
         # options that are available in a flavor.
         resource_request, resource_traits = \
             self._estimate_flavor_resources(source_flavor)
-
-        if (
-            CONF[self.resource_type].placement_reservation_permitted_trait and
-            resource_traits.get(
-                CONF[self.resource_type].placement_reservation_permitted_trait
-            ) != "required"
-        ):
-                raise mgr_exceptions.InvalidFlavor(flavor=source_flavor["name"])
 
         return (resource_request, resource_traits, source_flavor)
 
