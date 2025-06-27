@@ -137,8 +137,8 @@ class FlavorPlugin(base.BasePlugin):
         # resource requests, e.g. baremetal vs virtual
         # or missing traits
         if resource_traits:
-            raise mgr_exceptions.NotImplemented(
-                error="Resource traits not supported yet")
+            LOG.warning("Resource traits not supported yet. Ignoring.")
+
         hosts = db_api.reservable_host_get_all_by_queries([])
 
         # find reservations for each host in our time period
