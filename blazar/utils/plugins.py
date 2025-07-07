@@ -118,6 +118,7 @@ def send_lease_extension_reminder(lease, region_name):
     params_tmp = ('--to "{recipient}" '
                   '--username "{username}" '
                   '--project-name "{project_name}" '
+                  '--project-id "{project_id}" '
                   '--lease-name "{lease_name}" '
                   '--lease-id "{lease_id}" '
                   '--end-datetime "{end_datetime}" '
@@ -133,6 +134,7 @@ def send_lease_extension_reminder(lease, region_name):
     params = params_tmp.format(recipient=user.email,
                                username=user.name,
                                project_name=project.name,
+                               project_id=project_id,
                                lease_name=lease['name'],
                                lease_id=lease['id'],
                                end_datetime=lease['end_date'],
