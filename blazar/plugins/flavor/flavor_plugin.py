@@ -11,6 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import collections
+import concurrent.futures
 import datetime
 import json
 import random
@@ -136,8 +137,6 @@ class FlavorPlugin(base.BasePlugin):
         # we should be able to exclude hosts that don't match the
         # resource requests, e.g. baremetal vs virtual
         # or missing traits
-        if resource_traits:
-            LOG.warning("Resource traits not supported yet. Ignoring.")
 
         hosts = db_api.reservable_host_get_all_by_queries([])
 
@@ -149,8 +148,41 @@ class FlavorPlugin(base.BasePlugin):
                 end_date + datetime.timedelta(minutes=CONF.cleaning_time),
                 excludes)
 
+        def get_hosts_for_trait(trait):
+            hostnames = [
+                rp["name"] for rp in
+                self._placement_client.get_trait_resource_providers(trait)
+            ]
+            return trait, set(hostnames)
+
+        # Look up hosts per resource trait
+        hosts_by_trait = {}
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            futures = [
+                executor.submit(get_hosts_for_trait, trait)
+                for trait in resource_traits.keys()
+            ]
+
+            for future in concurrent.futures.as_completed(futures):
+                trait, hostnames = future.result()
+                hosts_by_trait[trait] = hostnames
         available_hosts = []
         for host_info in (reserved_hosts + free_hosts):
+            # First check placement traits
+            hostname = host_info['host']['hypervisor_hostname']
+            host_passes_trait_check = True
+            for trait, value in resource_traits.items():
+                if value == "required" and hostname not in hosts_by_trait[trait]:
+                    LOG.debug(f"Required trait {trait} not found for {hostname}")
+                    host_passes_trait_check = False
+                    break
+                elif value == "forbidden" and hostname in hosts_by_trait[trait]:
+                    LOG.debug(f"Forbidden trait {trait} found for {hostname}")
+                    host_passes_trait_check = False
+                    break
+            if not host_passes_trait_check:
+                continue
+
             # check how many instances can fit on this host
             hosts_list = self._get_hosts_list(host_info, resource_request, excludes)
             available_hosts.extend(hosts_list)
