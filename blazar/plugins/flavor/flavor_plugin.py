@@ -172,15 +172,16 @@ class FlavorPlugin(base.BasePlugin):
             hostname = host_info['host']['hypervisor_hostname']
             host_passes_trait_check = True
             for trait, value in resource_traits.items():
-                if value == "required" and hostname not in hosts_by_trait[trait]:
-                    LOG.debug(f"Required trait {trait} not found for {hostname}")
-                    host_passes_trait_check = False
-                    break
-                elif value == "forbidden" and hostname in hosts_by_trait[trait]:
-                    LOG.debug(f"Forbidden trait {trait} found for {hostname}")
+                matching_hosts = hosts_by_trait.get(trait, [])
+                if (
+                    (value == "required" and hostname not in matching_hosts) or
+                    (value == "forbidden" and hostname in matching_hosts)
+                ):
+                    LOG.debug(f"Host {hostname} fails trait condition for trait {trait}")
                     host_passes_trait_check = False
                     break
             if not host_passes_trait_check:
+                # Host cannot be considered available for this reservation
                 continue
 
             # check how many instances can fit on this host
