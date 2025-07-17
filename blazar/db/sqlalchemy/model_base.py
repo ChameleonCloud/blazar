@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from oslo_config import cfg
 from oslo_db.sqlalchemy import models
 from oslo_utils import timeutils
 from sqlalchemy import Column
@@ -61,11 +62,12 @@ class _BlazarBase(models.ModelBase, models.TimestampMixin):
         datetime_to_str(d, 'created_at')
         datetime_to_str(d, 'updated_at')
 
-        # Don't show fields created by SoftDeleteMixinWithUuid
-        if 'deleted' in d:
-            del d['deleted']
-        if 'deleted_at' in d:
-            del d['deleted_at']
+        # Don't show fields created by SoftDeleteMixinWithUuid unless configured
+        if not cfg.CONF.include_deleted:
+            if 'deleted' in d:
+                del d['deleted']
+            if 'deleted_at' in d:
+                del d['deleted_at']
 
         return d
 
