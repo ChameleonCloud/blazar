@@ -7,12 +7,12 @@ CONF = cfg.CONF
 
 
 def list_leases(args):
-    print("start,end,created_at,hours_before_start,number_of_hosts,numer_of_networks,id,user_id,project_id,host_id,hypervisor_hostname,node_name,node_type")
+    print("start,end,created_at,deleted_at,hours_before_start,number_of_hosts,numer_of_networks,id,user_id,project_id,host_id,hypervisor_hostname,node_name,node_type")
     since_datetime = None
     if args.since:
         since_datetime = datetime.strptime(args.since, "%Y-%m-%d %H:%M")
     hosts_by_id = {}
-    for lease in db_api.lease_list():
+    for lease in db_api.lease_list(args.project_id):
         try:
             if since_datetime and lease["start_date"] < since_datetime:
                 continue
@@ -42,6 +42,7 @@ def list_leases(args):
                     lease["start_date"],
                     lease["end_date"],
                     lease["created_at"],
+                    lease["deleted_at"],
                     td,
                     len(db_api.hosts_in_lease(lease["id"])),
                     len(db_api.networks_in_lease(lease["id"])),
@@ -57,7 +58,6 @@ def list_leases(args):
         except Exception as e:
             print(f"Error processing lease {lease['id']}: {e}", file=sys.stderr)
             continue
-    print(args)
 
 
 def add_command_parsers(subparsers):
@@ -66,6 +66,12 @@ def add_command_parsers(subparsers):
         '--since',
         type=str,
         help='Start date for filtering leases (YYYY-MM-DD HH:MM format)'
+    )
+    parser.add_argument(
+        '--project-id',
+        type=str,
+        default=None,
+        help='Project ID to filter by'
     )
     parser.set_defaults(func=list_leases)
 
