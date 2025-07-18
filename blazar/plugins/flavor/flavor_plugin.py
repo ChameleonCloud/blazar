@@ -146,42 +146,38 @@ class FlavorPlugin(base.BasePlugin):
                 hosts,
                 start_date - datetime.timedelta(minutes=CONF.cleaning_time),
                 end_date + datetime.timedelta(minutes=CONF.cleaning_time),
-                excludes)
+                [])
 
-        def _get_rp_traits(rp):
-            return rp, self._placement_client.get_traits(rp["uuid"])
+        placement_rps_matching_traits = None
+        # Only query placement if we have traits to match
+        if resource_traits:
+            traits_list = []
+            for trait, value in resource_traits.items():
+                # We've already validated resource_traits at this point
+                if value == "required":
+                    traits_list.append(trait)
+                elif value == "forbidden":
+                    # prefix forbidden traits with `!`
+                    traits_list.append(f"!{trait})")
+            required_string = ",".join(traits_list)
+            placement_rps_matching_traits = \
+                self._placement_client.list_resource_providers(
+                    query=f"required={required_string}",
+                    microversion="1.22",
+                )
 
-        # Gather hosts per resource trait
-        hosts_by_trait = collections.defaultdict(set)
-        resource_providers = self._placement_client.list_resource_providers()
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            futures = [
-                executor.submit(_get_rp_traits, rp)
-                for rp in resource_providers
-            ]
-
-            for future in concurrent.futures.as_completed(futures):
-                rp, traits = future.result()
-                for trait in traits:
-                    hosts_by_trait[trait].add(rp["name"])
         available_hosts = []
         for host_info in (reserved_hosts + free_hosts):
-            # First check placement traits
-            hostname = host_info['host']['hypervisor_hostname']
-            host_passes_trait_check = True
-            for trait, value in resource_traits.items():
-                matching_hosts = hosts_by_trait.get(trait, [])
-                if (
-                    (value == "required" and hostname not in matching_hosts) or
-                    (value == "forbidden" and hostname in matching_hosts)
-                ):
-                    LOG.debug(f"Host {hostname} fails trait condition for trait {trait}")
-                    host_passes_trait_check = False
-                    break
-            if not host_passes_trait_check:
-                # Host cannot be considered available for this reservation
+            hypervisor_hostname = host_info['host']['hypervisor_hostname']
+            if (
+                resource_traits and
+                hypervisor_hostname not in placement_rps_matching_traits
+            ):
+                LOG.debug(
+                    "Placement filtered out host %s based on traits",
+                    hypervisor_hostname
+                )
                 continue
-
             # check how many instances can fit on this host
             hosts_list = self._get_hosts_list(host_info, resource_request, excludes)
             available_hosts.extend(hosts_list)
