@@ -150,18 +150,32 @@ class BlazarPlacementClient(object):
         LOG.error(msg, args)
         raise exceptions.ResourceProviderRetrievalFailed(name=rp_name)
 
-    def get_reservation_provider(self, host_name):
-        """Calls the placement API for a reservation provider record.
+    def list_resource_providers(
+            self, query="", microversion=PLACEMENT_MICROVERSION):
+        """Get all resource providers.
 
-        :param host_name: Name of the host
-        :return: A dict of resource provider information
-                 or None if the resource provider doesn't exist.
-        :raise: ResourceProviderRetrievalFailed on error.
+        :param query: A string of query parameters.
+        :param microversion: The microversion to use for the request.
+        :return: A list of resource provider information
+        :raise: ResourceProviderListFailed on error.
         """
+        resp = self.get(
+            f'/resource_providers?{query}', microversion=microversion)
+        if resp:
+            json_resp = resp.json()
+            if json_resp['resource_providers']:
+                return json_resp['resource_providers']
+            else:
+                return []
 
-        return self.get_resource_provider(
-            self._get_reservation_provider_name(host_name)
-        )
+        msg = ("Failed to get resource providers. "
+               "Got %(status_code)d: %(err_text)s.")
+        args = {
+            'status_code': resp.status_code,
+            'err_text': resp.text,
+        }
+        LOG.error(msg, args)
+        raise exceptions.ResourceProviderListFailed()
 
     def create_resource_provider(self, rp_name, rp_uuid=None,
                                  parent_uuid=None):
