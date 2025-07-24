@@ -25,6 +25,7 @@ from oslo_policy import policy
 from blazar import context
 from blazar import exceptions
 from blazar import policies
+from blazar.db import api as db_api
 
 CONF = cfg.CONF
 LOG = logging.getLogger(__name__)
@@ -134,7 +135,19 @@ def authorize(extension, action=None, api='blazar', ctx=None,
     def decorator(func):
         @functools.wraps(func)
         def wrapped(self, *args, **kwargs):
-            check_enforcement(extension, action, api, ctx, target)
+            new_target = target
+            if new_target is None:
+                obj = None
+                if kwargs.get("lease_id"):
+                    obj = db_api.lease_get(kwargs.get("lease_id"))
+                if obj:
+                    new_target = {
+                        'project': obj.get("project_id"),
+                        'user': obj.get("user_id"),
+                        'project_id': obj.get("project_id"),
+                        'user_id': obj.get("user_id"),
+                    }
+            check_enforcement(extension, action, api, ctx, new_target)
             return func(self, *args, **kwargs)
 
         return wrapped
