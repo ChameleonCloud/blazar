@@ -34,7 +34,7 @@ class API(object):
     def get_leases(self, query):
         """List all existing leases."""
         ctx = context.current()
-        if policy.enforce(ctx, 'admin', {}, do_raise=False):
+        if query.get("all_tenants") and policy.enforce(ctx, 'admin', {}, do_raise=False):
             project_id = None
         else:
             project_id = ctx.project_id
