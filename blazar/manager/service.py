@@ -20,6 +20,7 @@ from functools import lru_cache
 
 from oslo_config import cfg
 from oslo_utils.excutils import save_and_reraise_exception
+from oslo_utils import strutils
 from oslo_service import periodic_task
 from stevedore import enabled
 
@@ -331,7 +332,19 @@ class ManagerService(service_utils.RPCServer):
         return db_api.devices_in_lease(lease_id)
 
     def list_leases(self, project_id=None, query=None):
-        return db_api.lease_list(project_id)
+        limit = query.get("limit")
+        if strutils.is_int_like(limit):
+            limit = int(limit)
+        else:
+            raise common_ex.InvalidInput(
+                f'limit must be integer, got {limit}')
+        return db_api.lease_list(
+            project_id,
+            marker=query.get("marker"),
+            limit=limit,
+            sort_key=query.get("sort_key", "end_date"),
+            sort_dir=query.get("sort_dir", "desc"),
+        )
 
     def create_lease(self, lease_values):
         """Create a lease with reservations.
