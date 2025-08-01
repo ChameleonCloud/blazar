@@ -197,9 +197,9 @@ def devices_in_lease(lease_id):
 
 
 @to_dict
-def lease_list(project_id=None):
+def lease_list(project_id, marker, limit, sort_dir, sort_key):
     """Return a list of all existing leases."""
-    return IMPL.lease_list(project_id)
+    return IMPL.lease_list(project_id, marker, limit, sort_dir, sort_key)
 
 
 def lease_destroy(lease_id):

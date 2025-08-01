@@ -24,6 +24,7 @@ from blazar.db.sqlalchemy import facade_wrapper
 from blazar.db.sqlalchemy import models
 from oslo_db import exception as common_db_exc
 from oslo_db.sqlalchemy import session as db_session
+from oslo_db.sqlalchemy import utils as sqlalchemyutils
 from oslo_log import log as logging
 import sqlalchemy as sa
 from sqlalchemy.sql.expression import asc
@@ -314,10 +315,30 @@ def networks_in_lease(lease_id):
     return query.all()
 
 
-def lease_list(project_id=None):
+def lease_list(
+        project_id=None,
+        marker=None,
+        limit=None,
+        sort_dir="desc",
+        sort_key="end_date"
+    ):
     query = model_query(models.Lease, get_session())
     if project_id is not None:
         query = query.filter_by(project_id=project_id)
+    marker_obj = None
+    if marker:
+        marker_obj = lease_get(marker)
+        if not marker_obj:
+            # raise not found error
+            raise db_exc.BlazarDBNotFound(id=marker, model='Lease')
+    query = sqlalchemyutils.paginate_query(
+        query,
+        models.Lease,
+        limit,
+        sort_keys=[sort_key, "id"],
+        sort_dirs=[sort_dir, "asc"],
+        marker=marker_obj,
+    )
     return query.all()
 
 
