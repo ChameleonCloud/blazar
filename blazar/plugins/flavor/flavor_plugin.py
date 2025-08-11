@@ -148,24 +148,22 @@ class FlavorPlugin(base.BasePlugin):
                 end_date + datetime.timedelta(minutes=CONF.cleaning_time),
                 excludes)
 
-        def get_hosts_for_trait(trait):
-            hostnames = [
-                rp["name"] for rp in
-                self._placement_client.get_trait_resource_providers(trait)
-            ]
-            return trait, set(hostnames)
+        def _get_rp_traits(rp):
+            return rp, self._placement_client.get_traits(rp["uuid"])
 
-        # Look up hosts per resource trait
-        hosts_by_trait = {}
+        # Gather hosts per resource trait
+        hosts_by_trait = collections.defaultdict(set)
+        resource_providers = self._placement_client.list_resource_providers()
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = [
-                executor.submit(get_hosts_for_trait, trait)
-                for trait in resource_traits.keys()
+                executor.submit(_get_rp_traits, rp)
+                for rp in resource_providers
             ]
 
             for future in concurrent.futures.as_completed(futures):
-                trait, hostnames = future.result()
-                hosts_by_trait[trait] = hostnames
+                rp, traits = future.result()
+                for trait in traits:
+                    hosts_by_trait[trait].add(rp["name"])
         available_hosts = []
         for host_info in (reserved_hosts + free_hosts):
             # First check placement traits
