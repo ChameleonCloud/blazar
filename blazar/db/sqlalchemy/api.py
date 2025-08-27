@@ -57,7 +57,7 @@ def _read_deleted_filter(query, db_model, deleted):
         return query
 
     default_deleted_value = None
-    if not deleted:
+    if not deleted and not cfg.CONF.include_deleted:
         query = query.filter(db_model.deleted == default_deleted_value)
     return query
 

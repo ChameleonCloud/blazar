@@ -6,6 +6,54 @@ from datetime import datetime
 CONF = cfg.CONF
 
 
+def list_leases_device(args):
+    print("start,end,created_at,deleted_at,id,user_id,project_id,device_id,device_name")
+    since_datetime = None
+    if args.since:
+        since_datetime = datetime.strptime(args.since, "%Y-%m-%d %H:%M")
+    devices_by_id = {}
+    for lease in db_api.lease_list():
+        try:
+            if since_datetime and lease["start_date"] < since_datetime:
+                continue
+
+            created_at = datetime.strptime(lease["created_at"], "%Y-%m-%d %H:%M:%S")
+            all_allocations = []
+            for allocations in [
+                db_api.device_allocation_get_all_by_values(reservation_id=x['id'])
+                for x in lease["reservations"]
+                if x["resource_type"] == "device"
+            ]:
+                all_allocations.extend(
+                    devices_by_id.setdefault(
+                        a["device_id"],
+                        db_api.device_get(a["device_id"])
+                    )
+                    for a in allocations
+                )
+            for device in all_allocations:
+                if not device.get("extras"):
+                    device["extras"] = {
+                        k: v.capability_value
+                        for v, k in db_api.device_extra_capability_get_all_per_device(device["id"])
+                    }
+                print(
+                    lease["start_date"],
+                    lease["end_date"],
+                    lease["created_at"],
+                    lease["deleted_at"],
+                    lease["id"],
+                    lease["user_id"],
+                    lease["project_id"],
+                    device["id"],
+                    device["name"],
+                    sep=",",
+                )
+        except Exception as e:
+            print(f"Error processing lease {lease['id']}: {e}", file=sys.stderr)
+            raise
+            continue
+
 def list_leases(args):
     print("start,end,created_at,deleted_at,hours_before_start,number_of_hosts,numer_of_networks,id,user_id,project_id,host_id,hypervisor_hostname,node_name,node_type")
     since_datetime = None
@@ -73,7 +121,13 @@ def add_command_parsers(subparsers):
         default=None,
         help='Project ID to filter by'
     )
-    parser.set_defaults(func=list_leases)
+    parser = subparsers.add_parser('device')
+    parser.add_argument(
+        '--since',
+        type=str,
+        help='Start date for filtering leases (YYYY-MM-DD HH:MM format)'
+    )
+    parser.set_defaults(func=list_leases_device)
 
 
 command_opts = [
@@ -88,7 +142,7 @@ CONF.register_cli_opts(command_opts)
 def main():
     CONF(project='blazar', prog='blazar-manager')
     CONF.set_override("include_deleted", True)
-
+    
     if hasattr(CONF.command, 'func'):
         CONF.command.func(CONF.command)
     else:
