@@ -335,7 +335,7 @@ class ManagerService(service_utils.RPCServer):
         limit = query.get("limit")
         if strutils.is_int_like(limit):
             limit = int(limit)
-        else:
+        elif limit is not None:
             raise common_ex.InvalidInput(
                 f'limit must be integer, got {limit}')
         return db_api.lease_list(
