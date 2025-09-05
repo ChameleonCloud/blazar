@@ -34,8 +34,12 @@ class API(object):
     def get_leases(self, query):
         """List all existing leases."""
         ctx = context.current()
-        if query.get("all_tenants") and policy.enforce(ctx, 'admin', {}, do_raise=False):
+        is_admin = policy.enforce(ctx, 'admin', {}, do_raise=False)
+        if query.get("all_tenants") and is_admin:
             project_id = None
+        elif query.get("project_id") and is_admin:
+            # User can only filter by project_id if they are an admin
+            project_id = query.get("project_id")
         else:
             project_id = ctx.project_id
         return self.manager_service.list_leases(project_id=project_id,

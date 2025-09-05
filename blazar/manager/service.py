@@ -340,6 +340,9 @@ class ManagerService(service_utils.RPCServer):
                 f'limit must be integer, got {limit}')
         return db_api.lease_list(
             project_id,
+            status=query.get("status"),
+            lease_id=query.get("lease_id"),
+            lease_name=query.get("lease_name"),
             marker=query.get("marker"),
             limit=limit,
             sort_key=query.get("sort_key", "end_date"),

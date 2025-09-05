@@ -317,6 +317,9 @@ def networks_in_lease(lease_id):
 
 def lease_list(
         project_id=None,
+        status=None,
+        lease_id=None,
+        lease_name=None,
         marker=None,
         limit=None,
         sort_dir="desc",
@@ -325,6 +328,12 @@ def lease_list(
     query = model_query(models.Lease, get_session())
     if project_id is not None:
         query = query.filter_by(project_id=project_id)
+    if status is not None:
+        query = query.filter_by(status=status)
+    if lease_id is not None:
+        query = query.filter_by(id=lease_id)
+    if lease_name is not None:
+        query = query.filter_by(name=lease_name)
     marker_obj = None
     if marker:
         marker_obj = lease_get(marker)
