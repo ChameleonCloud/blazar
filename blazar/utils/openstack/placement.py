@@ -710,6 +710,18 @@ class BlazarPlacementClient(object):
             if json_resp['resource_providers']:
                 resource_providers = json_resp['resource_providers']
         return resource_providers
+    
+    def list_resource_providers_query(self, params_string, microversion):
+        """Get all resource providers."""
+
+        url = f"/resource_providers?{params_string}"
+        resp = self.get(url, microversion=microversion)
+        resource_providers = []
+        if resp:
+            json_resp = resp.json()
+            if json_resp['resource_providers']:
+                resource_providers = json_resp['resource_providers']
+        return resource_providers
 
     def get_trait_resource_providers(self, trait_name):
         """Get all resource providers that associate with the trait

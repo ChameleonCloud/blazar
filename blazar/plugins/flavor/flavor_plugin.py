@@ -131,8 +131,12 @@ class FlavorPlugin(base.BasePlugin):
         except ValueError as e:
             raise mgr_exceptions.MalformedParameter(str(e))
 
-    def _query_available_hosts(self, start_date, end_date,
-                               resource_request, resource_traits, excludes=[]):
+    def _annotate_hosts_with_reservations(self, start_date, end_date, excludes):
+        """
+        Return a list of dicts, each one with structure:
+        {'host': host, 'reservations': reservations}
+        """
+
         # TODO(johngarbutt): offload more of this to the db
         # we should be able to exclude hosts that don't match the
         # resource requests, e.g. baremetal vs virtual
@@ -147,39 +151,52 @@ class FlavorPlugin(base.BasePlugin):
                 start_date - datetime.timedelta(minutes=CONF.cleaning_time),
                 end_date + datetime.timedelta(minutes=CONF.cleaning_time),
                 excludes)
+        
+        return [free_hosts + reserved_hosts]
+    
+    
+    def _get_placement_rps(self, resource_traits):
+        """
+        format the traits list into a string consumable by placement API
+        query for all RPs matching the needed traits, and return that list
+        """
 
-        def _get_rp_traits(rp):
-            return rp, self._placement_client.get_traits(rp["uuid"])
+        traits_list = []
+        for trait, value in resource_traits.items():
+            if value == "required":
+                traits_list.append(trait)
+            elif value == "forbidden":
+                # prefix forbidden traits with `!`
+                traits_list.append(f"!{trait})")
+            else:
+                raise ValueError("invalid trait request for %s:%s", trait, value)
+        
+        required_string = ",".join(traits_list)
 
-        # Gather hosts per resource trait
-        hosts_by_trait = collections.defaultdict(set)
-        resource_providers = self._placement_client.list_resource_providers()
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            futures = [
-                executor.submit(_get_rp_traits, rp)
-                for rp in resource_providers
-            ]
+        placement_rps_matching_traits = self._placement_client.list_resource_providers_query(
+            f"required={required_string}", 
+            microversion="1.22",
+        )
+        return placement_rps_matching_traits
 
-            for future in concurrent.futures.as_completed(futures):
-                rp, traits = future.result()
-                for trait in traits:
-                    hosts_by_trait[trait].add(rp["name"])
+    def _query_available_hosts(self, start_date, end_date,
+                               resource_request, resource_traits, excludes=[]):
+        
+        blazar_hosts_with_res = self._annotate_hosts_with_reservations(
+            start_date, 
+            end_date, 
+            excludes,
+        )
+
+        placement_rps_matching_traits = self._get_placement_rps(
+            resource_traits=resource_traits
+        )
+
         available_hosts = []
-        for host_info in (reserved_hosts + free_hosts):
-            # First check placement traits
-            hostname = host_info['host']['hypervisor_hostname']
-            host_passes_trait_check = True
-            for trait, value in resource_traits.items():
-                matching_hosts = hosts_by_trait.get(trait, [])
-                if (
-                    (value == "required" and hostname not in matching_hosts) or
-                    (value == "forbidden" and hostname in matching_hosts)
-                ):
-                    LOG.debug(f"Host {hostname} fails trait condition for trait {trait}")
-                    host_passes_trait_check = False
-                    break
-            if not host_passes_trait_check:
-                # Host cannot be considered available for this reservation
+        for host_info in blazar_hosts_with_res:
+            hypervisor_hostname = host_info['host']['hypervisor_hostname']
+            if hypervisor_hostname not in placement_rps_matching_traits:
+                LOG.debug("Placement filtered out host %s", hypervisor_hostname)
                 continue
 
             # check how many instances can fit on this host
