@@ -158,7 +158,7 @@ class FlavorPlugin(base.BasePlugin):
                     traits_list.append(trait)
                 elif value == "forbidden":
                     # prefix forbidden traits with `!`
-                    traits_list.append(f"!{trait})")
+                    traits_list.append(f"!{trait}")
             required_string = ",".join(traits_list)
             placement_rps_matching_traits = \
                 self._placement_client.list_resource_providers(
@@ -166,12 +166,15 @@ class FlavorPlugin(base.BasePlugin):
                     microversion="1.22",
                 )
 
+        placment_rps_matching_traits_hostnames = {
+            rp['name'] for rp in placement_rps_matching_traits
+        }
         available_hosts = []
         for host_info in (reserved_hosts + free_hosts):
             hypervisor_hostname = host_info['host']['hypervisor_hostname']
             if (
                 resource_traits and
-                hypervisor_hostname not in placement_rps_matching_traits
+                hypervisor_hostname not in placment_rps_matching_traits_hostnames
             ):
                 LOG.debug(
                     "Placement filtered out host %s based on traits",
