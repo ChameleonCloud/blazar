@@ -715,16 +715,6 @@ class BlazarPlacementClient(object):
             rp_uuid,
             [self._get_custom_reservation_trait_name(reserv_uuid, project_id)])
 
-    def list_resource_providers(self):
-        """Get all resource providers."""
-        resp = self.get('/resource_providers')
-        resource_providers = []
-        if resp:
-            json_resp = resp.json()
-            if json_resp['resource_providers']:
-                resource_providers = json_resp['resource_providers']
-        return resource_providers
-
     def get_trait_resource_providers(self, trait_name):
         """Get all resource providers that associate with the trait
 
