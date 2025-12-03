@@ -168,7 +168,8 @@ class FlavorPlugin(base.BasePlugin):
 
         placment_rps_matching_traits_hostnames = {
             rp['name'] for rp in placement_rps_matching_traits
-        }
+        } if placement_rps_matching_traits else set()
+
         available_hosts = []
         for host_info in (reserved_hosts + free_hosts):
             hypervisor_hostname = host_info['host']['hypervisor_hostname']

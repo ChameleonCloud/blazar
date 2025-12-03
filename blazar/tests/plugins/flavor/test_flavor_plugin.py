@@ -461,7 +461,7 @@ class TestFlavorPlugin(tests.DBTestCase):
             'allocation_ratio': 1.0
         }
         db_api.host_resource_inventory_create(fake_inventory_values)
-        mock_list_resource_providers.return_value = ["def"]
+        mock_list_resource_providers.return_value = [{"name": "def"}]
         query_params = {
             'start_date': datetime.datetime(2020, 7, 7, 18, 0),
             'end_date': datetime.datetime(2020, 7, 7, 19, 0),
