@@ -560,6 +560,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         self.db_host_list.return_value = [
             {'id': 'host-1'}, {'id': 'host-2'}, {'id': 'host-3'}]
 
+        self.patch(self.db_api, 'instance_reservation_get_by_reservation_id').return_value = None
+
         expected = [
             {
                 'resource_id': 'host-1',
@@ -618,6 +620,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         self.db_host_list.return_value = [
             {'id': 'host-1'}, {'id': 'host-2'}, {'id': 'host-3'}]
 
+        self.patch(self.db_api, 'instance_reservation_get_by_reservation_id').return_value = None
+
         expected = [
             {
                 'resource_id': 'host-1',
@@ -669,6 +673,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
 
         self.db_host_list = self.patch(self.db_api, 'host_list')
         self.db_host_list.return_value = [{'id': 'host-1'}, {'id': 'host-2'}]
+
+        self.patch(self.db_api, 'instance_reservation_get_by_reservation_id').return_value = None
 
         expected = [
             {
