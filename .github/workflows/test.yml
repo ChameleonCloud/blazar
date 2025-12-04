@@ -42,8 +42,7 @@ jobs:
         run: stestr init
       - name: run stestr tests
         run: |
-          stestr run \
-          --exclude-list stestr_known_failing.txt
+          stestr run
       - name: list failing tests
         run: stestr failing --list
         if: always() #run even if tests fail
