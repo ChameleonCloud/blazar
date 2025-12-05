@@ -40,6 +40,10 @@ plugin_opts = [
     cfg.BoolOpt('randomize_host_selection',
             default=False,
             help='Allocate hosts for reservations randomly.'),
+    cfg.BoolOpt('filter_ironic_hosts',
+            default=True,
+            help='Filter out ironic (baremetal) hosts from flavor '
+                 'reservation candidates.'),
 ]
 
 CONF = cfg.CONF
@@ -97,7 +101,7 @@ class FlavorPlugin(base.BasePlugin):
         start_date = reservation['start_date']
         end_date = reservation['end_date']
         candidates = self._query_available_hosts(
-            start_date, end_date, resource_request, resource_traits)
+            start_date, end_date, resource_request, resource_traits, reservation['project_id'])
 
         # Fail if we have fewer candidates than amount requested
         req_amount = reservation['amount']
@@ -131,14 +135,28 @@ class FlavorPlugin(base.BasePlugin):
         except ValueError as e:
             raise mgr_exceptions.MalformedParameter(str(e))
 
+    def _host_passes(self, host, project_id):
+        full_host = self._host_plugin.get_computehost(host["id"])
+        return (
+            self.is_project_allowed(project_id, full_host) and
+            (
+                not CONF[self.resource_type].filter_ironic_hosts or
+                full_host.get('hypervisor_type') != 'ironic'
+            )
+        )
+
     def _query_available_hosts(self, start_date, end_date,
-                               resource_request, resource_traits, excludes=[]):
+                               resource_request, resource_traits, project_id, excludes=[]):
         # TODO(johngarbutt): offload more of this to the db
         # we should be able to exclude hosts that don't match the
         # resource requests, e.g. baremetal vs virtual
         # or missing traits
 
         hosts = db_api.reservable_host_get_all_by_queries([])
+
+        hosts = [
+            host for host in hosts if self._host_passes(host, project_id)
+        ]
 
         # find reservations for each host in our time period
         free_hosts, reserved_hosts = \
@@ -499,6 +517,7 @@ class FlavorPlugin(base.BasePlugin):
             values['start_date'],
             values['end_date'],
             resource_request, resource_traits,
+            values['project_id'],
             [reservation_id]
         )
 

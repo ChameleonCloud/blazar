@@ -82,7 +82,8 @@ class TestFlavorPlugin(tests.DBTestCase):
             'amount': 4,
             'affinity': None,
             'start_date': datetime.datetime(2030, 1, 1, 8, 00),
-            'end_date': datetime.datetime(2030, 1, 1, 12, 00)
+            'end_date': datetime.datetime(2030, 1, 1, 12, 00),
+            "project_id": "fake",
         }
         mock_get_flavor.return_value = ({"PCPU": 2}, {},
                                         {"flavor_id": "fake"})
@@ -113,7 +114,8 @@ class TestFlavorPlugin(tests.DBTestCase):
             'amount': 5,
             'affinity': None,
             'start_date': datetime.datetime(2030, 1, 1, 8, 00),
-            'end_date': datetime.datetime(2030, 1, 1, 12, 00)
+            'end_date': datetime.datetime(2030, 1, 1, 12, 00),
+            "project_id": "fake",
         }
         mock_get_flavor.return_value = ({"PCPU": 2}, {},
                                         {"flavor_id": "fake"})
@@ -144,7 +146,8 @@ class TestFlavorPlugin(tests.DBTestCase):
             'amount': 3,
             'affinity': None,
             'start_date': datetime.datetime(2030, 1, 1, 8, 00),
-            'end_date': datetime.datetime(2030, 1, 1, 12, 00)
+            'end_date': datetime.datetime(2030, 1, 1, 12, 00),
+            "project_id": "fake",
         }
         fake_flavor = {
             "disk": 0,  # GiB
@@ -391,6 +394,7 @@ class TestFlavorPlugin(tests.DBTestCase):
             'resource_request': {
                 'VCPU': 1,
             },
+            "project_id": "fake",
             'resource_traits': {}
         }
         ret = plugin._query_available_hosts(**query_params)
@@ -416,6 +420,7 @@ class TestFlavorPlugin(tests.DBTestCase):
                 'VCPU': 1,
                 'MEMORY_MB': 1024
             },
+            "project_id": "fake",
             'resource_traits': {}
         }
         ret = plugin._query_available_hosts(**query_params)
@@ -429,6 +434,7 @@ class TestFlavorPlugin(tests.DBTestCase):
                 'VCPU': 1,
                 'MEMORY_MB': 1024
             },
+            "project_id": "fake",
             'resource_traits': {
                 "CUSTOM_1": "required"
             }
@@ -471,7 +477,8 @@ class TestFlavorPlugin(tests.DBTestCase):
             'resource_traits': {
                 "CUSTOM_1": "forbidden",
                 "CUSTOM_2": "required",
-            }
+            },
+            "project_id": "fake",
         }
         ret = plugin._query_available_hosts(**query_params)
         # 3 available slots on the second host
