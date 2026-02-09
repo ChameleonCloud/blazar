@@ -1115,25 +1115,24 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                                       if h['reservable'] is False]
 
                 hvs = self.nova.hypervisors.list()
-                hvs_by_id = {str(hv.id): hv for hv in hvs}
+                hvs_by_hostname = {hv.hypervisor_hostname: hv for hv in hvs}
 
-                failed_hv_ids = [str(hv.id) for hv in hvs
+                failed_hv_hostnames = [hv.hypervisor_hostname for hv in hvs
                                  if hv.state == 'down'
                                  or hv.status == 'disabled']
                 for host in reservable_hosts:
-                    host_id = str(host['id'])
-                    print(host_id)
-                    if host_id in failed_hv_ids:
-                        hv = hvs_by_id.get(host_id)
+                    if host['hypervisor_hostname'] in failed_hv_hostnames:
+                        hv = hvs_by_hostname.get(host['hypervisor_hostname'])
                         error = f"Hypervisor status is {hv.state} and {hv.status}"
                         db_api.host_update(host["id"], {"last_error": error})
                         failed_hosts.append(host)
 
-                active_hv_ids = [str(hv.id) for hv in hvs
+
+                active_hv_hostnames = [hv.hypervisor_hostname for hv in hvs
                                  if hv.state == 'up'
                                  and hv.status == 'enabled']
                 recovered_hosts.extend([host for host in unreservable_hosts
-                                        if host['id'] in active_hv_ids])
+                                        if host['hypervisor_hostname'] in active_hv_hostnames])
 
             aggregates = self.nova.aggregates.list()
             # create a map to get the current aggregate of a host in nova
