@@ -1097,17 +1097,17 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
 
                 hvs = self.nova.hypervisors.list()
 
-                failed_hv_ids = [str(hv.id) for hv in hvs
+                failed_hv_hostnames = [hv.hypervisor_hostname for hv in hvs
                                  if hv.state == 'down'
                                  or hv.status == 'disabled']
                 failed_hosts.extend([host for host in reservable_hosts
-                                     if host['id'] in failed_hv_ids])
+                                     if host['hypervisor_hostname'] in failed_hv_hostnames])
 
-                active_hv_ids = [str(hv.id) for hv in hvs
+                active_hv_hostnames = [hv.hypervisor_hostname for hv in hvs
                                  if hv.state == 'up'
                                  and hv.status == 'enabled']
                 recovered_hosts.extend([host for host in unreservable_hosts
-                                        if host['id'] in active_hv_ids])
+                                        if host['hypervisor_hostname'] in active_hv_hostnames])
 
             aggregates = self.nova.aggregates.list()
             # create a map to get the current aggregate of a host in nova
