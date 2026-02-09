@@ -3132,8 +3132,8 @@ class PhysicalHostMonitorPluginTestCase(tests.TestCase):
         hypervisors_list = self.patch(
             self.host_monitor_plugin.nova.hypervisors, 'list')
         hypervisors_list.return_value = [
-            mock.MagicMock(id=1, state='down', status='enabled'),
-            mock.MagicMock(id=2, state='down', status='enabled')]
+            mock.MagicMock(id=1, state='down', status='enabled', hypervisor_hostname="hypvsr1"),
+            mock.MagicMock(id=2, state='down', status='enabled', hypervisor_hostname="hypvsr2")]
 
         result = self.host_monitor_plugin.poll_resource_failures()
         self.assertEqual((hosts, []), result)
@@ -3160,8 +3160,8 @@ class PhysicalHostMonitorPluginTestCase(tests.TestCase):
         hypervisors_list = self.patch(
             self.host_monitor_plugin.nova.hypervisors, 'list')
         hypervisors_list.return_value = [
-            mock.MagicMock(id=1, state='up', status='disabled'),
-            mock.MagicMock(id=2, state='up', status='disabled')]
+            mock.MagicMock(id=1, state='up', status='disabled', hypervisor_hostname="hypvsr1"),
+            mock.MagicMock(id=2, state='up', status='disabled', hypervisor_hostname="hypvsr2")]
 
         result = self.host_monitor_plugin.poll_resource_failures()
         self.assertEqual((hosts, []), result)
@@ -3186,8 +3186,8 @@ class PhysicalHostMonitorPluginTestCase(tests.TestCase):
         hypervisors_list = self.patch(
             self.host_monitor_plugin.nova.hypervisors, 'list')
         hypervisors_list.return_value = [
-            mock.MagicMock(id=1, state='up', status='enabled'),
-            mock.MagicMock(id=2, state='up', status='enabled')]
+            mock.MagicMock(id=1, state='up', status='enabled', hypervisor_hostname="hypvsr1"),
+            mock.MagicMock(id=2, state='up', status='enabled', hypervisor_hostname="hypvsr2")]
 
         result = self.host_monitor_plugin.poll_resource_failures()
         self.assertEqual(([], []), result)
@@ -3208,8 +3208,8 @@ class PhysicalHostMonitorPluginTestCase(tests.TestCase):
         hypervisors_list = self.patch(
             self.host_monitor_plugin.nova.hypervisors, 'list')
         hypervisors_list.return_value = [
-            mock.MagicMock(id=1, state='up', status='enabled'),
-            mock.MagicMock(id=2, state='up', status='enabled')]
+            mock.MagicMock(id=1, state='up', status='enabled', hypervisor_hostname="hypvsr1"),
+            mock.MagicMock(id=2, state='up', status='enabled', hypervisor_hostname="hypvsr2")]
 
         result = self.host_monitor_plugin.poll_resource_failures()
         self.assertEqual(([], hosts), result)
