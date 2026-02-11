@@ -33,7 +33,6 @@ jobs:
         run: |
           uv pip install \
             --system \
-            -c https://releases.openstack.org/constraints/upper/2023.1 \
             -r requirements.txt \
             -r test-requirements.txt \
             -c https://releases.openstack.org/constraints/upper/2023.1 \
