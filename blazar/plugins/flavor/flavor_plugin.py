@@ -164,7 +164,7 @@ class FlavorPlugin(base.BasePlugin):
                 hosts,
                 start_date - datetime.timedelta(minutes=CONF.cleaning_time),
                 end_date + datetime.timedelta(minutes=CONF.cleaning_time),
-                [])
+                excludes)
 
         placement_rps_matching_traits = None
         # Only query placement if we have traits to match
