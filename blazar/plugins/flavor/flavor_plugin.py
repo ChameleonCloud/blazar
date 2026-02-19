@@ -517,11 +517,12 @@ class FlavorPlugin(base.BasePlugin):
             resource_request.pop(reservation_rc)
 
         existing_allocations = db_api.host_allocation_get_all_by_values(reservation_id=reservation_id)
+        lease = db_api.lease_get(reservation['lease_id'])
         candidates = self._query_available_hosts(
             values['start_date'],
             values['end_date'],
             resource_request, resource_traits,
-            values['project_id'],
+            lease['project_id'],
             [reservation_id]
         )
 
