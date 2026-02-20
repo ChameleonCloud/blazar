@@ -40,6 +40,10 @@ FORBIDDEN_EXTRA_CAPABILITY_NAMES = ["id", "reservable"]
 LOG = logging.getLogger(__name__)
 
 get_engine = facade_wrapper.get_engine
+
+cfg.CONF.register_opt(cfg.BoolOpt(
+    'include_deleted', default=False, help='Include deleted in queries (used by scripts)'))
+
 get_session = facade_wrapper.get_session
 
 
@@ -53,7 +57,7 @@ def _read_deleted_filter(query, db_model, deleted):
         return query
 
     default_deleted_value = None
-    if not deleted:
+    if not deleted and not cfg.CONF.include_deleted:
         query = query.filter(db_model.deleted == default_deleted_value)
     return query
 

@@ -34,7 +34,7 @@ class ZunPlugin(zun.ZunClientWrapper):
     def __init__(self):
         self.placement_client = placement.BlazarPlacementClient()
         for blazar_device in db_api.device_list():
-            if not blazar_device['reservable']:
+            if not blazar_device['reservable'] or blazar_device['device_driver'] != "zun":
                 continue
             name = blazar_device['name']
             parent_rp = self.placement_client.get_resource_provider(

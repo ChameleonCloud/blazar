@@ -734,25 +734,35 @@ class DeviceMonitorPlugin(monitor.GeneralMonitorPlugin):
 
         :return: a list of failed devices, a list of recovered devices.
         """
+        
         devices = db_api.device_get_all_by_filters({})
+        previously_reservable = set(d['id'] for d in devices if d["reservable"])
+        previously_unreservable = set(d['id'] for d in devices if not d["reservable"])
 
-        device_partition = defaultdict(list)
+        by_id = {d['id']: d for d in devices}
+
+        by_driver = defaultdict(list)
         for device in devices:
-            device_partition[device["device_driver"]].append(device)
+            by_driver[device["device_driver"]].append(device)
 
-        failed_devices = []
-        recovered_devices = []
+        currently_unreservable = set()
+        currently_reservable = set()
 
-        for device_driver in self.plugins.keys():
+        for driver_name in self.plugins:
             try:
-                driver_failed_devices, driver_recovered_devices = \
-                    self.plugins[device_driver].poll_resource_failures(
-                        device_partition[device_driver])
-                failed_devices.extend(driver_failed_devices)
-                recovered_devices.extend(driver_recovered_devices)
-            except AttributeError as e:
-                LOG.warning('poll_resource_failures is not implemented for {}'
-                            .format(device_driver))
-                raise e
+                unreservable, reservable = self.plugins[driver_name].poll_resource_failures(
+                    by_driver[driver_name])
+                # build dict of device_id: device
+                currently_unreservable.update({d['id'] for d in unreservable})
+                currently_reservable.update({d['id'] for d in reservable})
+            except AttributeError:
+                LOG.warning('poll_resource_failures not implemented for %s', driver_name)
+                raise
+
+        newly_unreservable = currently_unreservable & previously_reservable
+        newly_reservable = currently_reservable & previously_unreservable
+
+        failed_devices = [by_id[device_id] for device_id in newly_unreservable]
+        recovered_devices = [by_id[device_id] for device_id in newly_reservable]
 
         return failed_devices, recovered_devices
