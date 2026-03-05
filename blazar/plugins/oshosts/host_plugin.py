@@ -1071,10 +1071,11 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                 host_uuid = host['hypervisor_hostname']
                 curr_agg = host_to_agg_map.get(host['hypervisor_hostname'])
                 if not curr_agg:
-                    LOG.warning(f"f{host['hypervisor_hostname']} not found in any aggregate - moving to freepool")
-                    # if the host is not in any aggregate and in non-active reservation
-                    # it should be moved to freepool
-                    if not dry_run:
+                    msg = f"{host['hypervisor_hostname']} not found in any aggregate - moving to freepool"
+                    if dry_run:
+                        LOG.info(f"DRY RUN: {msg}")
+                    else:
+                        LOG.warning(msg)
                         freepool.add_host(host_uuid)
                     continue
                 if curr_agg.name == freepool.name:
@@ -1082,21 +1083,22 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                     LOG.debug(f"{host['hypervisor_hostname']} is already in a freepool - skipping aggregate clean up")
                     continue
                 try:
-                    LOG.warning(
-                        f"Removing host {host['hypervisor_hostname']} from aggregate"
-                        f" {curr_agg.name} Host {host['hypervisor_hostname']} is currently in reservation"
-                        f" {reservation['reservation_id']} with status {reservation['reservation_status']}"
+                    msg = (
+                        f"Moving {host['hypervisor_hostname']}"
+                        f" from aggregate {curr_agg.name} to freepool"
+                        f" (reservation {reservation['reservation_id']}"
+                        f" status {reservation['reservation_status']})"
                     )
-                    if not dry_run:
-                        curr_agg.remove_host(host_uuid)
-                    LOG.warning(f"Adding host {host['hypervisor_hostname']} to freepool")
-                    if not dry_run:
-                        freepool.add_host(host_uuid)
+                    if dry_run:
+                        LOG.info(f"DRY RUN: {msg}")
+                        continue
+                    LOG.warning(msg)
+                    curr_agg.remove_host(host_uuid)
+                    freepool.add_host(host_uuid)
                     hosts_in_agg = pool.get_computehosts(curr_agg)
                     if not hosts_in_agg:
-                        LOG.warning(f"Removing aggregate {curr_agg.name} - No hosts in it")
-                        if not dry_run:
-                            curr_agg.delete()
+                        LOG.warning(f"Removing empty aggregate {curr_agg.name}")
+                        curr_agg.delete()
                 except Exception as e:
                     LOG.exception(f"Failed to recover host {host}", exc_info=e)
                     failed_hosts.append(host)
