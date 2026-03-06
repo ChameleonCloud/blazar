@@ -868,6 +868,11 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                               self._filter_hosts_by_properties(
                                   hypervisor_properties, resource_properties)]
 
+        start_date_with_margin = dates_after['start_date'] - datetime.timedelta(
+            minutes=CONF.cleaning_time)
+        end_date_with_margin = dates_after['end_date'] + datetime.timedelta(
+            minutes=CONF.cleaning_time)
+
         for alloc in allocs:
             if alloc['compute_host_id'] not in requested_host_ids:
                 allocs_to_remove.append(alloc)
@@ -876,14 +881,14 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                     dates_before['end_date'] < dates_after['end_date']):
                 reserved_periods = db_utils.get_reserved_periods(
                     alloc['compute_host_id'],
-                    dates_after['start_date'],
-                    dates_after['end_date'],
+                    start_date_with_margin,
+                    end_date_with_margin,
                     datetime.timedelta(seconds=1))
 
                 max_start = max(dates_before['start_date'],
-                                dates_after['start_date'])
+                                start_date_with_margin)
                 min_end = min(dates_before['end_date'],
-                              dates_after['end_date'])
+                              end_date_with_margin)
 
                 if not (len(reserved_periods) == 0 or
                         (len(reserved_periods) == 1 and
