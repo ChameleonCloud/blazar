@@ -1217,6 +1217,158 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         host_allocation_create.assert_not_called()
         host_allocation_destroy.assert_not_called()
 
+    def test_update_reservation_move_with_cleaning_time_overlap(self):
+        self.cfg.CONF.set_override('cleaning_time', 5)
+        # Lease 1 is 20:00 to 21:00.
+        # Lease 2 is 22:00 to 23:00, moved backwards to 21:00 to 22:00
+        values = {
+            'start_date': datetime.datetime(2013, 12, 19, 21, 00),
+            'end_date': datetime.datetime(2013, 12, 19, 22, 00)
+        }
+        reservation_get = self.patch(self.db_api, 'reservation_get')
+        reservation_get.return_value = {
+            'lease_id': '10870923-6d56-45c9-b592-f788053f5baa',
+            'resource_id': '91253650-cc34-4c4f-bbe8-c943aa7d0c9b',
+            'status': 'pending'  # pending so it can fail with NotEnoughHostsAvailable if no resources
+        }
+        lease_get = self.patch(self.db_api, 'lease_get')
+        lease_get.return_value = {
+            'start_date': datetime.datetime(2013, 12, 19, 22, 00),
+            'end_date': datetime.datetime(2013, 12, 19, 23, 00),
+            'project_id': 'fake-project'
+        }
+        host_reservation_get = self.patch(
+            self.db_api,
+            'host_reservation_get')
+        host_reservation_get.return_value = {
+            'count_range': '1-1',
+            'hypervisor_properties': '["=", "$memory_mb", "256"]',
+            'resource_properties': ''
+        }
+        host_allocation_get_all = self.patch(
+            self.db_api,
+            'host_allocation_get_all_by_values')
+        host_allocation_get_all.return_value = [
+            {
+                'id': 'dd305477-4df8-4547-87f6-69069ee546a6',
+                'compute_host_id': 'host1'
+            }
+        ]
+        host_get_all_by_queries = self.patch(self.db_api,
+                                             'host_get_all_by_queries')
+        host_get_all_by_queries.return_value = [{'id': 'host1'}]
+        # When get_reserved_periods is called, we will simulate what it returns
+        # based on the arguments.
+        # If it's called with the START margin (20:55 to 22:05), it should see Lease 1
+        # which overlaps at 20:55 to 21:00.
+        def fake_get_reserved_periods(compute_host_id, start_date, end_date, duration):
+            # Lease 1: 20:00 to 21:00
+            # Lease 2: 22:00 to 23:00 (original)
+            periods = []
+            if start_date < datetime.datetime(2013, 12, 19, 21, 00):
+                # Lease 1 overlaps
+                periods.append((
+                    max(start_date, datetime.datetime(2013, 12, 19, 20, 00)),
+                    min(end_date, datetime.datetime(2013, 12, 19, 21, 00))
+                ))
+            # Lease 2 intersection (itself, which we are supposed to ignore or whatever
+            # - actually self-intersect is handled by comparing to max_start/min_end)
+            periods.append((
+                max(start_date, datetime.datetime(2013, 12, 19, 22, 00)),
+                min(end_date, datetime.datetime(2013, 12, 19, 23, 00))
+            ))
+            # filter out invalid ones
+            return [p for p in periods if p[0] < p[1]]
+
+        get_reserved_periods = self.patch(self.db_utils,
+                                          'get_reserved_periods')
+        get_reserved_periods.side_effect = fake_get_reserved_periods
+
+        matching_hosts = self.patch(self.fake_phys_plugin, '_matching_hosts')
+        matching_hosts.return_value = []
+
+        self.assertRaises(
+            manager_exceptions.NotEnoughHostsAvailable,
+            self.fake_phys_plugin.update_reservation,
+            '706eb3bc-07ed-4383-be93-b32845ece672',
+            values)
+
+    def test_update_reservation_move_with_cleaning_time_success(self):
+        self.cfg.CONF.set_override('cleaning_time', 5)
+        # Lease 1 is 20:00 to 20:55.
+        # Lease 2 is 22:00 to 23:00, moved backwards to 21:00 to 22:00.
+        # The cleaning time brings Lease 2's start to 20:55 and end to 22:05,
+        # which does NOT overlap with Lease 1.
+        values = {
+            'start_date': datetime.datetime(2013, 12, 19, 21, 00),
+            'end_date': datetime.datetime(2013, 12, 19, 22, 00)
+        }
+        reservation_get = self.patch(self.db_api, 'reservation_get')
+        reservation_get.return_value = {
+            'lease_id': '10870923-6d56-45c9-b592-f788053f5baa',
+            'resource_id': '91253650-cc34-4c4f-bbe8-c943aa7d0c9b',
+            'status': 'pending'
+        }
+        lease_get = self.patch(self.db_api, 'lease_get')
+        lease_get.return_value = {
+            'start_date': datetime.datetime(2013, 12, 19, 22, 00),
+            'end_date': datetime.datetime(2013, 12, 19, 23, 00),
+            'project_id': 'fake-project'
+        }
+        host_reservation_get = self.patch(
+            self.db_api,
+            'host_reservation_get')
+        host_reservation_get.return_value = {
+            'count_range': '1-1',
+            'hypervisor_properties': '["=", "$memory_mb", "256"]',
+            'resource_properties': ''
+        }
+        host_allocation_get_all = self.patch(
+            self.db_api,
+            'host_allocation_get_all_by_values')
+        host_allocation_get_all.return_value = [
+            {
+                'id': 'dd305477-4df8-4547-87f6-69069ee546a6',
+                'compute_host_id': 'host1'
+            }
+        ]
+        host_get_all_by_queries = self.patch(self.db_api,
+                                             'host_get_all_by_queries')
+        host_get_all_by_queries.return_value = [{'id': 'host1'}]
+        # If the bug is fixed, we call with margin: start=20:55, end=22:05.
+        def fake_get_reserved_periods(compute_host_id, start_date, end_date, duration):
+            # Lease 1: 20:00 to 20:55
+            # Lease 2: 22:00 to 23:00 (itself)
+            periods = []
+            if start_date < datetime.datetime(2013, 12, 19, 20, 55):
+                periods.append((
+                    max(start_date, datetime.datetime(2013, 12, 19, 20, 00)),
+                    min(end_date, datetime.datetime(2013, 12, 19, 20, 55))
+                ))
+            periods.append((
+                max(start_date, datetime.datetime(2013, 12, 19, 22, 00)),
+                min(end_date, datetime.datetime(2013, 12, 19, 23, 00))
+            ))
+            return [p for p in periods if p[0] < p[1]]
+
+        get_reserved_periods = self.patch(self.db_utils,
+                                          'get_reserved_periods')
+        get_reserved_periods.side_effect = fake_get_reserved_periods
+
+        matching_hosts = self.patch(self.fake_phys_plugin, '_matching_hosts')
+        matching_hosts.return_value = []
+
+        host_allocation_create = self.patch(self.db_api, 'host_allocation_create')
+        host_allocation_destroy = self.patch(self.db_api, 'host_allocation_destroy')
+
+        # Should not raise any exception!
+        self.fake_phys_plugin.update_reservation(
+            '706eb3bc-07ed-4383-be93-b32845ece672',
+            values)
+
+        host_allocation_create.assert_not_called()
+        host_allocation_destroy.assert_not_called()
+
     def test_update_reservation_move_realloc(self):
         values = {
             'start_date': datetime.datetime(2013, 12, 20, 20, 00),
