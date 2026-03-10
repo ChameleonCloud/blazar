@@ -13,10 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import eventlet
-eventlet.monkey_patch(
-    os=True, select=True, socket=True, thread=True, time=True)
-
 import flask
 from keystonemiddleware import auth_token
 from oslo_config import cfg
