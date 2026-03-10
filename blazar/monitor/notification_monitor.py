@@ -35,7 +35,7 @@ class NotificationMonitor(base.BaseMonitor):
                 oslo_messaging.get_notification_transport(cfg.CONF),
                 self._get_targets(monitor_plugins),
                 self._get_endpoints(monitor_plugins),
-                executor='eventlet'
+                executor='threading'
             )
             LOG.debug('Notification listener is successfully created.')
         except Exception as e:

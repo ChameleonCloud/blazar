@@ -13,11 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
 from collections import defaultdict
 import datetime
 from operator import itemgetter
 
-import eventlet
 from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils.excutils import save_and_reraise_exception
@@ -146,7 +146,7 @@ class ManagerService(service_utils.RPCServer):
         return actions
 
     @service_utils.with_empty_context
-    def _process_events_concurrently(self, events):
+    async def _process_events_concurrently(self, events):
         if not events:
             return
 
@@ -160,9 +160,7 @@ class ManagerService(service_utils.RPCServer):
             db_api.event_update(event['id'],
                                 {'status': status.event.IN_PROGRESS})
             try:
-                event_thread = eventlet.spawn(
-                    service_utils.with_empty_context(self._exec_event),
-                    event)
+                event_thread = asyncio.create_task(self._exec_event(event))
                 event_threads[event['id']] = event_thread
             except Exception:
                 db_api.event_update(event['id'],
@@ -172,7 +170,7 @@ class ManagerService(service_utils.RPCServer):
 
         for event_id, event_thread in event_threads.items():
             try:
-                event_thread.wait()
+                await event_thread
             except Exception:
                 db_api.event_update(event['id'],
                                     {'status': status.event.ERROR})
@@ -241,9 +239,10 @@ class ManagerService(service_utils.RPCServer):
         )
 
         for batch in self._select_for_execution(events):
-            self._process_events_concurrently(batch)
+            asyncio.run(self._process_events_concurrently(batch))
 
-    def _exec_event(self, event):
+    @service_utils.with_empty_context
+    async def _exec_event(self, event):
         """Execute an event function"""
         event_fn = getattr(self, event['event_type'], None)
         if event_fn is None:

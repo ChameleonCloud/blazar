@@ -43,7 +43,7 @@ def get_server(target, endpoints):
         TRANSPORT,
         target,
         endpoints,
-        executor='eventlet',
+        executor='threading',
     )
 
 

@@ -13,13 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
 import copy
 import datetime
+import importlib
 from unittest import mock
 
 import ddt
-import eventlet
-import importlib
 from oslo_config import cfg
 import oslo_messaging as messaging
 from oslo_utils import timeutils
@@ -121,7 +121,7 @@ class ServiceTestCase(tests.DBTestCase):
         self.context = context
         self.enabled = enabled
         self.exceptions = exceptions
-        self.eventlet = eventlet
+        self.asyncio = asyncio
         self.datetime = datetime
         self.db_api = db_api
         self.dummy_plugin = dummy_vm_plugin
@@ -284,7 +284,7 @@ class ServiceTestCase(tests.DBTestCase):
                                {'id': '444-555-666', 'time': self.good_date,
                                 'lease_id': 'bbb-ccc-ddd',
                                 'event_type': 'start_lease'}]
-        self.patch(eventlet, 'spawn')
+        self.patch(asyncio, 'create_task')
 
         self.manager._process_events()
 
@@ -340,7 +340,7 @@ class ServiceTestCase(tests.DBTestCase):
             # start_lease event
             mock.call([events_values[4]])])
 
-    def test_process_events_concurrently(self):
+    async def test_process_events_concurrently(self):
         events = [{'id': '111-222-333', 'time': self.good_date,
                    'lease_id': 'aaa-bbb-ccc',
                    'event_type': 'start_lease'},
@@ -350,18 +350,18 @@ class ServiceTestCase(tests.DBTestCase):
                   {'id': '333-444-555', 'time': self.good_date,
                    'lease_id': 'ccc-ddd-eee',
                    'event_type': 'start_lease'}]
-        spawn = self.patch(eventlet, 'spawn')
+        create_task = self.patch(asyncio, 'create_task')
 
-        self.manager._process_events_concurrently(events)
-        spawn.assert_has_calls([
+        await self.manager._process_events_concurrently(events)
+        create_task.assert_has_calls([
             mock.call(mock.ANY, events[0]),
             mock.call(mock.ANY, events[1]),
             mock.call(mock.ANY, events[2])])
 
-    def test_event_spawn_fail(self):
+    def test_event_create_task_fail(self):
         events = self.patch(self.db_api, 'event_get_all_sorted_by_filters')
         event_update = self.patch(self.db_api, 'event_update')
-        self.patch(eventlet, 'spawn').side_effect = Exception
+        self.patch(asyncio, 'create_task').side_effect = Exception
         events.return_value = [{'id': '111-222-333', 'time': self.good_date,
                                 'lease_id': 'aaa-bbb-ccc',
                                 'event_type': 'start_lease'}]
@@ -390,13 +390,13 @@ class ServiceTestCase(tests.DBTestCase):
 
         event_update.assert_not_called()
 
-    def test_exec_event_success(self):
+    async def test_exec_event_success(self):
         event = {'id': '111-222-333',
                  'event_type': 'start_lease',
                  'lease_id': self.lease_id}
         start_lease = self.patch(self.manager, 'start_lease')
 
-        self.manager._exec_event(event)
+        await self.manager._exec_event(event)
 
         start_lease.assert_called_once_with(lease_id=event['lease_id'],
                                             event_id=event['id'])
@@ -407,7 +407,7 @@ class ServiceTestCase(tests.DBTestCase):
             notifier_api.format_lease_payload(self.lease),
             'lease.event.start_lease')
 
-    def test_exec_event_invalid_event_type(self):
+    async def test_exec_event_invalid_event_type(self):
         event = {'id': '111-222-333',
                  'event_type': 'invalid',
                  'lease_id': self.lease_id}
@@ -416,7 +416,7 @@ class ServiceTestCase(tests.DBTestCase):
                           self.manager._exec_event,
                           event)
 
-    def test_exec_event_retry(self):
+    async def test_exec_event_retry(self):
         event = {'id': '111-222-333',
                  'event_type': 'start_lease',
                  'lease_id': self.lease_id,
@@ -428,7 +428,7 @@ class ServiceTestCase(tests.DBTestCase):
         with mock.patch.object(timeutils, 'utcnow') as patched:
             patched.return_value = (self.good_date + datetime.timedelta(
                 seconds=1))
-            self.manager._exec_event(event)
+            await self.manager._exec_event(event)
 
         start_lease.assert_called_once_with(lease_id=event['lease_id'],
                                             event_id=event['id'])
@@ -436,7 +436,7 @@ class ServiceTestCase(tests.DBTestCase):
             event['id'], {'status': status.event.UNDONE})
         self.lease_get.assert_not_called()
 
-    def test_exec_event_no_more_retry(self):
+    async def test_exec_event_no_more_retry(self):
         event = {'id': '111-222-333',
                  'event_type': 'start_lease',
                  'lease_id': self.lease_id,
@@ -448,7 +448,7 @@ class ServiceTestCase(tests.DBTestCase):
         with mock.patch.object(timeutils, 'utcnow') as patched:
             patched.return_value = (self.good_date + datetime.timedelta(
                 days=1))
-            self.manager._exec_event(event)
+            await self.manager._exec_event(event)
 
         start_lease.assert_called_once_with(lease_id=event['lease_id'],
                                             event_id=event['id'])
@@ -456,7 +456,7 @@ class ServiceTestCase(tests.DBTestCase):
             event['id'], {'status': status.event.ERROR})
         self.lease_get.assert_not_called()
 
-    def test_exec_event_handle_exception(self):
+    async def test_exec_event_handle_exception(self):
         event = {'id': '111-222-333',
                  'event_type': 'start_lease',
                  'lease_id': self.lease_id,
@@ -465,7 +465,7 @@ class ServiceTestCase(tests.DBTestCase):
         start_lease.side_effect = Exception
         event_update = self.patch(self.db_api, 'event_update')
 
-        self.manager._exec_event(event)
+        await self.manager._exec_event(event)
 
         start_lease.assert_called_once_with(lease_id=event['lease_id'],
                                             event_id=event['id'])

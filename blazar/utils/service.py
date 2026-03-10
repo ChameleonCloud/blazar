@@ -86,9 +86,9 @@ class ContextEndpointHandler(object):
 
 def with_empty_context(func):
     @functools.wraps(func)
-    def decorator(*args, **kwargs):
+    async def decorator(*args, **kwargs):
         with context.BlazarContext():
-            return func(*args, **kwargs)
+            await func(*args, **kwargs)
 
     return decorator
 
