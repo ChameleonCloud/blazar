@@ -439,8 +439,32 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         if rp is None:
             raise manager_ex.ResourceProviderNotFound(host=hostname)
 
-        inventories = self.placement_client.get_inventory(rp['uuid'])
-        for rc, inventory in inventories['inventories'].items():
+        tree_rps = self.placement_client.list_resource_providers(
+            query="in_tree=%s" % rp['uuid'])
+
+        aggregated_inventories = {}
+        for tree_rp in tree_rps:
+            inventories = self.placement_client.get_inventory(tree_rp['uuid'])
+            for rc, inventory in inventories['inventories'].items():
+                if rc not in aggregated_inventories:
+                    aggregated_inventories[rc] = {
+                        'total': 0,
+                        'reserved': 0,
+                        'min_unit': inventory['min_unit'],
+                        'max_unit': inventory['max_unit'],
+                        'step_size': inventory['step_size'],
+                        'allocation_ratio': inventory['allocation_ratio'],
+                    }
+                else:
+                    aggregated_inventories[rc]['max_unit'] = max(
+                        aggregated_inventories[rc]['max_unit'],
+                        inventory['max_unit']
+                    )
+
+                aggregated_inventories[rc]['total'] += inventory['total']
+                aggregated_inventories[rc]['reserved'] += inventory['reserved']
+
+        for rc, inventory in aggregated_inventories.items():
             resource_inventory = {
                 'computehost_id': host['id'],
                 'resource_class': rc,
