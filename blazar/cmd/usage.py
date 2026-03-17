@@ -12,7 +12,16 @@ def list_leases(args):
     if args.since:
         since_datetime = datetime.strptime(args.since, "%Y-%m-%d %H:%M")
     hosts_by_id = {}
-    for lease in db_api.lease_list(args.project_id):
+    for lease in db_api.lease_list(
+        args.project_id,
+        status=None,
+        lease_id=None,
+        lease_name=None,
+        marker=None,
+        limit=None,
+        sort_dir="desc",
+        sort_key="end_date"
+    ):
         try:
             if since_datetime and lease["start_date"] < since_datetime:
                 continue
