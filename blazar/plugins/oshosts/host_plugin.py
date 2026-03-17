@@ -445,9 +445,9 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         aggregated_inventories = {}
         for tree_rp in tree_rps:
             inventories = self.placement_client.get_inventory(tree_rp['uuid'])
-            for rc, inventory in inventories['inventories'].items():
-                if rc not in aggregated_inventories:
-                    aggregated_inventories[rc] = {
+            for resource_class, inventory in inventories['inventories'].items():
+                if resource_class not in aggregated_inventories:
+                    aggregated_inventories[resource_class] = {
                         'total': 0,
                         'reserved': 0,
                         'min_unit': inventory['min_unit'],
@@ -456,13 +456,17 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                         'allocation_ratio': inventory['allocation_ratio'],
                     }
                 else:
-                    aggregated_inventories[rc]['max_unit'] = max(
-                        aggregated_inventories[rc]['max_unit'],
+                    m = max(
+                        aggregated_inventories[resource_class]['max_unit'],
                         inventory['max_unit']
                     )
+                    if aggregated_inventories[resource_class]['max_unit'] != inventory['max_unit']:
+                        LOG.warning("Different max_units for resource %s on host %s, using max value %s",
+                                    resource_class, hostname, m)
+                    aggregated_inventories[resource_class]['max_unit'] = m
 
-                aggregated_inventories[rc]['total'] += inventory['total']
-                aggregated_inventories[rc]['reserved'] += inventory['reserved']
+                aggregated_inventories[resource_class]['total'] += inventory['total']
+                aggregated_inventories[resource_class]['reserved'] += inventory['reserved']
 
         for rc, inventory in aggregated_inventories.items():
             resource_inventory = {
