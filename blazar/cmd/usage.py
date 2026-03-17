@@ -60,8 +60,8 @@ def list_leases(args):
                     lease["project_id"],
                     host["id"],
                     host["hypervisor_hostname"],
-                    host["extras"]["node_name"],
-                    host["extras"]["node_type"],
+                    host["extras"].get("node_name", ""),
+                    host["extras"].get("node_type", ""),
                     sep=",",
                 )
         except Exception as e:
