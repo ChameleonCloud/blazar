@@ -128,6 +128,9 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         self.db_host_extra_capability_get_all_per_host = self.patch(
             self.db_api, 'host_extra_capability_get_all_per_host')
 
+        self.db_host_extra_capability_get_all_per_hosts = self.patch(
+            self.db_api, 'host_extra_capability_get_all_per_hosts')
+
         self.db_host_extra_capability_get_all_per_name = self.patch(
             self.db_api, 'host_extra_capability_get_all_per_name')
 

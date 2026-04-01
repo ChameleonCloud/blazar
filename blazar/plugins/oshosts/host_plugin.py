@@ -338,9 +338,23 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
 
     def list_computehosts(self, query=None):
         raw_host_list = db_api.host_list()
+        all_extras = db_api.host_extra_capability_get_all_per_hosts(
+            [h['id'] for h in raw_host_list])
+
+        extras_by_host = {}
+        for capability, property_name in all_extras:
+            extras_by_host.setdefault(capability.computehost_id, {})[
+                property_name] = capability.capability_value
+
         host_list = []
         for host in raw_host_list:
-            host_list.append(self.get_computehost(host['id']))
+            extra_capabilities = extras_by_host.get(host['id'], {})
+            if extra_capabilities:
+                res = host.copy()
+                res.update(extra_capabilities)
+                host_list.append(res)
+            else:
+                host_list.append(host)
         return host_list
 
     def create_computehost(self, host_values):
