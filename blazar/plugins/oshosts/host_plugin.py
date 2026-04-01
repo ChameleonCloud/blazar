@@ -314,6 +314,14 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                      '(lease: %s).', reservation['id'], lease['name'])
             return False
 
+    @staticmethod
+    def _merge_extras(host, extra_capabilities):
+        if extra_capabilities:
+            res = host.copy()
+            res.update(extra_capabilities)
+            return res
+        return host
+
     def _get_extra_capabilities(self, host_id):
         extra_capabilities = {}
         raw_extra_capabilities = (
@@ -328,13 +336,9 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
 
     def get_computehost(self, host_id):
         host = db_api.host_get(host_id)
-        extra_capabilities = self._get_extra_capabilities(host_id)
-        if host is not None and extra_capabilities:
-            res = host.copy()
-            res.update(extra_capabilities)
-            return res
-        else:
-            return host
+        if host is None:
+            return None
+        return self._merge_extras(host, self._get_extra_capabilities(host_id))
 
     def list_computehosts(self, query=None):
         raw_host_list = db_api.host_list()
@@ -348,13 +352,9 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
 
         host_list = []
         for host in raw_host_list:
-            extra_capabilities = extras_by_host.get(host['id'], {})
-            if extra_capabilities:
-                res = host.copy()
-                res.update(extra_capabilities)
-                host_list.append(res)
-            else:
-                host_list.append(host)
+            host_list.append(
+                self._merge_extras(host,
+                                   extras_by_host.get(host['id'], {})))
         return host_list
 
     def create_computehost(self, host_values):
