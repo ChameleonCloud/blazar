@@ -431,6 +431,11 @@ def host_extra_capability_get_all_per_host(host_id):
     return IMPL.host_extra_capability_get_all_per_host(host_id)
 
 
+def host_extra_capability_get_all_per_hosts(host_ids):
+    """Return all extra_capabilities for a list of Compute hosts."""
+    return IMPL.host_extra_capability_get_all_per_hosts(host_ids)
+
+
 def host_extra_capability_destroy(host_extra_capability_id):
     """Delete specific host ExtraCapability."""
     IMPL.host_extra_capability_destroy(host_extra_capability_id)

@@ -933,6 +933,12 @@ def host_extra_capability_get_all_per_host(host_id):
                                                    host_id).all()
 
 
+def host_extra_capability_get_all_per_hosts(host_ids):
+    query = _host_resource_property_query(get_session()).filter(
+        models.ComputeHostExtraCapability.computehost_id.in_(host_ids))
+    return query.all()
+
+
 def host_extra_capability_create(values):
     values = values.copy()
 

@@ -629,6 +629,20 @@ class SQLAlchemyDBApiTestCase(tests.DBTestCase):
         res = db_api.host_extra_capability_get_all_per_host('1')
         self.assertEqual(2, len(res))
 
+    def test_host_extra_capability_get_all_per_hosts(self):
+        db_api.host_extra_capability_create(
+            _get_fake_host_extra_capabilities(id='1', computehost_id='1'))
+        db_api.host_extra_capability_create(
+            _get_fake_host_extra_capabilities(id='2', computehost_id='1'))
+        db_api.host_extra_capability_create(
+            _get_fake_host_extra_capabilities(id='3', computehost_id='2'))
+        res = db_api.host_extra_capability_get_all_per_hosts(['1', '2'])
+        self.assertEqual(3, len(res))
+        res = db_api.host_extra_capability_get_all_per_hosts(['2'])
+        self.assertEqual(1, len(res))
+        res = db_api.host_extra_capability_get_all_per_hosts([])
+        self.assertEqual(0, len(res))
+
     def test_update_host_extra_capability(self):
         db_api.host_extra_capability_create(
             _get_fake_host_extra_capabilities(id='1'))
