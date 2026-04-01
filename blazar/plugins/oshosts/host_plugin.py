@@ -326,22 +326,24 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
     def get(self, host_id):
         return self.get_computehost(host_id)
 
-    def get_computehost(self, host_id):
-        host = db_api.host_get(host_id)
+    def _merge_extra_capabilities(self, host_id, host):
+        if host is None:
+            return None
         extra_capabilities = self._get_extra_capabilities(host_id)
-        if host is not None and extra_capabilities:
+        if extra_capabilities:
             res = host.copy()
             res.update(extra_capabilities)
             return res
-        else:
-            return host
+        return host
+
+    def get_computehost(self, host_id):
+        host = db_api.host_get(host_id)
+        return self._merge_extra_capabilities(host_id, host)
 
     def list_computehosts(self, query=None):
         raw_host_list = db_api.host_list()
-        host_list = []
-        for host in raw_host_list:
-            host_list.append(self.get_computehost(host['id']))
-        return host_list
+        return [self._merge_extra_capabilities(h['id'], h)
+                for h in raw_host_list]
 
     def create_computehost(self, host_values):
         # TODO(sbauza):
