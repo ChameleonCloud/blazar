@@ -56,3 +56,8 @@ def floatingips_delete(req, floatingip_id):
     """Delete specified floatingip."""
     _api.delete_floatingip(floatingip_id)
     return api_utils.render(status=200)
+
+@rest.get('/allocations', query=True)
+def allocations_list(req, query):
+    """List all allocations on all computehosts."""
+    return api_utils.render(allocations=_api.list_allocations(query))

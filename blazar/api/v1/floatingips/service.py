@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from blazar import context
 from blazar.manager.service import get_plugins
 from blazar import policy
 from blazar.utils import trusts
@@ -55,3 +56,18 @@ class API(object):
         :type floatingip_id: str
         """
         self.plugin.delete_floatingip(floatingip_id)
+
+    @policy.authorize('floatingips', 'get_allocations')
+    def list_allocations(self, query):
+        """List all allocations on all computehosts.
+
+        :param query: parameters to query allocations
+        :type query: dict
+        """
+        ctx = context.current()
+        detail = False
+
+        if policy.enforce(ctx, 'admin', {}, do_raise=False):
+            detail = True
+
+        return self.plugin.list_allocations(query, detail=detail)
