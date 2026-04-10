@@ -50,15 +50,16 @@ def create_ctx_from_trust(trust_id):
     client = keystone.BlazarKeystoneClient(trust_id=trust_id)
     session = client.session
 
+    auth_ref = session.auth.get_auth_ref(session)
+
     # use 'with ctx' statement in the place you need context from trust
     return context.BlazarContext(
         user_name=ctx.user_name,
         user_domain_name=ctx.user_domain_name,
+        roles=auth_ref.role_names,
         auth_token=session.get_token(),
         project_id=session.get_project_id(),
-        service_catalog=(
-            ctx.service_catalog or
-            session.auth.get_auth_ref(session).service_catalog),
+        service_catalog=(ctx.service_catalog or auth_ref.service_catalog),
         request_id=ctx.request_id,
         global_request_id=ctx.global_request_id
     )
