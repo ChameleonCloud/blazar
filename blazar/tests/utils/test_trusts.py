@@ -19,6 +19,7 @@ from oslo_config import cfg
 from oslo_config import fixture as conf_fixture
 
 from blazar import context
+from blazar import policy
 from blazar import tests
 from blazar.utils.openstack import base
 from blazar.utils.openstack import keystone
@@ -63,20 +64,48 @@ class TestTrusts(tests.TestCase):
             'auth_token': self.client().session.get_token(),
             'domain': None,
             'global_request_id': self.context.current().global_request_id,
-            'is_admin': False,
             'is_admin_project': True,
             'project': self.client().session.get_project_id(),
             'project_domain': None,
             'read_only': False,
             'request_id': ctx.request_id,
             'resource_uuid': None,
-            'roles': [],
             'service_catalog': ctx.service_catalog,
             'show_deleted': False,
             'system_scope': None,
             'user': None,
             'user_domain': None}
         self.assertDictContainsSubset(fake_ctx_dict, ctx.to_dict())
+
+    def test_create_ctx_from_trust_preserves_admin(self):
+        """Regression: trust context must preserve admin roles.
+
+        When an admin creates a lease, the manager wraps execution in
+        create_ctx_from_trust. The resulting context must carry roles
+        from the trust's auth_ref so that _is_admin() returns True
+        in the host plugin, allowing admins to reserve unreservable hosts.
+        """
+        self.cfg.config(os_admin_project_name='admin')
+        self.cfg.config(os_admin_username='admin')
+
+        # Set up the trust's auth_ref to return admin roles
+        mock_auth_ref = mock.MagicMock()
+        mock_auth_ref.role_names = ['admin', 'member']
+        mock_auth_ref.service_catalog = []
+        self.client().session.auth.get_auth_ref.return_value = mock_auth_ref
+
+        trust_ctx = self.trusts.create_ctx_from_trust('1')
+        
+        # Verify roles passed through
+        self.assertIn('admin', trust_ctx.roles)
+        self.assertIn('member', trust_ctx.roles)
+
+        # Verify policy.enforce recognizes this context as admin
+        policy.init()
+        self.assertTrue(
+            policy.enforce(trust_ctx, 'admin', {}, do_raise=False)
+        )
+
 
     def test_use_trust_auth_dict(self):
         def to_wrap(self, arg_to_update):
