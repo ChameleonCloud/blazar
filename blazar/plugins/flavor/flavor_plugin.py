@@ -473,7 +473,7 @@ class FlavorPlugin(base.BasePlugin):
             'ram': source_flavor['ram'],
             'disk': source_flavor['disk'],
             'is_public': False,
-            'description': lease["name"],
+            'description': f'{lease["name"]} (ID: {lease["id"]})',
         }
         # create flavor using admin access
         reserved_flavor = self._instance_plugin.nova.nova.flavors.create(
