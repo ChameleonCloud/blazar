@@ -400,7 +400,7 @@ class TestFlavorPlugin(tests.DBTestCase):
         mock_reservation_get.return_value = FakeRes()
         class FakeLease:
             def to_dict(self):
-                return {"name": "my_lease"}
+                return {"name": "my_lease", "id": 1}
         mock_lease_get.return_value = FakeLease()
 
         plugin._create_flavor(fake_reservation)
@@ -412,7 +412,7 @@ class TestFlavorPlugin(tests.DBTestCase):
         })
         mock_create.assert_called_once_with(
             flavorid='12345', name='reservation:12345', vcpus=2, ram=1024,
-            disk=10, is_public=False, description="my_lease")
+            disk=10, is_public=False, description="my_lease (ID: 1)")
 
     @mock.patch.object(placement.BlazarPlacementClient,
                        'list_resource_providers')
