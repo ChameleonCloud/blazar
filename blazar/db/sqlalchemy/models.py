@@ -240,11 +240,12 @@ class InstanceReservations(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     memory_mb = sa.Column(sa.Integer, nullable=False)
     disk_gb = sa.Column(sa.Integer, nullable=False)
     amount = sa.Column(sa.Integer, nullable=False)
-    affinity = sa.Column(sa.Boolean, nullable=False)
+    affinity = sa.Column(sa.Boolean, nullable=True)
     resource_properties = sa.Column(MediumText(), nullable=True)
     flavor_id = sa.Column(sa.String(36), nullable=True)
     aggregate_id = sa.Column(sa.Integer, nullable=True)
     server_group_id = sa.Column(sa.String(36), nullable=True)
+    before_end = sa.Column(sa.String(36))
 
 
 class ComputeHostAllocation(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
@@ -290,6 +291,12 @@ class ComputeHost(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
                                                   cascade="all,delete",
                                                   backref='computehost',
                                                   lazy='joined')
+    computehost_resource_inventories = relationship(
+        'ComputeHostResourceInventory', cascade="all,delete",
+        backref='computehost', lazy='joined')
+    computehost_traits = relationship(
+        'ComputeHostTrait', cascade="all,delete",
+        backref='computehost', lazy='joined')
 
     def to_dict(self):
         return super(ComputeHost, self).to_dict()
@@ -362,6 +369,34 @@ class ComputeHostExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
                     f"{self.computehost_id}"
                 )
         return value
+
+
+class ComputeHostResourceInventory(mb.BlazarBase):
+    __tablename__ = 'computehost_resource_inventory'
+
+    id = _id_column()
+    computehost_id = sa.Column(sa.String(36), sa.ForeignKey('computehosts.id'))
+    resource_class = sa.Column(sa.String(255), nullable=False)
+    total = sa.Column(sa.Integer, nullable=False)
+    reserved = sa.Column(sa.Integer, nullable=False)
+    min_unit = sa.Column(sa.Integer, nullable=False)
+    max_unit = sa.Column(sa.Integer, nullable=False)
+    step_size = sa.Column(sa.Integer, nullable=False)
+    allocation_ratio = sa.Column(sa.Float, nullable=False)
+
+    def to_dict(self):
+        return super(ComputeHostResourceInventory, self).to_dict()
+
+
+class ComputeHostTrait(mb.BlazarBase):
+    __tablename__ = 'computehost_trait'
+
+    id = _id_column()
+    computehost_id = sa.Column(sa.String(36), sa.ForeignKey('computehosts.id'))
+    trait = sa.Column(sa.String(255), nullable=False)
+
+    def to_dict(self):
+        return super(ComputeHostTrait, self).to_dict()
 
 
 # Floating IP

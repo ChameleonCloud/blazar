@@ -450,8 +450,12 @@ class ManagerService(service_utils.RPCServer):
                         db_api.lease_destroy(lease_id)
 
                 try:
+                    # NOTE: We fetch this again as the plugin's reserve_resource
+                    # may have updated the reservation usefully. (such as fetching flavor info)
+                    db_reservations = (
+                        db_api.reservation_get_all_by_lease_id(lease_id))
                     self.enforcement.check_create(
-                        context.current(), lease_values, reservations, allocations)
+                        context.current(), lease_values, db_reservations, allocations)
                 except common_ex.NotAuthorized as e:
                     LOG.warning("Enforcement checks failed. %s", str(e))
                     db_api.lease_destroy(lease_id)
@@ -501,6 +505,7 @@ class ManagerService(service_utils.RPCServer):
             exceptions.InvalidDate,
             exceptions.CantUpdateParameter,
             exceptions.InvalidPeriod,
+            exceptions.NotImplemented,
             enforcement.exceptions.MaxLeaseDurationException,
             enforcement.exceptions.MaxLeaseUpdateWindowException,
             enforcement.exceptions.ExternalServiceUnsupportedHTTPResponse,
@@ -856,7 +861,7 @@ class ManagerService(service_utils.RPCServer):
             except exceptions.NotEnoughResourcesAvailable:
                 candidate_ids = None
                 # Retry this function if allowed
-                if hasattr(
+                if plugin.resource_type in CONF and hasattr(
                     CONF[plugin.resource_type],
                     "retry_allocation_without_defaults"
                 ) and CONF[plugin.resource_type]\
@@ -871,7 +876,7 @@ class ManagerService(service_utils.RPCServer):
 
                 # If the retry didn't get candidate IDs, raise an exception
                 if candidate_ids is None:
-                    if hasattr(
+                    if plugin.resource_type in CONF and hasattr(
                         CONF[plugin.resource_type],
                         "display_default_resource_properties"
                     ) and CONF[plugin.resource_type]\

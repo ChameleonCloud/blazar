@@ -208,6 +208,7 @@ class ServiceTestCase(tests.DBTestCase):
         self.reservation_update = self.patch(self.db_api, 'reservation_update')
         self.event_create = self.patch(self.db_api, 'event_create')
         self.event_update = self.patch(self.db_api, 'event_update')
+        self.reservation_get_all_by_lease_id = self.patch(self.db_api, "reservation_get_all_by_lease_id")
         self.manager.plugins = {'virtual:instance': self.fake_plugin}
         self.manager.resource_actions = (
             {'virtual:instance':

@@ -628,6 +628,13 @@ def instance_reservation_get(instance_reservation_id, session=None):
     return query.filter_by(id=instance_reservation_id).first()
 
 
+def instance_reservation_get_by_reservation_id(reservation_id, session=None):
+    if not session:
+        session = get_session()
+    query = model_query(models.InstanceReservations, session)
+    return query.filter_by(reservation_id=reservation_id).first()
+
+
 def instance_reservation_update(instance_reservation_id, values):
     session = get_session()
 
@@ -994,6 +1001,58 @@ def host_extra_capability_get_all_per_name(host_id, property_name):
         query = _host_extra_capability_get_all_per_host(session, host_id)
         return query.filter(
             models.ResourceProperty.property_name == property_name).all()
+
+
+# ComputeHostResourceInventory
+
+def host_resource_inventory_create(values):
+    values = values.copy()
+
+    host_resource_inventory = models.ComputeHostResourceInventory()
+    host_resource_inventory.update(values)
+
+    session = get_session()
+
+    with session.begin():
+        try:
+            host_resource_inventory.save(session=session)
+        except common_db_exc.DBDuplicateEntry as e:
+            # raise exception about duplicated columns (e.columns)
+            raise db_exc.BlazarDBDuplicateEntry(
+                model=host_resource_inventory.__class__.__name__,
+                columns=e.columns)
+
+    return None
+
+
+def host_resource_inventory_get_all_per_host(host_id):
+    session = get_session()
+
+    with session.begin():
+        query = session.query(models.ComputeHostResourceInventory)
+        return query.filter_by(computehost_id=host_id).all()
+
+
+# ComputeHostTrait
+
+def host_trait_create(values):
+    values = values.copy()
+
+    host_trait = models.ComputeHostTrait()
+    host_trait.update(values)
+
+    session = get_session()
+
+    with session.begin():
+        try:
+            host_trait.save(session=session)
+        except common_db_exc.DBDuplicateEntry as e:
+            # raise exception about duplicated columns (e.columns)
+            raise db_exc.BlazarDBDuplicateEntry(
+                model=host_trait.__class__.__name__,
+                columns=e.columns)
+
+    return None
 
 
 # FloatingIP reservation
