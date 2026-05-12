@@ -471,12 +471,12 @@ class ManagerService(service_utils.RPCServer):
 
         return reservations
 
-    def _handle_resource_type_exception(self, lease):
-        for reservation in lease['reservations']:
+    def _handle_resource_type_exception(self, reservations):
+        for reservation in reservations:
             if reservation['resource_type'] == 'flavor:instance':
                 raise exceptions.NotImplemented(
-                    error="Updating leases for 'flavor:instance' type "
-                          "reservations is not yet supported.")
+                    error="Updating parameters for 'flavor:instance' "
+                          "type reservations is not yet supported.")
 
     @status.lease.lease_status(
         transition=status.lease.UPDATING,
@@ -504,8 +504,6 @@ class ManagerService(service_utils.RPCServer):
             return db_api.lease_get(lease_id)
 
         lease = db_api.lease_get(lease_id)
-
-        self._handle_resource_type_exception(lease)
 
         start_date = values.get(
             'start_date',
@@ -563,6 +561,7 @@ class ManagerService(service_utils.RPCServer):
 
             if reservations:
                 new_reservations = reservations
+                self._handle_resource_type_exception(reservations)
                 new_allocs = self._allocation_candidates(values,
                                                          existing_reservations)
             else:

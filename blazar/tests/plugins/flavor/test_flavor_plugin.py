@@ -17,7 +17,7 @@ from unittest import mock
 from novaclient.v2 import flavors
 
 from blazar import context
-from blazar.db.sqlalchemy import api as db_api
+from blazar.db import api as db_api
 from blazar.db import utils as db_utils
 from blazar.manager import exceptions as mgr_exceptions
 from blazar.plugins.flavor import flavor_plugin
@@ -467,3 +467,90 @@ class TestFlavorPlugin(tests.DBTestCase):
         self.assertEqual(3, len(ret))
         for host in ret:
             self.assertEqual(host["id"], '456')
+
+    def test_update_reservation(self):
+        plugin = flavor_plugin.FlavorPlugin()
+
+        old_reservation = {
+            "id": "reservation-id1",
+            "resource_id": "instance-reservation-id1",
+        }
+        instance_reservation = {"flavor_id": "flavor-id1", "amount": 2}
+
+        mock_reservation_get = self.patch(db_api, "reservation_get")
+        mock_reservation_get.return_value = old_reservation
+
+        mock_instance_reservation_get = self.patch(
+            db_api, "instance_reservation_get")
+        mock_instance_reservation_get.return_value = instance_reservation
+
+        mock_get_flavor_details = self.patch(plugin, "_get_flavor_details")
+        mock_get_flavor_details.return_value = ({"VCPU": 2}, {}, None)
+
+        mock_host_allocation_get = self.patch(
+            db_api, "host_allocation_get_all_by_values"
+        )
+        mock_host_allocation_get.return_value = [
+            {"compute_host_id": "host-id1"}
+        ]
+
+        mock_query_available_hosts = \
+            self.patch(plugin, "_query_available_hosts")
+        mock_query_available_hosts.return_value = [{"id": "host-id1"}]
+
+        # Test successful update (extending lease)
+        new_values = {
+            "start_date": datetime.datetime(2020, 7, 7, 18, 0),
+            "end_date": datetime.datetime(2020, 7, 7, 19, 0),
+        }
+        plugin.update_reservation("reservation-id1", new_values)
+
+        # Test that updating flavor_id raises exception
+        with self.assertRaises(mgr_exceptions.CantUpdateParameter):
+            plugin.update_reservation(
+                "reservation-id1", {"flavor_id": "different-flavor"}
+            )
+
+        # Test that updating amount raises exception
+        with self.assertRaises(mgr_exceptions.CantUpdateParameter):
+            plugin.update_reservation("reservation-id1", {"amount": 3})
+
+    def test_update_reservation_cant_extend(self):
+        plugin = flavor_plugin.FlavorPlugin()
+
+        old_reservation = {
+            "id": "reservation-id1",
+            "resource_id": "instance-reservation-id1",
+        }
+        instance_reservation = {"flavor_id": "flavor-id1", "amount": 2}
+
+        mock_reservation_get = self.patch(db_api, "reservation_get")
+        mock_reservation_get.return_value = old_reservation
+
+        mock_instance_reservation_get = \
+            self.patch(db_api, "instance_reservation_get")
+        mock_instance_reservation_get.return_value = instance_reservation
+
+        mock_get_flavor_details = self.patch(plugin, "_get_flavor_details")
+        mock_get_flavor_details.return_value = ({"VCPU": 2}, {}, None)
+
+        # Existing allocation on host-id1
+        mock_host_allocation_get = self.patch(
+            db_api, "host_allocation_get_all_by_values"
+        )
+        mock_host_allocation_get.return_value = [
+            {"compute_host_id": "host-id1"}
+        ]
+
+        # But no candidates available (other reservations block it)
+        mock_query_available_hosts = self.patch(
+            plugin, "_query_available_hosts")
+        mock_query_available_hosts.return_value = []
+
+        new_values = {
+            "start_date": datetime.datetime(2020, 7, 7, 18, 0),
+            "end_date": datetime.datetime(2020, 7, 7, 19, 0),
+        }
+
+        with self.assertRaises(mgr_exceptions.NotEnoughHostsAvailable):
+            plugin.update_reservation("reservation-id1", new_values)

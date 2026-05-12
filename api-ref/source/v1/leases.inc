@@ -470,8 +470,9 @@ are in the ``reservation`` object.
 Parameters for Flavor-based Instance Reservation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Lease updates are not currently supported for flavor-based instance
-reservations.
+Only the lease ``start_date`` and ``end_date`` can be updated for
+flavor-based instance reservations. The ``flavor_id`` and ``amount``
+parameters cannot be changed.
 
 **Example of Update Lease Request**
 
@@ -552,8 +553,20 @@ are in the ``reservation`` object.
 Parameters for Flavor-based Instance Reservation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Lease updates are not currently supported for flavor-based instance
-reservations.
+The following parameters are returned for flavor-based instance reservation.
+All parameters are in the ``reservation`` object.
+
+.. rest_parameters:: parameters.yaml
+
+  - reservation.amount: reservation_amount
+  - reservation.vcpus: reservation_vcpus
+  - reservation.memory_mb: reservation_memory_mb
+  - reservation.disk_gb: reservation_disk_gb
+  - reservation.affinity : reservation_affinity
+  - reservation.resource_properties: reservation_resource_properties
+  - reservation.flavor_id: reservation_flavor_id
+  - reservation.server_group_id: reservation_server_group_id
+  - reservation.aggregate_id: reservation_aggregate_id
 
 **Example of Update Lease Response**
 
