@@ -1028,14 +1028,20 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
 
                 ironic_client = ironic.BlazarIronicClient()
                 nodes = ironic_client.ironic.node.list()
+                nodes_by_uuid = {n.uuid: n for n in nodes}
                 failed_bm_ids = [n.uuid for n in nodes
                                  if n.maintenance
                                  or n.power_state in invalid_power_states
                                  or n.provision_state
                                  in invalid_provision_states]
-                failed_hosts.extend([host for host in reservable_hosts
-                                     if host['hypervisor_hostname']
-                                     in failed_bm_ids])
+
+                for host in reservable_hosts:
+                    print(host['hypervisor_hostname'])
+                    if host['hypervisor_hostname'] in failed_bm_ids:
+                        node = nodes_by_uuid.get(host['hypervisor_hostname'])
+                        error = f"Node status is maintenance {node.maintenance}, power state {node.power_state} and provision state {node.provision_state}"
+                        db_api.host_update(host["id"], {"last_error": error})
+                        failed_hosts.append(host)
                 active_bm_ids = [n.uuid for n in nodes
                                  if not n.maintenance
                                  and n.provision_state in ['available', 'active']]
@@ -1050,12 +1056,19 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                                       if h['reservable'] is False]
 
                 hvs = self.nova.hypervisors.list()
+                hvs_by_id = {str(hv.id): hv for hv in hvs}
 
                 failed_hv_ids = [str(hv.id) for hv in hvs
                                  if hv.state == 'down'
                                  or hv.status == 'disabled']
-                failed_hosts.extend([host for host in reservable_hosts
-                                     if host['id'] in failed_hv_ids])
+                for host in reservable_hosts:
+                    host_id = str(host['id'])
+                    print(host_id)
+                    if host_id in failed_hv_ids:
+                        hv = hvs_by_id.get(host_id)
+                        error = f"Hypervisor status is {hv.state} and {hv.status}"
+                        db_api.host_update(host["id"], {"last_error": error})
+                        failed_hosts.append(host)
 
                 active_hv_ids = [str(hv.id) for hv in hvs
                                  if hv.state == 'up'
