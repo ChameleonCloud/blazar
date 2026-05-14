@@ -2953,9 +2953,14 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             policy, 'enforce'
         )
         is_admin.return_value = True
+
+        self.assertRaises(manager_exceptions.MissingParameter,
+                          self.fake_phys_plugin.update_computehost,
+                          'host1', {'disabled': 'true', 'reservable': 'true'})
+
         self.fake_phys_plugin.update_computehost(
-            'host1', {'disabled': 'true'})
-        host_update.assert_called_once_with('host1', {"disabled": True, "reservable": False})
+            'host1', {'disabled': 'true', "disabled_reason": "maintenance"})
+        host_update.assert_called_once_with('host1', {"disabled": True, "reservable": False, "disabled_reason": "maintenance"})
 
     def test_update_disabled_property_as_user(self):
         resource_property_values = {'disabled': 'true'}
@@ -2967,7 +2972,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         )
         is_admin.return_value = False
         self.fake_phys_plugin.update_computehost(
-            'host1', {'disabled': 'true'})
+            'host1', {'disabled': 'true', "disabled_reason": "maintenance"})
         self.assertFalse(host_update.called)
 
 class PhysicalHostMonitorPluginTestCase(tests.TestCase):

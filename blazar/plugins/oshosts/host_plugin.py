@@ -367,9 +367,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             # Do not use nova's primary key for this host.
             # Instead, generate a new one.
             del host_details['id']
-        if 'disabled' in host_values:
-            self.handle_disabled_key(host_id, host_values['disabled'])
-            del host_values['disabled']
+        self.handle_disabled_key(host_id, host_values)
         # NOTE(sbauza): Only last duplicate name for same extra capability
         # will be stored
         to_store = set(host_values.keys()) - set(host_details.keys())
@@ -448,8 +446,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         if not values:
             return self.get_computehost(host_id)
         if 'disabled' in values:
-            self.handle_disabled_key(host_id, values['disabled'])
-            del values['disabled']
+            self.handle_disabled_key(host_id, values)
         cant_update_extra_capability = []
         cant_delete_extra_capability = []
         previous_capabilities = self._get_extra_capabilities(host_id)
@@ -545,23 +542,34 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             # they have to rerun
             raise manager_ex.CantDeleteHost(host=host_id, msg=str(e))
 
-    def handle_disabled_key(self, host_id, value):
+    def handle_disabled_key(self, host_id, values):
         # only admin can set/unset 'disabled' flag
-        if self._is_admin():
+        if "disabled" in values and self._is_admin():
+            new_disabled_flag = False if values.get('disabled') is None else True
+
+            disabled_reason = values.get('disabled_reason')
+            if new_disabled_flag and not disabled_reason:
+                raise manager_ex.MissingParameter(param='disabled_reason')
+            # unset reason automatically when re-enabling a host
+            if not new_disabled_flag:
+                values["disabled_reason"] = None
+
             host_details = self.get_computehost(host_id)
             # set True if value contains any string other than None
-            new_disabled_flag = False if value is None else True
-            self.set_disabled(host_details, new_disabled_flag)
+            self.set_disabled(host_details, new_disabled_flag, disabled_reason)
+            del values['disabled']
+            # NOTE: disabled_reason is set as normal in create_computehost and update_computehost.
+            # This method just verifies it is valid.
 
-    def set_disabled(self, resource, is_disabled):
-        host_update_values = {"disabled": is_disabled}
+    def set_disabled(self, resource, is_disabled, disabled_reason):
+        host_update_values = {"disabled": is_disabled, "disabled_reason": disabled_reason}
         # if a host is set as disabled, then it should not be reservable
         if is_disabled:
             host_update_values['reservable'] = False
         db_api.host_update(resource["id"], host_update_values)
         LOG.warn(
             f"{resource['hypervisor_hostname']}",
-            f"is set disabled {is_disabled}"
+            f"is set disabled {is_disabled} with reason: {disabled_reason}"
         )
 
     def list_allocations(self, query, detail=False):
