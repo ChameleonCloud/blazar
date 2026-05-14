@@ -3128,6 +3128,7 @@ class PhysicalHostMonitorPluginTestCase(tests.TestCase):
         host_get_all = self.patch(db_api,
                                   'host_get_all_by_filters')
         host_get_all.return_value = hosts
+        host_update = self.patch(db_api, 'host_update')
         hypervisors_list = self.patch(
             self.host_monitor_plugin.nova.hypervisors, 'list')
         hypervisors_list.return_value = [
@@ -3136,6 +3137,11 @@ class PhysicalHostMonitorPluginTestCase(tests.TestCase):
 
         result = self.host_monitor_plugin.poll_resource_failures()
         self.assertEqual((hosts, []), result)
+        host_update.assert_has_calls(
+            [mock.call('1', {"last_error": "Hypervisor status is down and enabled"}),
+             mock.call('2', {'last_error': "Hypervisor status is down and enabled"})],
+            any_order=True)
+
 
     def test_poll_resource_failures_status_disabled(self):
         hosts = [
@@ -3150,6 +3156,7 @@ class PhysicalHostMonitorPluginTestCase(tests.TestCase):
         host_get_all = self.patch(db_api,
                                   'host_get_all_by_filters')
         host_get_all.return_value = hosts
+        host_update = self.patch(db_api, 'host_update')
         hypervisors_list = self.patch(
             self.host_monitor_plugin.nova.hypervisors, 'list')
         hypervisors_list.return_value = [
@@ -3158,6 +3165,10 @@ class PhysicalHostMonitorPluginTestCase(tests.TestCase):
 
         result = self.host_monitor_plugin.poll_resource_failures()
         self.assertEqual((hosts, []), result)
+        host_update.assert_has_calls([
+            mock.call('1', {'last_error': "Hypervisor status is up and disabled"}),
+            mock.call('2', {'last_error': "Hypervisor status is up and disabled"})
+        ], any_order=True)
 
     def test_poll_resource_failures_nothing(self):
         hosts = [
