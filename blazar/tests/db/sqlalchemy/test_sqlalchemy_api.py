@@ -539,6 +539,70 @@ class SQLAlchemyDBApiTestCase(tests.DBTestCase):
             db_api.host_get_all_by_queries(['nic_model == ACME Model A'])
         ))
 
+    def test_search_for_hosts_by_capability_subset(self):
+        """A capability filter returns the right subset of several hosts."""
+        _ = db_api.host_create(_get_fake_host_values())
+        with_16 = db_api.host_create(_get_fake_host_values())
+        with_32 = db_api.host_create(_get_fake_host_values())
+        db_api.host_extra_capability_create(
+            _get_fake_host_extra_capabilities(
+                computehost_id=with_16['id'],
+                name='vgpu',
+                value='16',
+                )
+            )
+        db_api.host_extra_capability_create(
+            _get_fake_host_extra_capabilities(
+                computehost_id=with_32['id'],
+                name='vgpu',
+                value='32',
+                )
+            )
+
+        match_eq = db_api.host_get_all_by_queries(['vgpu == 16'])
+        self.assertEqual(
+            [with_16['id']],
+            [h['id'] for h in match_eq]
+        )
+
+        # != matches the host with vgpu=32, but NOT the host with no vgpu extra
+        # capability. `!=` will only match against hosts that have the property
+        # defined.
+        match_ne = db_api.host_get_all_by_queries(['vgpu != 16'])
+        self.assertEqual(
+            [with_32['id']],
+            [h['id'] for h in match_ne]
+        )
+
+    def test_search_for_hosts_by_two_capabilities(self):
+        """Two capability filters are ANDed together."""
+        both = db_api.host_create(_get_fake_host_values())
+        vgpu_only = db_api.host_create(_get_fake_host_values())
+        db_api.host_extra_capability_create(_get_fake_host_extra_capabilities(
+            computehost_id=both['id'], name='vgpu', value='16'))
+        db_api.host_extra_capability_create(_get_fake_host_extra_capabilities(
+            computehost_id=both['id'], name='nic_model', value='ACME Model A'))
+        db_api.host_extra_capability_create(_get_fake_host_extra_capabilities(
+            computehost_id=vgpu_only['id'], name='vgpu', value='16'))
+
+        result = db_api.host_get_all_by_queries(
+            ['vgpu == 16', 'nic_model == ACME Model A'])
+        self.assertEqual([both['id']], [h['id'] for h in result])
+
+    def test_search_for_hosts_by_capability_then_column(self):
+        """A capability predicate first must AND with a following column."""
+        host = db_api.host_create(_get_fake_host_values(mem=8192))
+        db_api.host_extra_capability_create(_get_fake_host_extra_capabilities(
+            computehost_id=host['id'], name='vgpu', value='16'))
+
+        match = db_api.host_get_all_by_queries(
+            ['vgpu == 16', 'memory_mb >= 2048'])
+        self.assertEqual([host['id']], [h['id'] for h in match])
+
+        no_match = db_api.host_get_all_by_queries(
+            ['vgpu == 16', 'memory_mb < 2048'])
+        self.assertEqual([], [h['id'] for h in no_match])
+
     def test_resource_properties_list(self):
         """Create one host and test extra capability queries."""
         # We create a first host, with extra capabilities
