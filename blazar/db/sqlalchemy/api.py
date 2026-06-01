@@ -789,7 +789,8 @@ def host_get_all_by_queries(queries):
         '!=': ['ne', lambda a, b: a == b],
     }
 
-    hosts = []
+    # loop over input queries. For each one, construct a sqlalchemy filter
+    # clause and append to hosts_query
     for query in queries:
         try:
             key, op, value = query.split(' ', 2)
@@ -817,30 +818,46 @@ def host_get_all_by_queries(queries):
 
             hosts_query = hosts_query.filter(filt)
         else:
-            # looking for resource properties matches
-            extra_filter = (
-                _host_resource_property_query(get_session())
-                .filter(models.ResourceProperty.property_name == key)
-            ).all()
-
-            if not extra_filter:
+            # Since `key` does not map to a host column directly, check if it
+            # maps to a resource property joined to at least one host by extra
+            # capability.
+            cap = models.ComputeHostExtraCapability
+            prop = models.ResourceProperty
+            # capability rows for this property name
+            caps_query = (model_query(cap, get_session())
+                          .join(prop, cap.property_id == prop.id)
+                          .filter(prop.property_name == key))
+            if not caps_query.first():
                 raise db_exc.BlazarDBNotFound(
                     id=key, model='ComputeHostExtraCapability')
 
-            for host, property_name in extra_filter:
-                if op in oper and oper[op][1](host.capability_value, value):
-                    hosts.append(host.computehost_id)
-                elif op not in oper:
-                    msg = 'Operator %s for resource properties not implemented'
-                    raise NotImplementedError(msg % op)
+            # Check if requested operator is supported for capabilities
+            if op not in oper:
+                msg = "Operator %s for resource properties not implemented"
+                raise NotImplementedError(msg % op)
 
-            # We must also avoid selecting any host which doesn't have the
-            # extra capability present.
-            all_hosts = [h.id for h in hosts_query.all()]
-            extra_filter_hosts = [h.computehost_id for h, _ in extra_filter]
-            hosts += [h for h in all_hosts if h not in extra_filter_hosts]
+            # the oper dict maps an input symbol, e.g. `>=` to a sqlalchemy 
+            # operator, e.g. `ge`, and to a python lambda implementing the op.
+            # look up the sqlalchemy operator, then look up which prefix form
+            # is a method on the extra capabilites column
+            op_name = oper[op][0]
+            try:
+                attr = [ e for e in ["%s", "%s_", "__%s__"]
+                    if hasattr(cap.capability_value, e % op_name)][0] % op_name
+            except IndexError:
+                raise db_exc.BlazarDBInvalidFilterOperator(filter_operator=op)
+            value_filter = getattr(cap.capability_value, attr)(value)
 
-    return hosts_query.filter(~models.ComputeHost.id.in_(hosts)).all()
+            # keep hosts that have a capability row matching that clause
+            hosts_query = hosts_query.filter(
+                caps_query.filter(cap.computehost_id == models.ComputeHost.id)
+                .filter(value_filter)
+                .exists()
+            )
+
+    # execute the constructed db query, containing filter clauses for each input
+    # query. 
+    return hosts_query.all()
 
 
 def reservable_host_get_all_by_queries(queries):
