@@ -757,6 +757,81 @@ def host_get_all_by_filters(filters):
     return hosts_query.all()
 
 
+_SYMBOLS = {
+    '<': 'lt',
+    '>': 'gt',
+    '<=': 'le',
+    '>=': 'ge',
+    '==': 'eq',
+    '!=': 'ne',
+}
+
+
+def _resolve_comparator(column, op):
+    """Return the bound comparator method on `column` for sqlalchemy op `op`.
+
+    SQLAlchemy spells its operators with inconsistent prefixes (`__ge__`,
+    `in_`, `like`), so probe the three forms and take the first that exists.
+    """
+    try:
+        attr = [e for e in ['%s', '%s_', '__%s__']
+                if hasattr(column, e % op)][0] % op
+    except IndexError:
+        raise db_exc.BlazarDBInvalidFilterOperator(filter_operator=op)
+    return getattr(column, attr)
+
+
+def _comparison_filter(column, op, value):
+    """Build a single `column op value` clause for a sqlalchemy column.
+
+    `op` is a blazar filter symbol (`==`, `>=`, ...) or a sqlalchemy operator
+    name; `in` and `null` get their dedicated forms.
+    """
+    if op == 'in':
+        return column.in_(value.split(','))
+    comparator = _resolve_comparator(column, _SYMBOLS.get(op, op))
+    if value == 'null':
+        value = None
+    return comparator(value)
+
+
+def _capability_exists(key, op, value):
+    """Return an EXISTS clause matching hosts with extra capability `key`.
+
+    `key` is a resource property name, not a host column, so it joins
+    computehost_extra_capabilities to resource_properties.
+    """
+    cap = models.ComputeHostExtraCapability
+    prop = models.ResourceProperty
+    caps = (model_query(cap, get_session())
+            .join(prop, cap.property_id == prop.id)
+            .filter(prop.property_name == key))
+    if not caps.first():
+        raise db_exc.BlazarDBNotFound(
+            id=key, model='ComputeHostExtraCapability')
+    if op not in _SYMBOLS:
+        msg = "Operator %s for resource properties not implemented"
+        raise NotImplementedError(msg % op)
+    comparator = _resolve_comparator(cap.capability_value, _SYMBOLS[op])
+    value_filter = comparator(value)
+    return (caps.filter(cap.computehost_id == models.ComputeHost.id)
+            .filter(value_filter)
+            .exists())
+
+
+def _blazar_query_to_sql_clause(query):
+    """Translate one "key op value" blazar query into a sqlalchemy clause."""
+    try:
+        key, op, value = query.split(' ', 2)
+    except ValueError:
+        raise db_exc.BlazarDBInvalidFilter(query_filter=query)
+
+    column = getattr(models.ComputeHost, key, None)
+    if column is not None:
+        return _comparison_filter(column, op, value)
+    return _capability_exists(key, op, value)
+
+
 def host_get_all_by_queries(queries):
     """Returns hosts filtered by an array of queries.
 
@@ -765,86 +840,9 @@ def host_get_all_by_queries(queries):
             #sqlalchemy.sql.operators.ColumnOperators
 
     """
+    clauses = [_blazar_query_to_sql_clause(q) for q in queries]
     hosts_query = model_query(models.ComputeHost, get_session())
-
-    oper = {
-        '<': ['lt', lambda a, b: a >= b],
-        '>': ['gt', lambda a, b: a <= b],
-        '<=': ['le', lambda a, b: a > b],
-        '>=': ['ge', lambda a, b: a < b],
-        '==': ['eq', lambda a, b: a != b],
-        '!=': ['ne', lambda a, b: a == b],
-    }
-
-    # loop over input queries. For each one, construct a sqlalchemy filter
-    # clause and append to hosts_query
-    for query in queries:
-        try:
-            key, op, value = query.split(' ', 2)
-        except ValueError:
-            raise db_exc.BlazarDBInvalidFilter(query_filter=query)
-
-        column = getattr(models.ComputeHost, key, None)
-        if column is not None:
-            if op == 'in':
-                filt = column.in_(value.split(','))
-            else:
-                if op in oper:
-                    op = oper[op][0]
-                try:
-                    attr = [e for e in ['%s', '%s_', '__%s__']
-                            if hasattr(column, e % op)][0] % op
-                except IndexError:
-                    raise db_exc.BlazarDBInvalidFilterOperator(
-                        filter_operator=op)
-
-                if value == 'null':
-                    value = None
-
-                filt = getattr(column, attr)(value)
-
-            hosts_query = hosts_query.filter(filt)
-        else:
-            # Since `key` does not map to a host column directly, check if it
-            # maps to a resource property joined to at least one host by extra
-            # capability.
-            cap = models.ComputeHostExtraCapability
-            prop = models.ResourceProperty
-            # capability rows for this property name
-            caps_query = (model_query(cap, get_session())
-                          .join(prop, cap.property_id == prop.id)
-                          .filter(prop.property_name == key))
-            if not caps_query.first():
-                raise db_exc.BlazarDBNotFound(
-                    id=key, model='ComputeHostExtraCapability')
-
-            # Check if requested operator is supported for capabilities
-            if op not in oper:
-                msg = "Operator %s for resource properties not implemented"
-                raise NotImplementedError(msg % op)
-
-            # the oper dict maps an input symbol, e.g. `>=` to a sqlalchemy 
-            # operator, e.g. `ge`, and to a python lambda implementing the op.
-            # look up the sqlalchemy operator, then look up which prefix form
-            # is a method on the extra capabilites column
-            op_name = oper[op][0]
-            try:
-                attr = [ e for e in ["%s", "%s_", "__%s__"]
-                    if hasattr(cap.capability_value, e % op_name)][0] % op_name
-            except IndexError:
-                raise db_exc.BlazarDBInvalidFilterOperator(filter_operator=op)
-            value_filter = getattr(cap.capability_value, attr)(value)
-
-            # keep hosts that have a capability row matching that clause
-            hosts_query = hosts_query.filter(
-                caps_query.filter(cap.computehost_id == models.ComputeHost.id)
-                .filter(value_filter)
-                .exists()
-            )
-
-    # execute the constructed db query, containing filter clauses for each input
-    # query. 
-    return hosts_query.all()
+    return hosts_query.filter(*clauses).all()
 
 
 def reservable_host_get_all_by_queries(queries):
