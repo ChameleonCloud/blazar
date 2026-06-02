@@ -456,6 +456,12 @@ class ManagerService(service_utils.RPCServer):
                     LOG.warning("Enforcement checks failed. %s", str(e))
                     db_api.lease_destroy(lease_id)
                     raise common_ex.NotAuthorized(e)
+                except Exception:
+                    with save_and_reraise_exception():
+                        LOG.exception("Unexpected enforcement error. "
+                                      "Destroying lease and associated "
+                                      "reservations")
+                        db_api.lease_destroy(lease_id)
 
                 try:
                     for event in events:

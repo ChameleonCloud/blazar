@@ -775,6 +775,19 @@ class ServiceTestCase(tests.DBTestCase):
                           lease_values=lease_values)
         self.assertEqual(1, self.lease_create.call_count)
 
+    def test_create_lease_with_unexpected_filter_exception(self):
+        lease_values = self.lease_values.copy()
+        self.lease_create.return_value = self.lease
+
+        self.enforcement.check_create.side_effect = RuntimeError(
+            'Generic error from enforcement filter')
+
+        self.assertRaises(RuntimeError,
+                          self.manager.create_lease,
+                          lease_values=lease_values)
+        self.lease_destroy.assert_called_once_with(self.lease_id)
+        self.assertEqual(1, self.lease_create.call_count)
+
     def test_update_lease_completed_lease_rename(self):
         lease_values = {'name': 'renamed'}
         target = datetime.datetime(2015, 1, 1)
