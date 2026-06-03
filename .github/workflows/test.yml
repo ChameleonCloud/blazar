@@ -1,48 +1,19 @@
 name: Unit tests
 
-on:
-  push:
-    branches:
-      - "chameleoncloud/*"
-  pull_request:
-
+on: [push, pull_request]
 
 jobs:
-  run_linting:
+  unittest:
     runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/ruff-action@v3
-
-
-  run_tests:
     strategy:
       matrix:
-        include:
-          - python_version: "3.10"
-    runs-on: ubuntu-22.04
+        python-version:
+        - "3.9"
+        - "3.10"
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python_version }}
-      - name: install uv for speedup
-        run: pip install uv
-      - name: install test tools
-        run: |
-          uv pip install \
-            --system \
-            -r requirements.txt \
-            -r test-requirements.txt \
-            -c https://releases.openstack.org/constraints/upper/2023.1 \
-            .
-      - name: init stestr repo
-        run: stestr init
-      - name: run stestr tests
-        run: |
-          stestr run \
-          --exclude-list stestr_known_failing.txt
-      - name: list failing tests
-        run: stestr failing --list
-        if: always() #run even if tests fail
+          python-version: ${{ matrix.python-version }}
+      - run: pip install tox
+      - run: tox -e py
