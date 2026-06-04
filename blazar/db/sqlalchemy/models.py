@@ -43,6 +43,13 @@ class Lease(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     """Contains all info about lease."""
 
     __tablename__ = 'leases'
+    __table_args__ = (
+        sa.Index('ix_leases_project_id', 'project_id'),
+        sa.Index('ix_leases_status', 'status'),
+        sa.Index('ix_leases_end_date', 'end_date'),
+        sa.Index('ix_leases_project_end_date', 'project_id', 'end_date'),
+        sa.Index('ix_leases_status_end_date', 'status', 'end_date'),
+    )
 
     id = _id_column()
     name = sa.Column(sa.String(80), nullable=False)
