@@ -258,6 +258,10 @@ class ComputeHostAllocation(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     """Mapping between ComputeHost, ComputeHostReservation and Reservation."""
 
     __tablename__ = 'computehost_allocations'
+    __table_args__ = (
+        sa.Index('ix_computehost_allocations_compute_host_id', 'compute_host_id'),
+        sa.Index('ix_computehost_allocations_reservation_id', 'reservation_id'),
+    )
 
     id = _id_column()
     compute_host_id = sa.Column(sa.String(36))
@@ -310,6 +314,9 @@ class ComputeHostExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     """
 
     __tablename__ = 'computehost_extra_capabilities'
+    __table_args__ = (
+        sa.Index('ix_computehost_extra_capabilities_computehost_id', 'computehost_id'),
+    )
 
     id = _id_column()
     computehost_id = sa.Column(sa.String(36), sa.ForeignKey('computehosts.id'))
