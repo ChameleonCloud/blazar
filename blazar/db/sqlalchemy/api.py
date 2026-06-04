@@ -325,7 +325,11 @@ def lease_list(
         sort_dir="desc",
         sort_key="end_date"
     ):
-    query = model_query(models.Lease, get_session())
+    # Wait to select relations until after pagination to avoid the large join
+    query = model_query(models.Lease, get_session()).options(
+        sa.orm.noload(models.Lease.reservations),
+        sa.orm.noload(models.Lease.events),
+    )
     if project_id is not None:
         query = query.filter_by(project_id=project_id)
     if status is not None:
@@ -348,7 +352,16 @@ def lease_list(
         sort_dirs=[sort_dir, "asc"],
         marker=marker_obj,
     )
-    return query.all()
+    lease_ids = [lease.id for lease in query.all()]
+    if not lease_ids:
+        return []
+    query = model_query(models.Lease, get_session()).options(
+        sa.orm.selectinload(models.Lease.reservations),
+        sa.orm.selectinload(models.Lease.events),
+    ).filter(models.Lease.id.in_(lease_ids))
+    leases = query.all()
+    lease_map = {lease.id: lease for lease in leases}
+    return [lease_map[lease_id] for lease_id in lease_ids if lease_id in lease_map]
 
 
 def lease_create(values):
