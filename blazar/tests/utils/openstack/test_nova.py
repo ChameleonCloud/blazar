@@ -21,6 +21,7 @@ from novaclient import client as nova_client
 from novaclient import exceptions as nova_exceptions
 from novaclient.v2 import availability_zones
 from novaclient.v2 import hypervisors
+from novaclient.v2 import servers
 from oslo_config import cfg
 from oslo_config import fixture
 
@@ -426,6 +427,8 @@ class FakeNovaHypervisors(object):
     def search(cls, host, servers=False):
         if host == 'multiple':
             return [cls.FakeHost, cls.FakeHost]
+        if host == cls.FakeHost.hypervisor_hostname:
+            return [cls.FakeHost]
         if host == cls.FakeHost.service['host']:
             return [cls.FakeHost]
         else:
@@ -443,6 +446,17 @@ class FakeNovaHypervisors(object):
                 'hypervisor_version': cls.FakeHost.hypervisor_version,
                 'memory_mb': cls.FakeHost.memory_mb,
                 'local_gb': cls.FakeHost.local_gb}
+
+
+class FakeNovaServers(object):
+
+    @classmethod
+    def list(cls, search_opts):
+        host = FakeNovaHypervisors.FakeHost
+        node = search_opts.get("node")
+        if node == host.hypervisor_hostname:
+            return host.servers
+        return []
 
 
 class FakeAvailabilityZones(object):
@@ -487,6 +501,9 @@ class NovaInventoryTestCase(tests.TestCase):
             availability_zones.AvailabilityZoneManager, 'list')
         self.availability_zones.side_effect = FakeAvailabilityZones.list
 
+        self.servers_list = self.patch(servers.ServerManager, 'list')
+        self.servers_list.side_effect = FakeNovaServers.list
+
     def test_get_host_details_with_host_id(self):
         host = self.inventory.get_host_details('1')
         expected = FakeNovaHypervisors.expected()
@@ -529,24 +546,48 @@ class NovaInventoryTestCase(tests.TestCase):
         self.assertEqual(expected, host)
 
     def test_get_servers_per_host(self):
-        servers = self.inventory.get_servers_per_host('fake_name')
+        servers = self.inventory.get_servers_per_host('fake_name.openstack.org')
         self.assertEqual(FakeNovaHypervisors.FakeHost.servers, servers)
+        # hypervisors_search with servers and filtered on hypervisor_hostname
+        # does not work, assert we use servers_list instead.
+        self.hypervisors_search.assert_called_once_with('fake_name.openstack.org')
+        self.servers_list.assert_called_once_with(
+            search_opts={"node": "fake_name.openstack.org", "all_tenants": 1})
 
     def test_get_servers_per_host_with_host_id(self):
         self.assertRaises(manager_exceptions.HostNotFound,
                           self.inventory.get_servers_per_host, '1')
+        self.hypervisors_search.assert_called_once_with('1')
+        self.servers_list.assert_not_called()
 
     def test_get_servers_per_host_with_host_not_found(self):
         self.assertRaises(manager_exceptions.HostNotFound,
                           self.inventory.get_servers_per_host, 'wrong_name')
+        self.hypervisors_search.assert_called_once_with('wrong_name')
+        self.servers_list.assert_not_called()
 
     def test_get_servers_per_host_having_multiple_results(self):
         self.assertRaises(manager_exceptions.MultipleHostsFound,
                           self.inventory.get_servers_per_host, 'multiple')
+        self.hypervisors_search.assert_called_once_with('multiple')
+        self.servers_list.assert_not_called()
 
     def test_get_servers_per_host_with_host_having_no_servers(self):
-        host_with_zero_servers = FakeNovaHypervisors.FakeHost
-        # NOTE(sbauza): We need to simulate a host having zero servers
-        del host_with_zero_servers.servers
-        servers = self.inventory.get_servers_per_host('fake_name')
+        self.servers_list.side_effect = None
+        self.servers_list.return_value = []
+        servers = self.inventory.get_servers_per_host('fake_name.openstack.org')
         self.assertEqual(None, servers)
+        self.hypervisors_search.assert_called_once_with('fake_name.openstack.org')
+        self.servers_list.assert_called_once_with(
+            search_opts={
+                "node": "fake_name.openstack.org",
+                "all_tenants": 1})
+
+    def test_get_servers_per_host_filters_by_hypervisor_hostname(self):
+        # Given the service host name ('fake_name'), servers are still looked
+        # up by the resolved hypervisor_hostname (node), never the service host.
+        servers = self.inventory.get_servers_per_host('fake_name')
+        self.assertEqual(FakeNovaHypervisors.FakeHost.servers, servers)
+        self.hypervisors_search.assert_called_once_with('fake_name')
+        self.servers_list.assert_called_once_with(
+            search_opts={"node": "fake_name.openstack.org", "all_tenants": 1})
