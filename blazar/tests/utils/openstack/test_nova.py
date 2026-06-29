@@ -410,7 +410,7 @@ class FakeNovaHypervisors(object):
         local_gb = 10
 
         servers = ['server1', 'server2']
-        service = {'host': 'fake_name'}
+        service = {'host': 'fake_service'}
 
     @classmethod
     def get(cls, host):
@@ -427,9 +427,8 @@ class FakeNovaHypervisors(object):
     def search(cls, host, servers=False):
         if host == 'multiple':
             return [cls.FakeHost, cls.FakeHost]
-        if host == cls.FakeHost.hypervisor_hostname:
-            return [cls.FakeHost]
-        if host == cls.FakeHost.service['host']:
+        # nova matches using LIKE hypervisor_hostname
+        if host in cls.FakeHost.hypervisor_hostname:
             return [cls.FakeHost]
         else:
             raise nova_exceptions.NotFound(404)
@@ -464,7 +463,7 @@ class FakeAvailabilityZones(object):
     class FakeAZ1(object):
         zoneName = 'fake_az1'
         hosts = {
-            "fake_name": {
+            "fake_service": {
                 "nova-compute": {}
             },
         }
@@ -472,7 +471,7 @@ class FakeAvailabilityZones(object):
     class FakeAZ2(object):
         zoneName = 'fake_az2'
         hosts = {
-            "fake_name": {
+            "fake_service": {
                 "nova-conductor": {},
                 "nova-scheduler": {}
             },
