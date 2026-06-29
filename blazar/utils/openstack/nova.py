@@ -432,22 +432,20 @@ class NovaInventory(NovaClientWrapper):
             raise manager_exceptions.InvalidHost(host=host)
 
     def get_servers_per_host(self, host):
-        """List all servers of a nova-compute host
+        """List all servers running on a given Nova hypervisor
 
-        :param host: Name (not UUID) of nova-compute host
-        :return: Dict of servers or None
+        :param host: hypervisor_hostname (or name pattern) of the host
+        :return: list of server or None
         """
         try:
-            hypervisors_list = self.nova.hypervisors.search(host, servers=True)
+            hypervisors_list = self.nova.hypervisors.search(host)
         except nova_exception.NotFound:
             raise manager_exceptions.HostNotFound(host=host)
         if len(hypervisors_list) > 1:
             raise manager_exceptions.MultipleHostsFound(host=host)
-        else:
-            try:
-                return hypervisors_list[0].servers
-            except AttributeError:
-                # NOTE(sbauza): nova.hypervisors.search(servers=True) returns
-                #  a list of hosts without 'servers' attribute if no servers
-                #  are running on that host
-                return None
+
+        hypervisor = hypervisors_list[0]
+        servers = self.nova.servers.list(
+            search_opts={"node": hypervisor.hypervisor_hostname,
+                         "all_tenants": 1})
+        return servers or None
