@@ -1100,7 +1100,7 @@ class TestVirtualInstancePlugin(tests.TestCase):
         mock_host_get = self.patch(db_api, 'host_get')
         mock_host_get.side_effect = fake_host_get
 
-        plugin.on_start('resource-id1')
+        plugin.on_start('resource-id1', lease={"project_id": "fake-project"})
 
         mock_nova.flavor_access.add_tenant_access.assert_called_once_with(
             'reservation-id1', 'fake-project')
@@ -1159,7 +1159,7 @@ class TestVirtualInstancePlugin(tests.TestCase):
             404, "The server doesn't exist in Nova"), Exception('Unknown'),
             None, None, None]
 
-        plugin.on_end('resource-id1')
+        plugin.on_end('resource-id1', lease={"project_id": "fake-project-id"})
 
         mock_nova.flavor_access.remove_tenant_access.assert_called_once_with(
             'reservation-id1', 'fake-project-id')

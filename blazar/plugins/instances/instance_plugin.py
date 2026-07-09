@@ -569,18 +569,17 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
         self.update_resources(reservation_id)
 
     def on_start(self, resource_id, lease=None):
-        ctx = context.current()
         instance_reservation = db_api.instance_reservation_get(resource_id)
         reservation_id = instance_reservation['reservation_id']
 
         try:
             self.nova.flavor_access.add_tenant_access(reservation_id,
-                                                      ctx.project_id)
+                                                      lease['project_id'])
         except nova_exceptions.ClientException:
             LOG.info('Failed to associate flavor %(reservation_id)s '
                      'to project %(project_id)s',
                      {'reservation_id': reservation_id,
-                      'project_id': ctx.project_id})
+                      'project_id': lease['project_id']})
             raise mgr_exceptions.EventError()
 
         pool = nova.ReservationPool()
@@ -603,11 +602,10 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
     def on_end(self, resource_id, lease=None):
         instance_reservation = db_api.instance_reservation_get(resource_id)
         reservation_id = instance_reservation['reservation_id']
-        ctx = context.current()
 
         try:
             self.nova.flavor_access.remove_tenant_access(
-                reservation_id, ctx.project_id)
+                reservation_id, lease['project_id'])
         except nova_exceptions.NotFound:
             pass
 
