@@ -261,6 +261,27 @@ class TestFlavorPlugin(tests.DBTestCase):
         self.assertEqual("345", reservation["reservation_id"])
         self.assertEqual("flavor_id", reservation["flavor_id"])
         self.assertEqual("aggregate_id", reservation["aggregate_id"])
+        # before_end defaults to 'default' and must be persisted on the
+        # instance reservation, not only set on the request dict.
+        self.assertEqual("default", reservation["before_end"])
+
+    @mock.patch.object(flavor_plugin.FlavorPlugin, '_create_resources')
+    @mock.patch.object(flavor_plugin.FlavorPlugin, '_pick_hosts')
+    def test_reserve_resource_rejects_invalid_before_end(
+            self, mock_pick, mock_create):
+        plugin = flavor_plugin.FlavorPlugin()
+        reservation = {
+            'flavor_id': "34eb7166-0e9b-432c-96fd-dff37f22e36e",
+            'amount': 1,
+            'affinity': None,
+            'before_end': 'bogus',
+            'start_date': datetime.datetime(2030, 1, 1, 8, 00),
+            'end_date': datetime.datetime(2030, 1, 1, 12, 00)
+        }
+        mock_pick.return_value = (['123'], {"vcpus": 1, "ram": 1024,
+                                            "disk": 10})
+        self.assertRaises(mgr_exceptions.MalformedParameter,
+                          plugin.reserve_resource, "345", reservation)
 
     @mock.patch.object(nova.ReservationPool, 'create')
     @mock.patch.object(context.BlazarContext, 'current')
