@@ -122,6 +122,9 @@ class ExtraCapabilityNotFound(exceptions.BlazarException):
     code = 404
     msg_fmt = _("Capability %(keys)s not found on resource %(resource)s")
 
+class ResourceProviderNotFound(exceptions.NotFound):
+    code = 404
+    msg_fmt = _("No resource provider found for host %(host)s")
 
 class EndpointsNotFound(exceptions.NotFound):
     code = 404
