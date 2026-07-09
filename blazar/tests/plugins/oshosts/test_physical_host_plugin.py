@@ -326,6 +326,15 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             "total": 5825
         })
 
+    @mock.patch.object(placement.BlazarPlacementClient,
+                       'get_resource_provider')
+    def test_create_host_without_resource_provider(self, mock_get_rp):
+        mock_get_rp.return_value = None
+        fake_host = self.fake_host.copy()
+        self.assertRaises(manager_exceptions.ResourceProviderNotFound,
+                          self.fake_phys_plugin.create_computehost,
+                          fake_host)
+
     def test_create_host_with_capabilities_too_long(self):
         fake_host = self.fake_host.copy()
         fake_host.update({'foo': 'bar'})
