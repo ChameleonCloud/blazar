@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import copy
+import copy
 import datetime
 from unittest import mock
 
@@ -269,6 +270,7 @@ class ServiceTestCase(tests.DBTestCase):
         events.return_value = None
 
         self.manager._process_events()
+        self.manager._process_events()
 
         self.assertFalse(event_update.called)
 
@@ -282,7 +284,15 @@ class ServiceTestCase(tests.DBTestCase):
                                 'lease_id': 'bbb-ccc-ddd',
                                 'event_type': 'start_lease'}]
         self.patch(eventlet, 'spawn')
+        events.return_value = [{'id': '111-222-333', 'time': self.good_date,
+                                'lease_id': 'aaa-bbb-ccc',
+                                'event_type': 'start_lease'},
+                               {'id': '444-555-666', 'time': self.good_date,
+                                'lease_id': 'bbb-ccc-ddd',
+                                'event_type': 'start_lease'}]
+        self.patch(eventlet, 'spawn')
 
+        self.manager._process_events()
         self.manager._process_events()
 
         event_update.assert_has_calls([
@@ -364,7 +374,12 @@ class ServiceTestCase(tests.DBTestCase):
         events.return_value = [{'id': '111-222-333', 'time': self.good_date,
                                 'lease_id': 'aaa-bbb-ccc',
                                 'event_type': 'start_lease'}]
+        self.patch(eventlet, 'spawn').side_effect = Exception
+        events.return_value = [{'id': '111-222-333', 'time': self.good_date,
+                                'lease_id': 'aaa-bbb-ccc',
+                                'event_type': 'start_lease'}]
 
+        self.manager._process_events()
         self.manager._process_events()
 
         event_update.assert_has_calls([
@@ -385,6 +400,7 @@ class ServiceTestCase(tests.DBTestCase):
 
         event_update = self.patch(self.db_api, 'event_update')
 
+        self.manager._process_events()
         self.manager._process_events()
 
         event_update.assert_not_called()
@@ -937,7 +953,7 @@ class ServiceTestCase(tests.DBTestCase):
                                mock.Mock(wraps=datetime.datetime)) as patched:
             patched.utcnow.return_value = target
             self.assertRaises(
-                manager_ex.CantUpdateParameter, self.manager.update_lease,
+                manager_ex.UnsupportedResourceType, self.manager.update_lease,
                 lease_id=self.lease_id, values=lease_values)
 
     def test_update_modify_reservations_without_reservation_id(self):

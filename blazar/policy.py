@@ -23,9 +23,9 @@ from oslo_policy import opts
 from oslo_policy import policy
 
 from blazar import context
+from blazar.db import api as db_api
 from blazar import exceptions
 from blazar import policies
-from blazar.db import api as db_api
 
 CONF = cfg.CONF
 LOG = logging.getLogger(__name__)
@@ -98,11 +98,11 @@ def enforce(context, action, target, do_raise=True):
 
     init()
 
-    credentials = context.to_dict()
-    # NOTE(jasonandersonatuchicago): Keep for backwards compabitility with
-    # deployments using the old %(project_id)s policy syntax.
-    credentials['project_id'] = credentials.get('project')
-    credentials['user_id'] = credentials.get('user')
+    credentials = context.to_policy_values()
+    # NOTE(jasonandersonatuchicago): Keep for backwards compatibility with
+    # deployments using the old %(project)s / %(user)s policy syntax.
+    credentials['project'] = credentials.get('project_id')
+    credentials['user'] = credentials.get('user_id')
 
     # Add the exceptions arguments if asked to do a raise
     extra = {}

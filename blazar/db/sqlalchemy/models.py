@@ -323,6 +323,9 @@ class ComputeHostExtraCapability(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     property_id = sa.Column(sa.String(36),
                             sa.ForeignKey('resource_properties.id'),
                             nullable=False)
+    property_id = sa.Column(sa.String(36),
+                            sa.ForeignKey('resource_properties.id'),
+                            nullable=False)
     capability_value = sa.Column(MediumText(), nullable=False)
 
     def to_dict(self):

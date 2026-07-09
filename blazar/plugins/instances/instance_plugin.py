@@ -163,6 +163,8 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
                        {
                          'lease_id': lease_id,
                          'id': reservation_id
+                         'start_date': lease_start_date,
+                         'end_date': lease_end_date,
                        },
                      ]
         }.
@@ -172,13 +174,17 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
 
         # To reduce overhead, this method only executes one query
         # to get the allocation information
-        rsv_lease_host = db_utils.get_reservation_allocations_by_host_ids(
+        reservations = db_utils.get_reservation_allocations_by_host_ids(
             hosts, start, end, lease_id, reservation_id)
-
-        hosts_allocs = collections.defaultdict(list)
-        for rsv, lease, host in rsv_lease_host:
-            hosts_allocs[host].append({'lease_id': lease, 'id': rsv})
-        return hosts_allocs
+        host_allocs = {h: [] for h in hosts}
+        attributes_to_copy = ["id", "lease_id", "start_date", "end_date"]
+        for reservation in reservations:
+            for host_id in reservation['host_ids']:
+                if host_id in host_allocs.keys():
+                    host_allocs[host_id].append({
+                        k: v for k, v in reservation.items()
+                        if k in attributes_to_copy})
+        return host_allocs
 
     def query_available_hosts(self, cpus=None, memory=None, disk=None,
                               resource_properties=None,
@@ -534,7 +540,8 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
             return
 
         if (reservation['status'] == 'active' and
-                any([k in updatable[:-1] for k in new_values.keys()])):
+                any([k in updatable for k in new_values.keys()
+                     if k != 'amount'])):
             msg = "An active reservation only accepts to update amount."
             raise mgr_exceptions.InvalidStateUpdate(msg)
 
@@ -714,9 +721,9 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
             if new_host_id is None:
                 for allocation in allocations:
                     db_api.host_allocation_destroy(allocation['id'])
-                LOG.warn('Could not find alternative host for '
-                         'reservation %s (lease: %s).',
-                         reservation['id'], lease['name'])
+                LOG.warning('Could not find alternative host for '
+                            'reservation %s (lease: %s).',
+                            reservation['id'], lease['name'])
                 ret = False
             else:
                 for allocation in allocations:
@@ -735,9 +742,9 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
 
                 if new_host_id is None:
                     db_api.host_allocation_destroy(allocation['id'])
-                    LOG.warn('Could not find alternative host for '
-                             'reservation %s (lease: %s).',
-                             reservation['id'], lease['name'])
+                    LOG.warning('Could not find alternative host for '
+                                'reservation %s (lease: %s).',
+                                reservation['id'], lease['name'])
                     ret = False
                     continue
 
@@ -796,8 +803,8 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
             self.placement_client.update_reservation_inventory(
                 new_host['hypervisor_hostname'], reservation['id'], num,
                 additional=True)
-        LOG.warn('Resource changed for reservation %s (lease: %s).',
-                 reservation['id'], lease['name'])
+        LOG.warning('Resource changed for reservation %s (lease: %s).',
+                    reservation['id'], lease['name'])
 
     def _get_extra_capabilities(self, host_id):
         extra_capabilities = {}

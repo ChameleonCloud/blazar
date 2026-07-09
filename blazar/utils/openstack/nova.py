@@ -15,12 +15,15 @@
 import uuid as uuidgen
 import concurrent.futures
 
+from keystoneauth1 import session
+from keystoneauth1 import token_endpoint
 from novaclient import client as nova_client
 from novaclient import exceptions as nova_exception
 from novaclient.v2 import servers
 from oslo_config import cfg
 from oslo_log import log as logging
 
+from blazar import context
 from blazar.manager import exceptions as manager_exceptions
 from blazar.plugins import oshosts
 from blazar.utils.openstack import base
@@ -74,9 +77,104 @@ LOG = logging.getLogger(__name__)
 
 class BlazarNovaClient(object):
     def __init__(self, **kwargs):
-        client_kwargs = base.client_kwargs(**kwargs)
-        self.nova = nova_client.Client(
-            CONF.nova.nova_client_version, **client_kwargs)
+        """Description
+
+        BlazarNovaClient can be used in two ways: from context or kwargs.
+
+        :param version: service client version which we will use
+        :type version: str
+
+        :param ctx: request context
+        :type ctx: context object
+
+        :param auth_token: keystone auth token
+        :type auth_token: str
+
+        :param endpoint_override: endpoint url which we will use
+        :type endpoint_override: str
+
+        :param username: username to use with nova client
+        :type username: str
+
+        :param password: password to use with nova client
+        :type password: str
+
+        :param user_domain_name: domain name of the user
+        :type user_domain_name: str
+
+        :param project_name: project name to use with nova client
+        :type project_name: str
+
+        :param project_domain_name: domain name of the project
+        :type project_domain_name: str
+
+        :param auth_url: keystone url to authenticate against
+        :type auth_url: str
+        """
+
+        ctx = kwargs.pop('ctx', None)
+        auth_token = kwargs.pop('auth_token', None)
+        endpoint_override = kwargs.pop('endpoint_override', None)
+        version = kwargs.pop('version', CONF.nova.nova_client_version)
+        username = kwargs.pop('username', None)
+        password = kwargs.pop('password', None)
+        user_domain_name = kwargs.pop('user_domain_name', None)
+        project_name = kwargs.pop('project_name', None)
+        project_domain_name = kwargs.pop('project_domain_name', None)
+        auth_url = kwargs.pop('auth_url', None)
+
+        if ctx is None:
+            try:
+                ctx = context.current()
+            except RuntimeError:
+                pass
+        if ctx is not None:
+            auth_token = auth_token or ctx.auth_token
+            endpoint_override = endpoint_override or \
+                base.url_for(ctx.service_catalog,
+                             CONF.nova.compute_service,
+                             endpoint_interface=CONF.nova.endpoint_type,
+                             os_region_name=CONF.os_region_name)
+            auth_url = base.url_for(ctx.service_catalog, CONF.identity_service,
+                                    CONF.endpoint_type,
+                                    os_region_name=CONF.os_region_name)
+            kwargs.setdefault('global_request_id', ctx.global_request_id)
+
+        if auth_url is None:
+            auth_url = "%s://%s:%s" % (CONF.os_auth_protocol,
+                                       base.get_os_auth_host(CONF),
+                                       CONF.os_auth_port)
+            if CONF.os_auth_prefix:
+                auth_url += "/%s" % CONF.os_auth_prefix
+
+        if username:
+            kwargs.setdefault('username', username)
+            kwargs.setdefault('password', password)
+            kwargs.setdefault('project_name', project_name)
+            kwargs.setdefault('auth_url', auth_url)
+
+            if "v2.0" not in auth_url:
+                kwargs.setdefault('project_domain_name', project_domain_name)
+                kwargs.setdefault('user_domain_name', user_domain_name)
+
+            if CONF.cafile:
+                kwargs.setdefault('cacert', CONF.cafile)
+        else:
+            auth = token_endpoint.Token(endpoint_override,
+                                        auth_token)
+            sess_kwargs = dict(
+                auth=auth
+            )
+            if CONF.cafile:
+                sess_kwargs.update(verify=CONF.cafile)
+            sess = session.Session(**sess_kwargs)
+            kwargs.setdefault('session', sess)
+
+        kwargs.setdefault('endpoint_type', CONF.nova.endpoint_type + 'URL')
+        kwargs.setdefault('endpoint_override', endpoint_override)
+        kwargs.setdefault('version', version)
+        self.nova = nova_client.Client(**kwargs)
+
         self.nova.servers = ServerManager(self.nova)
         self.exceptions = nova_exception
 
@@ -182,7 +280,7 @@ class ReservationPool(NovaClientWrapper):
         try:
             agg = self.get_aggregate_from_name_or_id(pool)
         except manager_exceptions.AggregateNotFound:
-            LOG.warn("Aggregate '%s' not found, skipping deletion", pool)
+            LOG.warning("Aggregate '%s' not found, skipping deletion", pool)
             return
 
         hosts = agg.hosts
@@ -262,6 +360,15 @@ class ReservationPool(NovaClientWrapper):
                     except nova_exception.NotFound:
                         raise manager_exceptions.HostNotFound(host=host)
 
+                    # When moving a host out of the freepool, we need to
+                    # terminate preemptible instances before adding hosts to
+                    # the reservation aggregate, which makes them available for
+                    # scheduling.
+                    #
+                    # NOTE(priteau): Preemptibles should not be used with
+                    # instance reservation yet.
+                    self.terminate_preemptibles(host)
+
                 LOG.info("adding host '%(host)s' to aggregate %(id)s",
                          {'host': host, 'id': agg.id})
                 try:
@@ -297,12 +404,12 @@ class ReservationPool(NovaClientWrapper):
             results = list(futures)
         except Exception as e:
             if added_hosts:
-                LOG.warn('Removing hosts added to aggregate %s: %s',
-                         agg.id, added_hosts)
+                LOG.warning('Removing hosts added to aggregate %s: %s',
+                            agg.id, added_hosts)
                 for host in added_hosts:
                     self.nova.aggregates.remove_host(agg.id, host)
             if removed_hosts:
-                LOG.warn('Adding hosts back to freepool: %s', removed_hosts)
+                LOG.warning('Adding hosts back to freepool: %s', removed_hosts)
                 for host in removed_hosts:
                     self.nova.aggregates.add_host(freepool_agg.id, host)
             raise e
@@ -375,6 +482,20 @@ class ReservationPool(NovaClientWrapper):
 
         metadata = {project_id: None}
         return self.nova.aggregates.set_metadata(agg.id, metadata)
+
+    def terminate_preemptibles(self, host):
+        """Terminate preemptible instances running on host"""
+        for server in self.nova.servers.list(
+                search_opts={"host": host, "all_tenants": 1}):
+            try:
+                LOG.info('Terminating preemptible instance %s (%s)',
+                         server.name, server.id)
+                self.nova.servers.delete(server=server)
+            except nova_exception.NotFound:
+                LOG.info('Could not find server %s, may have been deleted '
+                         'concurrently.', server)
+            except Exception as e:
+                LOG.exception('Failed to delete %s: %s.', server, str(e))
 
 
 class NovaInventory(NovaClientWrapper):

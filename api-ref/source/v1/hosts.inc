@@ -281,6 +281,8 @@ Response
   - reservations: reservation_allocation
   - reservation.id: reservation_id
   - reservation.lease_id: lease_id
+  - reservation.start_date: allocation_start_date
+  - reservation.end_date: allocation_end_date
 
 **Example of List Allocations Response**
 
@@ -320,6 +322,8 @@ Response
   - reservations: reservation_allocation
   - reservation.id: reservation_id
   - reservation.lease_id: lease_id
+  - reservation.start_date: allocation_start_date
+  - reservation.end_date: allocation_end_date
 
 **Example of Get Allocation Response**
 

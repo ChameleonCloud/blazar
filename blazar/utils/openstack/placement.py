@@ -32,6 +32,15 @@ placement_opts = [
                     'one of public, internal or admin.'),
 ]
 
+placement_opts = [
+    cfg.StrOpt('endpoint_type',
+               default='internal',
+               choices=['public', 'admin', 'internal'],
+               help='Type of the placement endpoint to use. This endpoint '
+                    'will be looked up in the keystone catalog and should be '
+                    'one of public, internal or admin.'),
+]
+
 CONF = cfg.CONF
 CONF.register_opts(placement_opts, group='placement')
 LOG = logging.getLogger(__name__)
@@ -82,7 +91,12 @@ class BlazarPlacementClient(object):
                            project_name=project_name,
                            user_domain_name=user_domain_name,
                            project_domain_name=project_domain_name)
-        sess = session.Session(auth=auth)
+        sess_kwargs = dict(
+            auth=auth
+        )
+        if CONF.cafile:
+            sess_kwargs.update(verify=CONF.cafile)
+        sess = session.Session(**sess_kwargs)
         # Set accept header on every request to ensure we notify placement
         # service of our response body media type preferences.
         headers = {'accept': 'application/json'}

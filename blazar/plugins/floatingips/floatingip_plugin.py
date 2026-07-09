@@ -457,7 +457,7 @@ class FloatingIpPlugin(base.BasePlugin):
         return fip_allocations
 
 
-class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClientWrapper):
+class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin):
     """
     Monitors reserved floating IPs which fail to clean up.
     Deletes any floating IPs without an associated active reservation.

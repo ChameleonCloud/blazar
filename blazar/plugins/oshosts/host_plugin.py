@@ -290,8 +290,8 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             new_hostid = new_hostids.pop()
             db_api.host_allocation_update(allocation['id'],
                                           {'compute_host_id': new_hostid})
-            LOG.warn('Resource changed for reservation %s (lease: %s).',
-                     reservation['id'], lease['name'])
+            LOG.warning('Resource changed for reservation %s (lease: %s).',
+                        reservation['id'], lease['name'])
             if reservation['status'] == status.reservation.ACTIVE:
                 # Add the alternative host into the aggregate.
                 new_host = db_api.host_get(new_hostid)
@@ -420,7 +420,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                 host=host['id'])
         return self.get_computehost(host['id'])
 
-    def is_updatable_extra_capability(self, capability, capability_name):
+    def is_updatable_extra_capability(self, capability, property_name):
         reservations = db_utils.get_reservations_by_host_id(
             capability['computehost_id'], datetime.datetime.utcnow(),
             datetime.date.max)
@@ -437,7 +437,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             # the extra_capability.
             for requirement in requirements_queries:
                 # A requirement is of the form "key op value" as string
-                if requirement.split(" ")[0] == capability_name:
+                if requirement.split(" ")[0] == property_name:
                     return False
         return True
 
@@ -648,7 +648,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                          'lease_id': lease_id,
                          'id': reservation_id,
                          'start_date': lease_start_date,
-                         'end_date': lease_end_date
+                         'end_date': lease_end_date,
                        },
                      ]
         }.
@@ -656,6 +656,8 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         start = datetime.datetime.utcnow()
         end = datetime.date.max
 
+        # To reduce overhead, this method only executes one query
+        # to get the allocation information
         reservations = db_utils.get_reservation_allocations_by_host_ids(
             hosts, start, end, lease_id, reservation_id)
         host_allocations = {h: [] for h in hosts}
@@ -973,8 +975,8 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                 failed_hosts = db_api.reservable_host_get_all_by_queries(
                     ['hypervisor_hostname == ' + data['host']])
                 if failed_hosts:
-                    LOG.warn('%s failed.',
-                             failed_hosts[0]['hypervisor_hostname'])
+                    LOG.warning('%s failed.',
+                                failed_hosts[0]['hypervisor_hostname'])
                     for host in failed_hosts:
                         self.set_reservable(host, False)
             else:
@@ -983,8 +985,8 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                      'hypervisor_hostname == ' + data['host']])
                 if recovered_hosts:
                     self.set_reservable(recovered_hosts[0], True)
-                    LOG.warn('%s recovered.',
-                             recovered_hosts[0]['hypervisor_hostname'])
+                    LOG.warning('%s recovered.',
+                                recovered_hosts[0]['hypervisor_hostname'])
 
         return reservation_flags
 

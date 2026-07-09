@@ -53,6 +53,54 @@ class TestCNClient(tests.TestCase):
         self.version = '2'
         self.endpoint_type = 'internalURL'
 
+    def test_client_from_kwargs(self):
+        self.ctx.side_effect = RuntimeError
+        endpoint = 'fake_endpoint'
+        username = 'blazar_admin'
+        password = 'blazar_password'
+        user_domain = 'User_Domain'
+        project_name = 'admin'
+        project_domain = 'Project_Domain'
+        auth_url = "%s://%s:%s" % (CONF.os_auth_protocol,
+                                   CONF.os_auth_host,
+                                   CONF.os_auth_port)
+        if CONF.os_auth_prefix:
+            auth_url += "/%s" % CONF.os_auth_prefix
+
+        kwargs = {'version': self.version,
+                  'endpoint_override': endpoint,
+                  'username': username,
+                  'password': password,
+                  'user_domain_name': user_domain,
+                  'project_name': project_name,
+                  'project_domain_name': project_domain}
+
+        self.nova.BlazarNovaClient(**kwargs)
+
+        self.client.assert_called_once_with(version=self.version,
+                                            username=username,
+                                            password=password,
+                                            user_domain_name=user_domain,
+                                            project_name=project_name,
+                                            project_domain_name=project_domain,
+                                            auth_url=auth_url,
+                                            endpoint_override=endpoint,
+                                            endpoint_type=self.endpoint_type)
+
+    def test_client_from_ctx(self):
+        kwargs = {'version': self.version}
+
+        self.nova.BlazarNovaClient(**kwargs)
+
+        self.auth.assert_called_once_with(self.url,
+                                          self.ctx().auth_token)
+        self.session.assert_called_once_with(auth=self.auth.return_value)
+        self.client.assert_called_once_with(version=self.version,
+                                            endpoint_override=self.url,
+                                            endpoint_type=self.endpoint_type,
+                                            session=self.session.return_value,
+                                            global_request_id=mock.ANY)
+
     def test_getattr(self):
         # TODO(n.s.): Will be done as soon as pypi package will be updated
         pass
@@ -235,6 +283,8 @@ class ReservationPoolTestCase(tests.TestCase):
 
     def test_add_computehost(self):
         self._patch_get_aggregate_from_name_or_id()
+        terminate_preemptibles = self.patch(
+            self.pool, 'terminate_preemptibles')
         self.patch(self.nova, "servers")
         self.pool.add_computehost('pool', 'host3')
 
@@ -242,6 +292,7 @@ class ReservationPoolTestCase(tests.TestCase):
         check0.assert_any_call(self.fake_aggregate.id, 'host3')
         check1 = self.nova.aggregates.remove_host
         check1.assert_any_call(self.fake_freepool.id, 'host3')
+        terminate_preemptibles.assert_called_with('host3')
 
     def test_add_computehost_with_host_id(self):
         # NOTE(sbauza): Freepool.hosts only contains names of hosts, not UUIDs
@@ -293,6 +344,8 @@ class ReservationPoolTestCase(tests.TestCase):
     def test_add_computehost_revert(self):
         self._patch_get_aggregate_from_name_or_id()
         self.fake_freepool.hosts = ['host1', 'host2']
+        terminate_preemptibles = self.patch(
+            self.pool, 'terminate_preemptibles')
         self.assertRaises(manager_exceptions.HostNotInFreePool,
                           self.pool.add_computehost,
                           'pool', ['host1', 'host2', 'host3'])
@@ -307,6 +360,8 @@ class ReservationPoolTestCase(tests.TestCase):
                                  mock.call(self.fake_freepool.id, 'host2'),
                                  mock.call(self.fake_aggregate.id, 'host1'),
                                  mock.call(self.fake_aggregate.id, 'host2')])
+        terminate_preemptibles.assert_has_calls([mock.call('host1'),
+                                                 mock.call('host2')])
 
     def test_remove_computehost_from_freepool(self):
         self._patch_get_aggregate_from_name_or_id()

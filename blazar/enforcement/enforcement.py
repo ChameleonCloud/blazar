@@ -55,7 +55,6 @@ class UsageEnforcement:
         region_name = CONF.os_region_name
         auth_url = base.url_for(
             ctx['service_catalog'], CONF.identity_service,
-            endpoint_interface="public",
             os_region_name=region_name)
 
         return dict(user_id=lease_values['user_id'],

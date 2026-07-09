@@ -42,18 +42,6 @@ class BlazarDBInvalidFilterOperator(BlazarDBException):
     msg_fmt = _('%(filter_operator)s is invalid')
 
 
-class BlazarDBExtraCapabilitiesNotEnabled(BlazarDBException):
-    msq_fmt = _('%(resource_type)s does not have extra capabilities enabled.')
-
-
-class BlazarDBInvalidExtraCapability(BlazarDBException):
-    msg_fmt = _('%(property_name)s does not exist for resource type '
-                '%(resource_type)s.')
-
-
-class BlazarDBForbiddenResourceProperty(BlazarDBException):
-    msg_fmt = _('%(property_name)s cannot be set as an extra capability')
-
 class BlazarDBResourcePropertiesNotEnabled(BlazarDBException):
     msq_fmt = _('%(resource_type)s does not have resource properties enabled.')
 

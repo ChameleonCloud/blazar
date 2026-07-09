@@ -55,6 +55,7 @@ supports two configuration options:
 See the :doc:`../configuration/blazar-conf` page for a description of these
 options.
 
+
 ExternalServiceFilter
 ---------------------
 

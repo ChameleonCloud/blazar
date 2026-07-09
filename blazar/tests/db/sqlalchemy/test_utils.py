@@ -301,15 +301,56 @@ class SQLAlchemyDBUtilsTestCase(tests.DBTestCase):
         self._setup_leases()
 
         # query all allocations of lease1, lease2 and lease3
-        expected = _create_allocation_dicts(['lease1', 'lease2', 'lease3'])
+        expected = [
+            {
+                "id": db_api.reservation_get_all_by_lease_id(
+                    "lease1")[0]["id"],
+                "status": "active",
+                "lease_id": "lease1",
+                "start_date": datetime.datetime(2030, 1, 1, 9, 0),
+                "end_date": datetime.datetime(2030, 1, 1, 10, 30),
+                "lease_name": "fake_phys_lease_r1",
+                "project_id": "fake_project",
+                "host_ids": ["r1"]
+            },
+            {
+                "id": db_api.reservation_get_all_by_lease_id(
+                    "lease2")[0]["id"],
+                "status": "active",
+                "lease_id": "lease2",
+                "start_date": datetime.datetime(2030, 1, 1, 11, 0),
+                "end_date": datetime.datetime(2030, 1, 1, 12, 45),
+                "lease_name": "fake_phys_lease_r2",
+                "project_id": "fake_project", "host_ids": ["r2"]
+            },
+            {
+                "id": db_api.reservation_get_all_by_lease_id(
+                    "lease3")[0]["id"],
+                "status": "active",
+                "lease_id": "lease3",
+                "start_date": datetime.datetime(2030, 1, 1, 13, 0),
+                "end_date": datetime.datetime(2030, 1, 1, 14, 0),
+                "lease_name": "fake_phys_lease_r3",
+                "project_id": "fake_project", "host_ids": ["r1"]
+            }
+        ]
         ret = db_utils.get_reservation_allocations_by_host_ids(
             ['r1', 'r2'], '2030-01-01 08:00', '2030-01-01 15:00')
-
-        self.assertListEqual(
-            expected, _filter_dicts_for_keys(['id', 'host_ids'], ret))
+        self.assertListEqual(expected, ret)
 
         # query allocations of lease2 and lease3
-        expected = _create_allocation_dicts(['lease2', 'lease3'])
+        expected = [
+            {
+                "id": db_api.reservation_get_all_by_lease_id(
+                    "lease2")[0]["id"],
+                "host_ids": ["r2"]
+            },
+            {
+                "id": db_api.reservation_get_all_by_lease_id(
+                    "lease3")[0]["id"],
+                "host_ids": ["r1"]
+            }
+        ]
         ret = db_utils.get_reservation_allocations_by_host_ids(
             ['r1', 'r2'], '2030-01-01 11:30', '2030-01-01 15:00')
 
@@ -319,8 +360,13 @@ class SQLAlchemyDBUtilsTestCase(tests.DBTestCase):
     def test_get_reservation_allocations_by_host_ids_with_lease_id(self):
         self._setup_leases()
 
-        # query all allocations of lease1, lease2 and lease3
-        expected = _create_allocation_dicts(['lease1'])
+        expected = [
+            {
+                "id": db_api.reservation_get_all_by_lease_id(
+                    "lease1")[0]["id"],
+                "host_ids": ["r1"]
+            },
+        ]
         ret = db_utils.get_reservation_allocations_by_host_ids(
             ['r1', 'r2'], '2030-01-01 08:00', '2030-01-01 15:00', 'lease1')
 
@@ -331,8 +377,13 @@ class SQLAlchemyDBUtilsTestCase(tests.DBTestCase):
         self._setup_leases()
         reservation1 = db_api.reservation_get_all_by_lease_id('lease1')[0]
 
-        # query allocations of lease1
-        expected = _create_allocation_dicts(['lease1'])
+        expected = [
+            {
+                "id": db_api.reservation_get_all_by_lease_id(
+                    "lease1")[0]["id"],
+                "host_ids": ["r1"]
+            },
+        ]
         ret = db_utils.get_reservation_allocations_by_host_ids(
             ['r1', 'r2'], '2030-01-01 08:00', '2030-01-01 15:00',
             reservation_id=reservation1['id'])

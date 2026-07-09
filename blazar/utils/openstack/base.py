@@ -24,8 +24,6 @@ from oslo_config import cfg
 from blazar import context
 from blazar.manager import exceptions
 
-CONF = cfg.CONF
-
 
 CONF = cfg.CONF
 
@@ -87,7 +85,15 @@ def client_kwargs(**_kwargs):
         auth_kwargs.update(project_name=project_name)
 
     auth = v3.Password(**auth_kwargs)
-    sess = session.Session(auth=auth)
+
+    sess_kwargs = dict(
+        auth=auth
+    )
+
+    if CONF.cafile:
+        sess_kwargs.update(verify=CONF.cafile)
+
+    sess = session.Session(**sess_kwargs)
 
     kwargs.setdefault('session', sess)
     kwargs.setdefault('region_name', region_name)
@@ -119,7 +125,15 @@ def client_user_kwargs(**_kwargs):
     data = admin_ks_client.tokens.get_token_data(ctx.auth_token)
     access_info = create_access_info(body=data, auth_token=ctx.auth_token)
     auth = access.AccessInfoPlugin(access_info, auth_url=auth_url)
-    sess = session.Session(auth=auth)
+
+    sess_kwargs = dict(
+        auth=auth
+    )
+
+    if CONF.cafile:
+        sess_kwargs.update(verify=CONF.cafile)
+
+    sess = session.Session(**sess_kwargs)
 
     kwargs.setdefault('session', sess)
     kwargs.setdefault('region_name', region_name)
@@ -166,6 +180,8 @@ def url_for(service_catalog, service_type, admin=False,
                                                     os_region_name))
         try:
             # if Keystone API v3 endpoints returned
+            print(endpoints)
+            print(endpoint_interface)
             endpoint = [e for e in endpoints
                         if e['interface'] == endpoint_interface][0]
             return endpoint['url']

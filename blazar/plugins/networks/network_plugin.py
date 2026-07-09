@@ -838,7 +838,7 @@ def remove_subnet_route_from_router(router_id, subnet_id, dry_run):
             )
 
 
-class NetworkMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClientWrapper):
+class NetworkMonitorPlugin(monitor.GeneralMonitorPlugin):
     """
     Monitor plugin for network resources
     """

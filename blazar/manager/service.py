@@ -14,11 +14,14 @@
 # limitations under the License.
 
 from collections import defaultdict
+from collections import defaultdict
 import datetime
+from operator import itemgetter
 
 from functools import lru_cache
 
 from oslo_config import cfg
+from oslo_log import log as logging
 from oslo_utils.excutils import save_and_reraise_exception
 from oslo_utils import strutils
 from oslo_service import periodic_task
@@ -38,7 +41,6 @@ from blazar.utils.openstack import placement
 from blazar.utils import service as service_utils
 from blazar.utils import trusts
 import eventlet
-from oslo_log import log as logging
 
 
 manager_opts = [
@@ -560,16 +562,16 @@ class ManagerService(service_utils.RPCServer):
                 'Please enter valid reservation IDs. Invalid reservation '
                 'IDs are: %s' % ','.join([str(id) for id in invalid_ids]))
 
-        # Populate resource_type if missing from data passed by client
-        reservations = self._add_resource_type(
-            reservations, existing_reservations)
+            # Populate resource_type if missing from data passed by client
+            reservations = self._add_resource_type(reservations,
+                                                   existing_reservations)
 
-        try:
-            [
-                self.plugins[r['resource_type']] for r
-                in (reservations + existing_reservations)]
-        except KeyError:
-            raise exceptions.CantUpdateParameter(param='resource_type')
+            try:
+                [
+                    self.plugins[r['resource_type']] for r
+                    in (reservations + existing_reservations)]
+            except KeyError:
+                raise exceptions.CantUpdateParameter(param='resource_type')
 
         existing_allocs = self._existing_allocations(existing_reservations)
 

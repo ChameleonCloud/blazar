@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import collections
+import collections
 import datetime
 from unittest import mock
 
@@ -23,6 +24,7 @@ from novaclient import client as nova_client
 from novaclient import exceptions as nova_exceptions
 from oslo_config import cfg
 from oslo_config import fixture as conf_fixture
+import random
 import random
 import testtools
 
@@ -67,6 +69,9 @@ class PhysicalHostPluginSetupOnlyTestCase(tests.TestCase):
             self.patch(self.db_api, 'host_extra_capability_get_all_per_host'))
 
     def test__get_extra_capabilities_with_values(self):
+        ComputeHostExtraCapability = collections.namedtuple(
+            'ComputeHostExtraCapability',
+            ['id', 'property_id', 'capability_value', 'computehost_id'])
         ComputeHostExtraCapability = collections.namedtuple(
             'ComputeHostExtraCapability',
             ['id', 'property_id', 'capability_value', 'computehost_id'])
@@ -220,6 +225,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         fake_request = fake_host.copy()
         fake_capa = {'computehost_id': '1',
                      'property_name': 'foo',
+                     'property_name': 'foo',
                      'capability_value': 'bar',
                      }
         self.get_extra_capabilities.return_value = {'foo': 'bar'}
@@ -300,6 +306,10 @@ class PhysicalHostPluginTestCase(tests.TestCase):
               'computehost_id': self.fake_host_id,
               'capability_value': 'bar'},
              'foo'),
+            ({'id': 'extra_id1',
+              'computehost_id': self.fake_host_id,
+              'capability_value': 'bar'},
+             'foo'),
         ]
 
         self.get_reservations_by_host = self.patch(
@@ -323,6 +333,10 @@ class PhysicalHostPluginTestCase(tests.TestCase):
               'computehost_id': self.fake_host_id,
               'capability_value': 'bar'},
              'foo'),
+            ({'id': 'extra_id1',
+              'computehost_id': self.fake_host_id,
+              'capability_value': 'bar'},
+             'foo'),
         ]
         fake = self.db_host_extra_capability_update
         fake.side_effect = fake_db_host_extra_capability_update
@@ -338,6 +352,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
                                                  host_values)
         self.db_host_extra_capability_create.assert_called_once_with({
             'computehost_id': '1',
+            'property_name': 'qux',
             'property_name': 'qux',
             'capability_value': 'word'
         })
@@ -365,6 +380,10 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         host_values = {'foo': 'buzz'}
 
         self.db_host_extra_capability_get_all_per_name.return_value = [
+            ({'id': 'extra_id1',
+              'computehost_id': self.fake_host_id,
+              'capability_value': 'bar'},
+             'foo'),
             ({'id': 'extra_id1',
               'computehost_id': self.fake_host_id,
               'capability_value': 'bar'},
@@ -451,6 +470,13 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         self.db_get_reserv_allocs = self.patch(
             self.db_utils, 'get_reservation_allocations_by_host_ids')
 
+        self.db_host_list.return_value = [
+            {'id': '3001'},
+            {'id': '3002'},
+            {'id': '3003'},
+            {'id': '3004'},
+        ]
+
         # Expecting a list of (Reservation, Allocation)
         self.db_get_reserv_allocs.return_value = [
             self.reservation_allocation_dict(*r) for r
@@ -510,6 +536,12 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         self.db_get_reserv_allocs = self.patch(
             self.db_utils, 'get_reservation_allocations_by_host_ids')
 
+        self.db_host_list.return_value = [
+            {'id': '3001'},
+            {'id': '3002'},
+            {'id': '3003'},
+            {'id': '3004'},
+        ]
         # Expecting a list of (Reservation, Allocation)
         self.db_get_reserv_allocs.return_value = [
             self.reservation_allocation_dict(*r) for r
@@ -552,8 +584,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
                 ]
             }
         ]
-        ret = self.fake_phys_plugin.list_allocations({'lease_id': 'lease-1'})
-
+        ret = self.fake_phys_plugin.list_allocations({'lease_id': '2001'})
         # Sort returned value to use assertListEqual
         for r in ret:
             r['reservations'].sort(key=lambda x: x['id'])
@@ -565,6 +596,12 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         self.db_get_reserv_allocs = self.patch(
             self.db_utils, 'get_reservation_allocations_by_host_ids')
 
+        self.db_host_list.return_value = [
+            {'id': "3001"},
+            {'id': "3002"},
+            {'id': "3003"},
+            {'id': "3004"},
+        ]
         # Expecting a list of (Reservation, Allocation)
         self.db_get_reserv_allocs.return_value = [
             self.reservation_allocation_dict(*r) for r
@@ -581,7 +618,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
                 'reservations': [
                     {'id': 'reservation-1',
                         'lease_id': 'lease-1', 'extras': {},
-                        'start_date': datetime.datetime(2015, 1, 1), 'end_date': datetime.datetime(2015, 1, 2)},
+                        'start_date': datetime.datetime(2015, 1, 1), 'end_date': datetime.datetime(2015, 1, 2)}
                 ]
             },
             {
@@ -589,12 +626,13 @@ class PhysicalHostPluginTestCase(tests.TestCase):
                 'reservations': [
                     {'id': 'reservation-1',
                         'lease_id': 'lease-1', 'extras': {},
-                        'start_date': datetime.datetime(2015, 1, 1), 'end_date': datetime.datetime(2015, 1, 2)},
+                        'start_date': datetime.datetime(2015, 1, 1), 'end_date': datetime.datetime(2015, 1, 2)}
                 ]
             },
         ]
+
         ret = self.fake_phys_plugin.list_allocations(
-            {'reservation_id': 'reservation-1'})
+            {'reservation_id': '1002'})
 
         # Sort returned value to use assertListEqual
         for r in ret:
@@ -683,7 +721,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
                     'start_date': datetime.datetime(2015, 1, 1, 0, 0), 'end_date': datetime.datetime(2015, 1, 2, 0, 0)}]}
 
         ret = self.fake_phys_plugin.get_allocations(
-            'host-1', {'reservation_id': 'reservation-1'})
+            'host-1', {'reservation_id': '1001'})
 
         # sort returned value to use assertListEqual
         ret['reservations'].sort(key=lambda x: x['id'])
