@@ -41,12 +41,9 @@ FORBIDDEN_RESOURCE_PROPERTY_NAMES = ["id", "reservable"]
 
 LOG = logging.getLogger(__name__)
 
-get_engine = facade_wrapper.get_engine
-
 cfg.CONF.register_opt(cfg.BoolOpt(
     'include_deleted', default=False, help='Include deleted in queries (used by scripts)'))
 
-get_session = facade_wrapper.get_session
 
 def get_backend():
     """The backend is this module itself."""
@@ -68,16 +65,18 @@ def model_query(model, session=None, deleted=False):
 
     :param model: base model to query
     """
-    session = session or get_session()
-
+    if session is None:
+        with facade_wrapper.session_for_read() as session:
+            return _read_deleted_filter(session.query(model), model, deleted)
     return _read_deleted_filter(session.query(model), model, deleted)
 
 
 def setup_db():
     try:
-        engine = db_session.EngineFacade(cfg.CONF.database.connection,
-                                         sqlite_fk=True).get_engine()
-        models.Lease.metadata.create_all(engine)
+        with facade_wrapper.session_for_write(sqlite_fk=True) as session:
+            engine = session.get_bind()
+            models.Lease.metadata.create_all(engine)
+        facade_wrapper._clear_engine()
     except sa.exc.OperationalError as e:
         LOG.error("Database registration exception: %s", e)
         return False
@@ -86,9 +85,10 @@ def setup_db():
 
 def drop_db():
     try:
-        engine = db_session.EngineFacade(cfg.CONF.database.connection,
-                                         sqlite_fk=True).get_engine()
-        models.Lease.metadata.drop_all(engine)
+        with facade_wrapper.session_for_write(sqlite_fk=True) as session:
+            engine = session.get_bind()
+            models.Lease.metadata.drop_all(engine)
+        facade_wrapper._clear_engine()
     except Exception as e:
         LOG.error("Database shutdown exception: %s", e)
         return False
@@ -144,29 +144,32 @@ def _reservation_get(session, reservation_id):
 
 
 def reservation_get(reservation_id):
-    return _reservation_get(get_session(), reservation_id)
+    with facade_wrapper.session_for_read() as session:
+        return _reservation_get(session, reservation_id)
 
 
 def reservation_get_all():
-    query = model_query(models.Reservation, get_session())
-    return query.all()
+    with facade_wrapper.session_for_read() as session:
+        query = model_query(models.Reservation, session)
+        return query.all()
 
 
 def reservation_get_all_by_lease_id(lease_id):
-    reservations = (model_query(models.Reservation,
-                                get_session()).filter_by(lease_id=lease_id))
-    return reservations.all()
+    with facade_wrapper.session_for_read() as session:
+        reservations = (model_query(models.Reservation, session)
+                        .filter_by(lease_id=lease_id))
+        return reservations.all()
 
 
 def reservation_get_all_by_values(**kwargs):
     """Returns all entries filtered by col=value."""
-
-    reservation_query = model_query(models.Reservation, get_session())
-    for name, value in kwargs.items():
-        column = getattr(models.Reservation, name, None)
-        if column:
-            reservation_query = reservation_query.filter(column == value)
-    return reservation_query.all()
+    with facade_wrapper.session_for_read() as session:
+        reservation_query = model_query(models.Reservation, session)
+        for name, value in kwargs.items():
+            column = getattr(models.Reservation, name, None)
+            if column:
+                reservation_query = reservation_query.filter(column == value)
+        return reservation_query.all()
 
 
 def reservation_create(values):
@@ -174,8 +177,7 @@ def reservation_create(values):
     reservation = models.Reservation()
     reservation.update(values)
 
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         try:
             reservation.save(session=session)
         except common_db_exc.DBDuplicateEntry as e:
@@ -187,9 +189,7 @@ def reservation_create(values):
 
 
 def reservation_update(reservation_id, values):
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         reservation = _reservation_get(session, reservation_id)
         reservation.update(values)
         reservation.save(session=session)
@@ -226,8 +226,7 @@ def _reservation_destroy(session, reservation):
 
 
 def reservation_destroy(reservation_id):
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         reservation = _reservation_get(session, reservation_id)
 
         if not reservation:
@@ -245,12 +244,14 @@ def _lease_get(session, lease_id):
 
 
 def lease_get(lease_id):
-    return _lease_get(get_session(), lease_id)
+    with facade_wrapper.session_for_read() as session:
+        return _lease_get(session, lease_id)
 
 
 def lease_get_all():
-    query = model_query(models.Lease, get_session())
-    return query.all()
+    with facade_wrapper.session_for_read() as session:
+        query = model_query(models.Lease, session)
+        return query.all()
 
 
 def lease_get_all_by_project(project_id):
@@ -262,57 +263,60 @@ def lease_get_all_by_user(user_id):
 
 
 def hosts_in_lease(lease_id):
-    query = model_query(models.ComputeHost, get_session())
-    query = query.join(
-        models.ComputeHostAllocation,
-        models.ComputeHostAllocation.compute_host_id == models.ComputeHost.id
-    ).join(
-        models.ComputeHostReservation,
-        models.ComputeHostReservation.reservation_id == models.ComputeHostAllocation.reservation_id
-    ).join(
-        models.Reservation,
-        models.Reservation.id == models.ComputeHostReservation.reservation_id
-    ).join(
-        models.Lease,
-        models.Lease.id == models.Reservation.lease_id
-    ).filter(models.Lease.id == lease_id)
-    return query.all()
+    with facade_wrapper.session_for_read() as session:
+        query = model_query(models.ComputeHost, session)
+        query = query.join(
+            models.ComputeHostAllocation,
+            models.ComputeHostAllocation.compute_host_id == models.ComputeHost.id
+        ).join(
+            models.ComputeHostReservation,
+            models.ComputeHostReservation.reservation_id == models.ComputeHostAllocation.reservation_id
+        ).join(
+            models.Reservation,
+            models.Reservation.id == models.ComputeHostReservation.reservation_id
+        ).join(
+            models.Lease,
+            models.Lease.id == models.Reservation.lease_id
+        ).filter(models.Lease.id == lease_id)
+        return query.all()
 
 
 def devices_in_lease(lease_id):
-    query = model_query(models.Device, get_session())
-    query = query.join(
-        models.DeviceAllocation,
-        models.DeviceAllocation.device_id == models.Device.id
-    ).join(
-        models.DeviceReservation,
-        models.DeviceReservation.reservation_id == models.DeviceAllocation.reservation_id
-    ).join(
-        models.Reservation,
-        models.Reservation.id == models.DeviceReservation.reservation_id
-    ).join(
-        models.Lease,
-        models.Lease.id == models.Reservation.lease_id
-    ).filter(models.Lease.id == lease_id)
-    return query.all()
+    with facade_wrapper.session_for_read() as session:
+        query = model_query(models.Device, session)
+        query = query.join(
+            models.DeviceAllocation,
+            models.DeviceAllocation.device_id == models.Device.id
+        ).join(
+            models.DeviceReservation,
+            models.DeviceReservation.reservation_id == models.DeviceAllocation.reservation_id
+        ).join(
+            models.Reservation,
+            models.Reservation.id == models.DeviceReservation.reservation_id
+        ).join(
+            models.Lease,
+            models.Lease.id == models.Reservation.lease_id
+        ).filter(models.Lease.id == lease_id)
+        return query.all()
 
 
 def networks_in_lease(lease_id):
-    query = model_query(models.NetworkSegment, get_session())
-    query = query.join(
-        models.NetworkAllocation,
-        models.NetworkAllocation.network_id == models.NetworkSegment.id
-    ).join(
-        models.NetworkReservation,
-        models.NetworkReservation.reservation_id == models.NetworkAllocation.reservation_id
-    ).join(
-        models.Reservation,
-        models.Reservation.id == models.NetworkReservation.reservation_id
-    ).join(
-        models.Lease,
-        models.Lease.id == models.Reservation.lease_id
-    ).filter(models.Lease.id == lease_id)
-    return query.all()
+    with facade_wrapper.session_for_read() as session:
+        query = model_query(models.NetworkSegment, session)
+        query = query.join(
+            models.NetworkAllocation,
+            models.NetworkAllocation.network_id == models.NetworkSegment.id
+        ).join(
+            models.NetworkReservation,
+            models.NetworkReservation.reservation_id == models.NetworkAllocation.reservation_id
+        ).join(
+            models.Reservation,
+            models.Reservation.id == models.NetworkReservation.reservation_id
+        ).join(
+            models.Lease,
+            models.Lease.id == models.Reservation.lease_id
+        ).filter(models.Lease.id == lease_id)
+        return query.all()
 
 
 def lease_list(
@@ -325,43 +329,44 @@ def lease_list(
         sort_dir="desc",
         sort_key="end_date"
     ):
-    # Wait to select relations until after pagination to avoid the large join
-    query = model_query(models.Lease, get_session()).options(
-        sa.orm.noload(models.Lease.reservations),
-        sa.orm.noload(models.Lease.events),
-    )
-    if project_id is not None:
-        query = query.filter_by(project_id=project_id)
-    if status is not None:
-        query = query.filter_by(status=status)
-    if lease_id is not None:
-        query = query.filter_by(id=lease_id)
-    if lease_name is not None:
-        query = query.filter_by(name=lease_name)
-    marker_obj = None
-    if marker:
-        marker_obj = lease_get(marker)
-        if not marker_obj:
-            # raise not found error
-            raise db_exc.BlazarDBNotFound(id=marker, model='Lease')
-    query = sqlalchemyutils.paginate_query(
-        query,
-        models.Lease,
-        limit,
-        sort_keys=[sort_key, "id"],
-        sort_dirs=[sort_dir, "asc"],
-        marker=marker_obj,
-    )
-    lease_ids = [lease.id for lease in query.all()]
-    if not lease_ids:
-        return []
-    query = model_query(models.Lease, get_session()).options(
-        sa.orm.selectinload(models.Lease.reservations),
-        sa.orm.selectinload(models.Lease.events),
-    ).filter(models.Lease.id.in_(lease_ids))
-    leases = query.all()
-    lease_map = {lease.id: lease for lease in leases}
-    return [lease_map[lease_id] for lease_id in lease_ids if lease_id in lease_map]
+    with facade_wrapper.session_for_read() as session:
+        # Wait to select relations until after pagination to avoid the large join
+        query = model_query(models.Lease, session).options(
+            sa.orm.noload(models.Lease.reservations),
+            sa.orm.noload(models.Lease.events),
+        )
+        if project_id is not None:
+            query = query.filter_by(project_id=project_id)
+        if status is not None:
+            query = query.filter_by(status=status)
+        if lease_id is not None:
+            query = query.filter_by(id=lease_id)
+        if lease_name is not None:
+            query = query.filter_by(name=lease_name)
+        marker_obj = None
+        if marker:
+            marker_obj = lease_get(marker)
+            if not marker_obj:
+                # raise not found error
+                raise db_exc.BlazarDBNotFound(id=marker, model='Lease')
+        query = sqlalchemyutils.paginate_query(
+            query,
+            models.Lease,
+            limit,
+            sort_keys=[sort_key, "id"],
+            sort_dirs=[sort_dir, "asc"],
+            marker=marker_obj,
+        )
+        lease_ids = [lease.id for lease in query.all()]
+        if not lease_ids:
+            return []
+        query = model_query(models.Lease, session).options(
+            sa.orm.selectinload(models.Lease.reservations),
+            sa.orm.selectinload(models.Lease.events),
+        ).filter(models.Lease.id.in_(lease_ids))
+        leases = query.all()
+        lease_map = {lease.id: lease for lease in leases}
+        return [lease_map[lease_id] for lease_id in lease_ids if lease_id in lease_map]
 
 
 def lease_create(values):
@@ -371,8 +376,7 @@ def lease_create(values):
     events = values.pop("events", [])
     lease.update(values)
 
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         try:
             lease.save(session=session)
         except common_db_exc.DBDuplicateEntry as e:
@@ -406,9 +410,7 @@ def lease_create(values):
 
 
 def lease_update(lease_id, values):
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         lease = _lease_get(session, lease_id)
         lease.update(values)
         lease.save(session=session)
@@ -417,8 +419,7 @@ def lease_update(lease_id, values):
 
 
 def lease_destroy(lease_id):
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         lease = _lease_get(session, lease_id)
 
         if not lease:
@@ -446,11 +447,13 @@ def _event_get_all(session):
 
 
 def event_get(event_id):
-    return _event_get(get_session(), event_id)
+    with facade_wrapper.session_for_read() as session:
+        return _event_get(session, event_id)
 
 
 def event_get_all():
-    return _event_get_all(get_session()).all()
+    with facade_wrapper.session_for_read() as session:
+        return _event_get_all(session).all()
 
 
 def _event_get_sorted_by_filters(sort_key, sort_dir, filters):
@@ -458,7 +461,8 @@ def _event_get_sorted_by_filters(sort_key, sort_dir, filters):
 
     sort_fn = {'desc': desc, 'asc': asc}
 
-    events_query = _event_get_all(get_session())
+    with facade_wrapper.session_for_read() as session:
+        events_query = _event_get_all(session)
 
     if 'status' in filters:
         events_query = (
@@ -510,8 +514,7 @@ def event_create(values):
     event = models.Event()
     event.update(values)
 
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         try:
             event.save(session=session)
         except common_db_exc.DBDuplicateEntry as e:
@@ -523,20 +526,17 @@ def event_create(values):
 
 
 def event_update(event_id, values):
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         # NOTE(jason): Allow updating soft-deleted events
         event = _event_get(session, event_id, deleted=True)
         event.update(values)
         event.save(session=session)
 
-    return event_get(event_id)
+        return event_get(event_id)
 
 
 def event_destroy(event_id):
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         event = _event_get(session, event_id)
 
         if not event:
@@ -553,13 +553,14 @@ def _host_reservation_get(session, host_reservation_id):
 
 
 def host_reservation_get(host_reservation_id):
-    return _host_reservation_get(get_session(),
-                                 host_reservation_id)
+    with facade_wrapper.session_for_read() as session:
+        return _host_reservation_get(session, host_reservation_id)
 
 
 def host_reservation_get_all():
-    query = model_query(models.ComputeHostReservation, get_session())
-    return query.all()
+    with facade_wrapper.session_for_read() as session:
+        query = model_query(models.ComputeHostReservation, session)
+        return query.all()
 
 
 def _host_reservation_get_by_reservation_id(session, reservation_id):
@@ -568,8 +569,8 @@ def _host_reservation_get_by_reservation_id(session, reservation_id):
 
 
 def host_reservation_get_by_reservation_id(reservation_id):
-    return _host_reservation_get_by_reservation_id(get_session(),
-                                                   reservation_id)
+    with facade_wrapper.session_for_read() as session:
+        return _host_reservation_get_by_reservation_id(session, reservation_id)
 
 
 def host_reservation_create(values):
@@ -577,8 +578,7 @@ def host_reservation_create(values):
     host_reservation = models.ComputeHostReservation()
     host_reservation.update(values)
 
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         try:
             host_reservation.save(session=session)
         except common_db_exc.DBDuplicateEntry as e:
@@ -590,11 +590,8 @@ def host_reservation_create(values):
 
 
 def host_reservation_update(host_reservation_id, values):
-    session = get_session()
-
-    with session.begin():
-        host_reservation = _host_reservation_get(session,
-                                                 host_reservation_id)
+    with facade_wrapper.session_for_write() as session:
+        host_reservation = _host_reservation_get(session, host_reservation_id)
         host_reservation.update(values)
         host_reservation.save(session=session)
 
@@ -602,10 +599,8 @@ def host_reservation_update(host_reservation_id, values):
 
 
 def host_reservation_destroy(host_reservation_id):
-    session = get_session()
-    with session.begin():
-        host_reservation = _host_reservation_get(session,
-                                                 host_reservation_id)
+    with facade_wrapper.session_for_write() as session:
+        host_reservation = _host_reservation_get(session, host_reservation_id)
 
         if not host_reservation:
             # raise not found error
@@ -621,8 +616,7 @@ def instance_reservation_create(values):
     instance_reservation = models.InstanceReservations()
     instance_reservation.update(value)
 
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         try:
             instance_reservation.save(session=session)
         except common_db_exc.DBDuplicateEntry as e:
@@ -636,15 +630,15 @@ def instance_reservation_create(values):
 
 def instance_reservation_get(instance_reservation_id, session=None):
     if not session:
-        session = get_session()
+        with facade_wrapper.session_for_write() as session:
+            query = model_query(models.InstanceReservations, session)
+            return query.filter_by(id=instance_reservation_id).first()
     query = model_query(models.InstanceReservations, session)
     return query.filter_by(id=instance_reservation_id).first()
 
 
 def instance_reservation_update(instance_reservation_id, values):
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         instance_reservation = instance_reservation_get(
             instance_reservation_id, session)
 
@@ -659,8 +653,7 @@ def instance_reservation_update(instance_reservation_id, values):
 
 
 def instance_reservation_destroy(instance_reservation_id):
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         instance = instance_reservation_get(instance_reservation_id)
 
         if not instance:
@@ -677,23 +670,25 @@ def _host_allocation_get(session, host_allocation_id):
 
 
 def host_allocation_get(host_allocation_id):
-    return _host_allocation_get(get_session(),
-                                host_allocation_id)
+    with facade_wrapper.session_for_read() as session:
+        return _host_allocation_get(session, host_allocation_id)
 
 
 def host_allocation_get_all():
-    query = model_query(models.ComputeHostAllocation, get_session())
-    return query.all()
+    with facade_wrapper.session_for_read() as session:
+        query = model_query(models.ComputeHostAllocation, session)
+        return query.all()
 
 
 def host_allocation_get_all_by_values(**kwargs):
     """Returns all entries filtered by col=value."""
-    allocation_query = model_query(models.ComputeHostAllocation, get_session())
-    for name, value in kwargs.items():
-        column = getattr(models.ComputeHostAllocation, name, None)
-        if column:
-            allocation_query = allocation_query.filter(column == value)
-    return allocation_query.all()
+    with facade_wrapper.session_for_read() as session:
+        allocation_query = model_query(models.ComputeHostAllocation, session)
+        for name, value in kwargs.items():
+            column = getattr(models.ComputeHostAllocation, name, None)
+            if column:
+                allocation_query = allocation_query.filter(column == value)
+        return allocation_query.all()
 
 
 def host_allocation_create(values):
@@ -701,8 +696,7 @@ def host_allocation_create(values):
     host_allocation = models.ComputeHostAllocation()
     host_allocation.update(values)
 
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         try:
             host_allocation.save(session=session)
         except common_db_exc.DBDuplicateEntry as e:
@@ -714,9 +708,7 @@ def host_allocation_create(values):
 
 
 def host_allocation_update(host_allocation_id, values):
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         host_allocation = _host_allocation_get(session,
                                                host_allocation_id)
         host_allocation.update(values)
@@ -726,8 +718,7 @@ def host_allocation_update(host_allocation_id, values):
 
 
 def host_allocation_destroy(host_allocation_id):
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         host_allocation = _host_allocation_get(session,
                                                host_allocation_id)
 
@@ -751,17 +742,20 @@ def _host_get_all(session):
 
 
 def host_get(host_id):
-    return _host_get(get_session(), host_id)
+    with facade_wrapper.session_for_read() as session:
+        return _host_get(session, host_id)
 
 
 def host_list():
-    return model_query(models.ComputeHost, get_session()).all()
+    with facade_wrapper.session_for_read() as session:
+        return model_query(models.ComputeHost, session).all()
 
 
 def host_get_all_by_filters(filters):
     """Returns hosts filtered by name of the field."""
 
-    hosts_query = _host_get_all(get_session())
+    with facade_wrapper.session_for_read() as session:
+        hosts_query = _host_get_all(session)
 
     if 'status' in filters:
         hosts_query = hosts_query.filter(
@@ -778,7 +772,8 @@ def host_get_all_by_queries(queries):
             #sqlalchemy.sql.operators.ColumnOperators
 
     """
-    hosts_query = model_query(models.ComputeHost, get_session())
+    with facade_wrapper.session_for_read() as session:
+        hosts_query = model_query(models.ComputeHost, session)
 
     oper = {
         '<': ['lt', lambda a, b: a >= b],
@@ -824,12 +819,13 @@ def host_get_all_by_queries(queries):
             cap = models.ComputeHostExtraCapability
             prop = models.ResourceProperty
             # capability rows for this property name
-            caps_query = (model_query(cap, get_session())
-                          .join(prop, cap.property_id == prop.id)
-                          .filter(prop.property_name == key))
-            if not caps_query.first():
-                raise db_exc.BlazarDBNotFound(
-                    id=key, model='ComputeHostExtraCapability')
+            with facade_wrapper.session_for_read() as session:
+                caps_query = (model_query(cap, session)
+                            .join(prop, cap.property_id == prop.id)
+                            .filter(prop.property_name == key))
+                if not caps_query.first():
+                    raise db_exc.BlazarDBNotFound(
+                        id=key, model='ComputeHostExtraCapability')
 
             # Check if requested operator is supported for capabilities
             if op not in oper:
@@ -891,8 +887,7 @@ def host_create(values):
     host = models.ComputeHost()
     host.update(values)
 
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         try:
             host.save(session=session)
         except common_db_exc.DBDuplicateEntry as e:
@@ -904,9 +899,7 @@ def host_create(values):
 
 
 def host_update(host_id, values):
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         host = _host_get(session, host_id)
         host.update(values)
         host.save(session=session)
@@ -915,8 +908,7 @@ def host_update(host_id, values):
 
 
 def host_destroy(host_id):
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         host = _host_get(session, host_id)
 
         if not host:
@@ -947,8 +939,8 @@ def _host_extra_capability_get(session, host_extra_capability_id):
 
 
 def host_extra_capability_get(host_extra_capability_id):
-    return _host_extra_capability_get(get_session(),
-                                      host_extra_capability_id)
+    with facade_wrapper.session_for_read() as session:
+        return _host_extra_capability_get(session, host_extra_capability_id)
 
 
 def _host_extra_capability_get_all_per_host(session, host_id):
@@ -959,8 +951,8 @@ def _host_extra_capability_get_all_per_host(session, host_id):
 
 
 def host_extra_capability_get_all_per_host(host_id):
-    return _host_extra_capability_get_all_per_host(get_session(),
-                                                   host_id).all()
+    with facade_wrapper.session_for_read() as session:
+        return _host_extra_capability_get_all_per_host(session, host_id).all()
 
 
 def host_extra_capability_create(values):
@@ -975,9 +967,7 @@ def host_extra_capability_create(values):
     host_extra_capability = models.ComputeHostExtraCapability()
     host_extra_capability.update(values)
 
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         try:
             host_extra_capability.save(session=session)
         except common_db_exc.DBDuplicateEntry as e:
@@ -986,13 +976,11 @@ def host_extra_capability_create(values):
                 model=host_extra_capability.__class__.__name__,
                 columns=e.columns)
 
-    return host_extra_capability_get(host_extra_capability.id)
+        return host_extra_capability_get(host_extra_capability.id)
 
 
 def host_extra_capability_update(host_extra_capability_id, values):
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         host_extra_capability, _ = (
             _host_extra_capability_get(session,
                                        host_extra_capability_id))
@@ -1003,8 +991,7 @@ def host_extra_capability_update(host_extra_capability_id, values):
 
 
 def host_extra_capability_destroy(host_extra_capability_id):
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         host_extra_capability = _host_extra_capability_get(
             session, host_extra_capability_id)
 
@@ -1018,9 +1005,7 @@ def host_extra_capability_destroy(host_extra_capability_id):
 
 
 def host_extra_capability_get_all_per_name(host_id, property_name):
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_read() as session:
         query = _host_extra_capability_get_all_per_host(session, host_id)
         return query.filter(
             models.ResourceProperty.property_name == property_name).all()
@@ -1033,8 +1018,7 @@ def fip_reservation_create(fip_reservation_values):
     fip_reservation = models.FloatingIPReservation()
     fip_reservation.update(values)
 
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         try:
             fip_reservation.save(session=session)
         except common_db_exc.DBDuplicateEntry as e:
@@ -1051,13 +1035,12 @@ def _fip_reservation_get(session, fip_reservation_id):
 
 
 def fip_reservation_get(fip_reservation_id):
-    return _fip_reservation_get(get_session(), fip_reservation_id)
+    with facade_wrapper.session_for_read() as session:
+        return _fip_reservation_get(session, fip_reservation_id)
 
 
 def fip_reservation_update(fip_reservation_id, fip_reservation_values):
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         fip_reservation = _fip_reservation_get(session, fip_reservation_id)
         fip_reservation.update(fip_reservation_values)
         fip_reservation.save(session=session)
@@ -1066,8 +1049,7 @@ def fip_reservation_update(fip_reservation_id, fip_reservation_values):
 
 
 def fip_reservation_destroy(fip_reservation_id):
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         fip_reservation = _fip_reservation_get(session, fip_reservation_id)
 
         if not fip_reservation:
@@ -1086,8 +1068,7 @@ def required_fip_create(required_fip_values):
     required_fip = models.RequiredFloatingIP()
     required_fip.update(values)
 
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         try:
             required_fip.save(session=session)
         except common_db_exc.DBDuplicateEntry as e:
@@ -1104,13 +1085,12 @@ def _required_fip_get(session, required_fip_id):
 
 
 def required_fip_get(required_fip_id):
-    return _required_fip_get(get_session(), required_fip_id)
+    with facade_wrapper.session_for_read() as session:
+        return _required_fip_get(session, required_fip_id)
 
 
 def required_fip_update(required_fip_id, required_fip_values):
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         required_fip = _required_fip_get(session, required_fip_id)
         required_fip.update(required_fip_values)
         required_fip.save(session=session)
@@ -1119,8 +1099,7 @@ def required_fip_update(required_fip_id, required_fip_values):
 
 
 def required_fip_destroy(required_fip_id):
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         required_fip = _required_fip_get(session, required_fip_id)
 
         if not required_fip:
@@ -1133,8 +1112,7 @@ def required_fip_destroy(required_fip_id):
 
 
 def required_fip_destroy_by_fip_reservation_id(fip_reservation_id):
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         required_fips = model_query(
             models.RequiredFloatingIP, session).filter_by(
             floatingip_reservation_id=fip_reservation_id)
@@ -1150,7 +1128,8 @@ def _fip_allocation_get(session, fip_allocation_id):
 
 
 def fip_allocation_get(fip_allocation_id):
-    return _fip_allocation_get(get_session(), fip_allocation_id)
+    with facade_wrapper.session_for_read() as session:
+        return _fip_allocation_get(session, fip_allocation_id)
 
 
 def fip_allocation_create(allocation_values):
@@ -1158,8 +1137,7 @@ def fip_allocation_create(allocation_values):
     fip_allocation = models.FloatingIPAllocation()
     fip_allocation.update(values)
 
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         try:
             fip_allocation.save(session=session)
         except common_db_exc.DBDuplicateEntry as e:
@@ -1172,17 +1150,17 @@ def fip_allocation_create(allocation_values):
 
 def fip_allocation_get_all_by_values(**kwargs):
     """Returns all entries filtered by col=value."""
-    allocation_query = model_query(models.FloatingIPAllocation, get_session())
-    for name, value in kwargs.items():
-        column = getattr(models.FloatingIPAllocation, name, None)
-        if column:
-            allocation_query = allocation_query.filter(column == value)
-    return allocation_query.all()
+    with facade_wrapper.session_for_read() as session:
+        allocation_query = model_query(models.FloatingIPAllocation, session)
+        for name, value in kwargs.items():
+            column = getattr(models.FloatingIPAllocation, name, None)
+            if column:
+                allocation_query = allocation_query.filter(column == value)
+        return allocation_query.all()
 
 
 def fip_allocation_destroy(allocation_id):
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         fip_allocation = _fip_allocation_get(session, allocation_id)
 
         if not fip_allocation:
@@ -1195,9 +1173,7 @@ def fip_allocation_destroy(allocation_id):
 
 
 def fip_allocation_update(allocation_id, allocation_values):
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         fip_allocation = _fip_allocation_get(session, allocation_id)
         fip_allocation.update(allocation_values)
         fip_allocation.save(session=session)
@@ -1224,7 +1200,8 @@ def fip_get_all_by_queries(queries):
             #sqlalchemy.sql.operators.ColumnOperators
 
     """
-    fips_query = model_query(models.FloatingIP, get_session())
+    with facade_wrapper.session_for_read() as session:
+        fips_query = model_query(models.FloatingIP, session)
 
     oper = {
         '<': ['lt', lambda a, b: a >= b],
@@ -1286,11 +1263,13 @@ def unreservable_fip_get_all_by_queries(queries):
 
 
 def floatingip_get(floatingip_id):
-    return _floatingip_get(get_session(), floatingip_id)
+    with facade_wrapper.session_for_read() as session:
+        return _floatingip_get(session, floatingip_id)
 
 
 def floatingip_list():
-    return model_query(models.FloatingIP, get_session()).all()
+    with facade_wrapper.session_for_read() as session:
+        return model_query(models.FloatingIP, session).all()
 
 
 def floatingip_create(values):
@@ -1298,8 +1277,7 @@ def floatingip_create(values):
     floatingip = models.FloatingIP()
     floatingip.update(values)
 
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         try:
             floatingip.save(session=session)
         except common_db_exc.DBDuplicateEntry as e:
@@ -1311,8 +1289,7 @@ def floatingip_create(values):
 
 
 def floatingip_destroy(floatingip_id):
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         floatingip = _floatingip_get(session, floatingip_id)
 
         if not floatingip:
@@ -1323,9 +1300,7 @@ def floatingip_destroy(floatingip_id):
 
 
 def floatingip_update(fip_id, values):
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         fip = _floatingip_get(session, fip_id)
         fip.update(values)
         fip.save(session=session)
@@ -1345,11 +1320,13 @@ def _network_get_all(session):
 
 
 def network_get(network_id):
-    return _network_get(get_session(), network_id)
+    with facade_wrapper.session_for_read() as session:
+        return _network_get(session, network_id)
 
 
 def network_list():
-    return model_query(models.NetworkSegment, get_session()).all()
+    with facade_wrapper.session_for_read() as session:
+        return model_query(models.NetworkSegment, session).all()
 
 
 def network_create(values):
@@ -1357,8 +1334,7 @@ def network_create(values):
     network = models.NetworkSegment()
     network.update(values)
 
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         try:
             network.save(session=session)
         except common_db_exc.DBDuplicateEntry as e:
@@ -1370,9 +1346,7 @@ def network_create(values):
 
 
 def network_update(network_id, values):
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         network = _network_get(session, network_id)
         network.update(values)
         network.save(session=session)
@@ -1381,8 +1355,7 @@ def network_update(network_id, values):
 
 
 def network_destroy(network_id):
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         network = _network_get(session, network_id)
 
         if not network:
@@ -1405,13 +1378,15 @@ def _network_allocation_get(session, network_allocation_id):
 
 
 def network_allocation_get(network_allocation_id):
-    return _network_allocation_get(get_session(),
-                                   network_allocation_id)
+    with facade_wrapper.session_for_read() as session:
+        return _network_allocation_get(session,
+                                       network_allocation_id)
 
 
 def network_allocation_get_all():
-    query = model_query(models.NetworkAllocation, get_session())
-    return query.all()
+    with facade_wrapper.session_for_read() as session:
+        query = model_query(models.NetworkAllocation, session)
+        return query.all()
 
 
 def network_allocation_create(values):
@@ -1419,8 +1394,7 @@ def network_allocation_create(values):
     network_allocation = models.NetworkAllocation()
     network_allocation.update(values)
 
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         try:
             network_allocation.save(session=session)
         except common_db_exc.DBDuplicateEntry as e:
@@ -1433,17 +1407,17 @@ def network_allocation_create(values):
 
 def network_allocation_get_all_by_values(**kwargs):
     """Returns all entries filtered by col=value."""
-    allocation_query = model_query(models.NetworkAllocation, get_session())
-    for name, value in kwargs.items():
-        column = getattr(models.NetworkAllocation, name, None)
-        if column:
-            allocation_query = allocation_query.filter(column == value)
-    return allocation_query.all()
+    with facade_wrapper.session_for_read() as session:
+        allocation_query = model_query(models.NetworkAllocation, session)
+        for name, value in kwargs.items():
+            column = getattr(models.NetworkAllocation, name, None)
+            if column:
+                allocation_query = allocation_query.filter(column == value)
+        return allocation_query.all()
 
 
 def network_allocation_destroy(network_allocation_id):
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         network_allocation = _network_allocation_get(session,
                                                      network_allocation_id)
 
@@ -1462,8 +1436,7 @@ def network_reservation_create(values):
     network_reservation = models.NetworkReservation()
     network_reservation.update(value)
 
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         try:
             network_reservation.save(session=session)
         except common_db_exc.DBDuplicateEntry as e:
@@ -1477,15 +1450,15 @@ def network_reservation_create(values):
 
 def network_reservation_get(network_reservation_id, session=None):
     if not session:
-        session = get_session()
+        with facade_wrapper.session_for_read() as session:
+            query = model_query(models.NetworkReservation, session)
+            return query.filter_by(id=network_reservation_id).first()
     query = model_query(models.NetworkReservation, session)
     return query.filter_by(id=network_reservation_id).first()
 
 
 def network_reservation_update(network_reservation_id, values):
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         network_reservation = network_reservation_get(
             network_reservation_id, session)
 
@@ -1500,8 +1473,7 @@ def network_reservation_update(network_reservation_id, values):
 
 
 def network_reservation_destroy(network_reservation_id):
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         network = network_reservation_get(network_reservation_id)
 
         if not network:
@@ -1514,7 +1486,8 @@ def network_reservation_destroy(network_reservation_id):
 def network_get_all_by_filters(filters):
     """Returns networks filtered by name of the field."""
 
-    networks_query = _network_get_all(get_session())
+    with facade_wrapper.session_for_read() as session:
+        networks_query = _network_get_all(session)
 
     if 'status' in filters:
         networks_query = networks_query.filter(
@@ -1530,7 +1503,8 @@ def network_get_all_by_queries(queries):
     http://docs.sqlalchemy.org/en/rel_0_7/core/expression_api.html
             #sqlalchemy.sql.operators.ColumnOperators
     """
-    networks_query = model_query(models.NetworkSegment, get_session())
+    with facade_wrapper.session_for_read() as session:
+        networks_query = model_query(models.NetworkSegment, session)
 
     oper = {
         '<': ['lt', lambda a, b: a >= b],
@@ -1570,10 +1544,11 @@ def network_get_all_by_queries(queries):
             networks_query = networks_query.filter(filt)
         else:
             # looking for extra capabilities matches
-            extra_filter = (
-                _network_extra_capability_query(get_session())
-                .filter(models.ResourceProperty.property_name == key)
-            ).all()
+            with facade_wrapper.session_for_read() as session:
+                extra_filter = (
+                    _network_extra_capability_query(session)
+                    .filter(models.ResourceProperty.property_name == key)
+                ).all()
             if not extra_filter:
                 raise db_exc.BlazarDBNotFound(
                     id=key, model='NetworkSegmentExtraCapability')
@@ -1634,8 +1609,9 @@ def _network_extra_capability_get(session, network_extra_capability_id):
 
 
 def network_extra_capability_get(network_extra_capability_id):
-    return _network_extra_capability_get(get_session(),
-                                         network_extra_capability_id)
+    with facade_wrapper.session_for_read() as session:
+        return _network_extra_capability_get(session,
+                                             network_extra_capability_id)
 
 
 def _network_extra_capability_get_all_per_network(session, network_id):
@@ -1646,25 +1622,24 @@ def _network_extra_capability_get_all_per_network(session, network_id):
 
 
 def network_extra_capability_get_all_per_network(network_id):
-    return _network_extra_capability_get_all_per_network(get_session(),
-                                                         network_id).all()
+    with facade_wrapper.session_for_read() as session:
+        return _network_extra_capability_get_all_per_network(session,
+                                                             network_id).all()
 
 
 def network_extra_capability_create(values):
     values = values.copy()
 
-    resource_property = _resource_property_get_or_create(
-        get_session(), 'network', values.get('capability_name'))
+    with facade_wrapper.session_for_write() as session:
+        resource_property = _resource_property_get_or_create(
+            session, 'network', values.get('capability_name'))
 
-    del values['capability_name']
-    values['property_id'] = resource_property.id
+        del values['capability_name']
+        values['property_id'] = resource_property.id
 
-    network_extra_capability = models.NetworkSegmentExtraCapability()
-    network_extra_capability.update(values)
+        network_extra_capability = models.NetworkSegmentExtraCapability()
+        network_extra_capability.update(values)
 
-    session = get_session()
-
-    with session.begin():
         try:
             network_extra_capability.save(session=session)
         except common_db_exc.DBDuplicateEntry as e:
@@ -1677,9 +1652,7 @@ def network_extra_capability_create(values):
 
 
 def network_extra_capability_update(network_extra_capability_id, values):
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         network_extra_capability, _ = (
             _network_extra_capability_get(session,
                                           network_extra_capability_id))
@@ -1690,8 +1663,7 @@ def network_extra_capability_update(network_extra_capability_id, values):
 
 
 def network_extra_capability_destroy(network_extra_capability_id):
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         network_extra_capability = _network_extra_capability_get(
             session, network_extra_capability_id)
 
@@ -1705,18 +1677,14 @@ def network_extra_capability_destroy(network_extra_capability_id):
 
 
 def network_extra_capability_get_all_per_name(network_id, capability_name):
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_read() as session:
         query = _network_extra_capability_get_all_per_network(
             session, network_id)
         return query.filter_by(capability_name=capability_name).all()
 
 
 def network_extra_capability_get_latest_per_name(network_id, capability_name):
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_read() as session:
         query = _network_extra_capability_get_all_per_network(session,
                                                               network_id)
         return (
@@ -1739,11 +1707,13 @@ def _device_get_all(session):
 
 
 def device_get(device_id):
-    return _device_get(get_session(), device_id)
+    with facade_wrapper.session_for_read() as session:
+        return _device_get(session, device_id)
 
 
 def device_list():
-    return model_query(models.Device, get_session()).all()
+    with facade_wrapper.session_for_read() as session:
+        return model_query(models.Device, session).all()
 
 
 def device_create(values):
@@ -1751,8 +1721,7 @@ def device_create(values):
     device = models.Device()
     device.update(values)
 
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         try:
             device.save(session=session)
         except common_db_exc.DBDuplicateEntry as e:
@@ -1764,9 +1733,7 @@ def device_create(values):
 
 
 def device_update(device_id, values):
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         device = _device_get(session, device_id)
         device.update(values)
         device.save(session=session)
@@ -1775,8 +1742,7 @@ def device_update(device_id, values):
 
 
 def device_destroy(device_id):
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         device = _device_get(session, device_id)
 
         if not device:
@@ -1799,13 +1765,15 @@ def _device_allocation_get(session, device_allocation_id):
 
 
 def device_allocation_get(device_allocation_id):
-    return _device_allocation_get(get_session(),
-                                  device_allocation_id)
+    with facade_wrapper.session_for_read() as session:
+        return _device_allocation_get(session,
+                                      device_allocation_id)
 
 
 def device_allocation_get_all():
-    query = model_query(models.DeviceAllocation, get_session())
-    return query.all()
+    with facade_wrapper.session_for_read() as session:
+        query = model_query(models.DeviceAllocation, session)
+        return query.all()
 
 
 def device_allocation_create(values):
@@ -1813,8 +1781,7 @@ def device_allocation_create(values):
     device_allocation = models.DeviceAllocation()
     device_allocation.update(values)
 
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         try:
             device_allocation.save(session=session)
         except common_db_exc.DBDuplicateEntry as e:
@@ -1827,18 +1794,17 @@ def device_allocation_create(values):
 
 def device_allocation_get_all_by_values(**kwargs):
     """Returns all entries filtered by col=value."""
-    allocation_query = model_query(models.DeviceAllocation, get_session())
-    for name, value in kwargs.items():
-        column = getattr(models.DeviceAllocation, name, None)
-        if column:
-            allocation_query = allocation_query.filter(column == value)
-    return allocation_query.all()
+    with facade_wrapper.session_for_read() as session:
+        allocation_query = model_query(models.DeviceAllocation, session)
+        for name, value in kwargs.items():
+            column = getattr(models.DeviceAllocation, name, None)
+            if column:
+                allocation_query = allocation_query.filter(column == value)
+        return allocation_query.all()
 
 
 def device_allocation_update(device_allocation_id, values):
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         device_allocation = _device_allocation_get(session,
                                                    device_allocation_id)
         device_allocation.update(values)
@@ -1848,8 +1814,7 @@ def device_allocation_update(device_allocation_id, values):
 
 
 def device_allocation_destroy(device_allocation_id):
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         device_allocation = _device_allocation_get(session,
                                                    device_allocation_id)
 
@@ -1868,8 +1833,7 @@ def device_reservation_create(values):
     device_reservation = models.DeviceReservation()
     device_reservation.update(value)
 
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         try:
             device_reservation.save(session=session)
         except common_db_exc.DBDuplicateEntry as e:
@@ -1883,15 +1847,15 @@ def device_reservation_create(values):
 
 def device_reservation_get(device_reservation_id, session=None):
     if not session:
-        session = get_session()
+        with facade_wrapper.session_for_read() as session:
+            query = model_query(models.DeviceReservation, session)
+            return query.filter_by(id=device_reservation_id).first()
     query = model_query(models.DeviceReservation, session)
     return query.filter_by(id=device_reservation_id).first()
 
 
 def device_reservation_update(device_reservation_id, values):
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         device_reservation = device_reservation_get(
             device_reservation_id, session)
 
@@ -1906,8 +1870,7 @@ def device_reservation_update(device_reservation_id, values):
 
 
 def device_reservation_destroy(device_reservation_id):
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         device = device_reservation_get(device_reservation_id)
 
         if not device:
@@ -1920,7 +1883,8 @@ def device_reservation_destroy(device_reservation_id):
 def device_get_all_by_filters(filters):
     """Returns devices filtered by name of the field."""
 
-    devices_query = _device_get_all(get_session())
+    with facade_wrapper.session_for_read() as session:
+        devices_query = _device_get_all(session)
 
     if 'status' in filters:
         devices_query = devices_query.filter(
@@ -1936,7 +1900,8 @@ def device_get_all_by_queries(queries):
     http://docs.sqlalchemy.org/en/rel_0_7/core/expression_api.html
             #sqlalchemy.sql.operators.ColumnOperators
     """
-    devices_query = model_query(models.Device, get_session())
+    with facade_wrapper.session_for_read() as session:
+        devices_query = model_query(models.Device, session)
 
     oper = {
         '<': ['lt', lambda a, b: a >= b],
@@ -1976,10 +1941,11 @@ def device_get_all_by_queries(queries):
             devices_query = devices_query.filter(filt)
         else:
             # looking for extra capabilities matches
-            extra_filter = (
-                _device_extra_capability_query(get_session())
-                .filter(models.ResourceProperty.property_name == key)
-            ).all()
+            with facade_wrapper.session_for_read() as session:
+                extra_filter = (
+                    _device_extra_capability_query(session)
+                    .filter(models.ResourceProperty.property_name == key)
+                ).all()
 
             if not extra_filter:
                 raise db_exc.BlazarDBNotFound(
@@ -2042,8 +2008,9 @@ def _device_extra_capability_get(session, device_extra_capability_id):
 
 
 def device_extra_capability_get(device_extra_capability_id):
-    return _device_extra_capability_get(get_session(),
-                                        device_extra_capability_id)
+    with facade_wrapper.session_for_read() as session:
+        return _device_extra_capability_get(session,
+                                            device_extra_capability_id)
 
 
 def _device_extra_capability_get_all_per_device(session, device_id):
@@ -2054,25 +2021,24 @@ def _device_extra_capability_get_all_per_device(session, device_id):
 
 
 def device_extra_capability_get_all_per_device(device_id):
-    return _device_extra_capability_get_all_per_device(get_session(),
-                                                       device_id).all()
+    with facade_wrapper.session_for_read() as session:
+        return _device_extra_capability_get_all_per_device(session,
+                                                           device_id).all()
 
 
 def device_extra_capability_create(values):
     values = values.copy()
 
-    resource_property = _resource_property_get_or_create(
-        get_session(), 'device', values.get('capability_name'))
+    with facade_wrapper.session_for_write() as session:
+        resource_property = _resource_property_get_or_create(
+            session, 'device', values.get('capability_name'))
 
-    del values['capability_name']
-    values['property_id'] = resource_property.id
+        del values['capability_name']
+        values['property_id'] = resource_property.id
 
-    device_extra_capability = models.DeviceExtraCapability()
-    device_extra_capability.update(values)
+        device_extra_capability = models.DeviceExtraCapability()
+        device_extra_capability.update(values)
 
-    session = get_session()
-
-    with session.begin():
         try:
             device_extra_capability.save(session=session)
         except common_db_exc.DBDuplicateEntry as e:
@@ -2085,9 +2051,7 @@ def device_extra_capability_create(values):
 
 
 def device_extra_capability_update(device_extra_capability_id, values):
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         device_extra_capability, _ = (
             _device_extra_capability_get(session,
                                          device_extra_capability_id))
@@ -2098,8 +2062,7 @@ def device_extra_capability_update(device_extra_capability_id, values):
 
 
 def device_extra_capability_destroy(device_extra_capability_id):
-    session = get_session()
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         device_extra_capability = _device_extra_capability_get(
             session, device_extra_capability_id)
 
@@ -2113,18 +2076,14 @@ def device_extra_capability_destroy(device_extra_capability_id):
 
 
 def device_extra_capability_get_all_per_name(device_id, capability_name):
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_read() as session:
         query = _device_extra_capability_get_all_per_device(
             session, device_id)
         return query.filter_by(capability_name=capability_name).all()
 
 
 def device_extra_capability_get_latest_per_name(device_id, capability_name):
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_read() as session:
         query = _device_extra_capability_get_all_per_device(session,
                                                             device_id)
         return (
@@ -2146,7 +2105,8 @@ def _resource_property_get(session, resource_type, property_name):
 
 
 def resource_property_get(resource_type, property_name):
-    return _resource_property_get(get_session(), resource_type, property_name)
+    with facade_wrapper.session_for_read() as session:
+        return _resource_property_get(session, resource_type, property_name)
 
 
 def resource_properties_list(resource_type):
@@ -2154,10 +2114,7 @@ def resource_properties_list(resource_type):
         raise db_exc.BlazarDBResourcePropertiesNotEnabled(
             resource_type=resource_type)
 
-    session = get_session()
-
-    with session.begin():
-
+    with facade_wrapper.session_for_read() as session:
         resource_model = RESOURCE_PROPERTY_MODELS[resource_type]
         query = _read_deleted_filter(session.query(
             models.ResourceProperty.property_name,
@@ -2175,21 +2132,21 @@ def _resource_property_create(session, values):
     resource_property = models.ResourceProperty()
     resource_property.update(values)
 
-    with session.begin():
-        try:
-            resource_property.save(session=session)
-        except common_db_exc.DBDuplicateEntry as e:
-            # raise exception about duplicated columns (e.columns)
-            raise db_exc.BlazarDBDuplicateEntry(
-                model=resource_property.__class__.__name__,
-                columns=e.columns)
+    try:
+        resource_property.save(session=session)
+    except common_db_exc.DBDuplicateEntry as e:
+        # raise exception about duplicated columns (e.columns)
+        raise db_exc.BlazarDBDuplicateEntry(
+            model=resource_property.__class__.__name__,
+            columns=e.columns)
 
     return resource_property_get(values.get('resource_type'),
                                  values.get('property_name'))
 
 
 def resource_property_create(values):
-    return _resource_property_create(get_session(), values)
+    with facade_wrapper.session_for_write() as session:
+        return _resource_property_create(session, values)
 
 
 def resource_property_update(resource_type, property_name, values):
@@ -2198,9 +2155,7 @@ def resource_property_update(resource_type, property_name, values):
             resource_type=resource_type)
 
     values = values.copy()
-    session = get_session()
-
-    with session.begin():
+    with facade_wrapper.session_for_write() as session:
         resource_property = _resource_property_get(
             session, resource_type, property_name)
 
@@ -2235,5 +2190,6 @@ def _resource_property_get_or_create(session, resource_type, property_name):
 
 
 def resource_property_get_or_create(resource_type, property_name):
-    return _resource_property_get_or_create(
-        get_session(), resource_type, property_name)
+    with facade_wrapper.session_for_write() as session:
+        return _resource_property_get_or_create(
+            session, resource_type, property_name)

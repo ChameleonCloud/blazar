@@ -24,6 +24,7 @@ from oslo_policy import policy
 
 from blazar import context
 from blazar.db import api as db_api
+from blazar.db import api as db_api
 from blazar import exceptions
 from blazar import policies
 

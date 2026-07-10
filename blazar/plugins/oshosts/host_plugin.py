@@ -16,6 +16,7 @@
 
 import datetime
 import random
+import retrying
 
 from novaclient import exceptions as nova_exceptions
 from oslo_config import cfg
@@ -88,6 +89,7 @@ LOG = logging.getLogger(__name__)
 before_end_options = ['', 'snapshot', 'default', 'email']
 on_start_options = ['', 'default', 'orchestration']
 
+INSTANCE_DELETION_TIMEOUT = 10 * 60 * 1000  # 10 minutes
 QUERY_TYPE_ALLOCATION = 'allocation'
 
 MONITOR_ARGS = {"resource_type": plugin.RESOURCE_TYPE}
@@ -231,10 +233,11 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
     def on_end(self, resource_id, lease=None):
         """Remove the hosts from the pool."""
         host_reservation = db_api.host_reservation_get(resource_id)
+        reservation_id = host_reservation['reservation_id']
         db_api.host_reservation_update(host_reservation['id'],
                                        {'status': 'completed'})
         allocations = db_api.host_allocation_get_all_by_values(
-            reservation_id=host_reservation['reservation_id'])
+            reservation_id=reservation_id)
         for allocation in allocations:
             db_api.host_allocation_destroy(allocation['id'])
         pool = nova.ReservationPool()
@@ -248,10 +251,73 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                              'concurrently.', server)
                 except Exception as e:
                     LOG.exception('Failed to delete %s: %s.', server, str(e))
+
+        # We need to check the deletion is complete before removing the host
+        # from the aggregate. See change
+        # https://review.opendev.org/c/openstack/nova/+/821423 for details.
+        if not self._check_server_deletion(pool, host_reservation):
+            LOG.error('Timed out while deleting servers on reservation %s',
+                      reservation_id)
+            raise manager_ex.ServerDeletionTimeout()
+
         try:
             pool.delete(host_reservation['aggregate_id'])
         except manager_ex.AggregateNotFound:
             pass
+
+    @retrying.retry(stop_max_delay=INSTANCE_DELETION_TIMEOUT,
+                    wait_fixed=5000,  # 5 seconds interval
+                    retry_on_result=lambda x: x is False)
+    def _check_server_deletion(self, pool, host_reservation):
+        servers = []
+        for host in pool.get_computehosts(host_reservation['aggregate_id']):
+            servers.extend(
+                self.nova.servers.list(search_opts={"node": host,
+                                                    "all_tenants": 1},
+                                       detailed=False))
+        if servers:
+            LOG.info('Waiting to delete servers: %s ', servers)
+            return False
+        return True
+
+    def heal_reservations(self, failed_resources, interval_begin,
+                          interval_end):
+        """Heal reservations which suffer from resource failures.
+
+        :param failed_resources: a list of failed hosts.
+        :param interval_begin: start date of the period to heal.
+        :param interval_end: end date of the period to heal.
+        :return: a dictionary of {reservation id: flags to update}
+                 e.g. {'de27786d-bd96-46bb-8363-19c13b2c6657':
+                       {'missing_resources': True}}
+        """
+        reservation_flags = {}
+
+        host_ids = [h['id'] for h in failed_resources]
+        reservations = db_utils.get_reservations_by_host_ids(host_ids,
+                                                             interval_begin,
+                                                             interval_end)
+
+        for reservation in reservations:
+            if reservation['resource_type'] != plugin.RESOURCE_TYPE:
+                continue
+
+            for allocation in [alloc for alloc
+                               in reservation['computehost_allocations']
+                               if alloc['compute_host_id'] in host_ids]:
+                if self._reallocate(allocation):
+                    if reservation['status'] == status.reservation.ACTIVE:
+                        if reservation['id'] not in reservation_flags:
+                            reservation_flags[reservation['id']] = {}
+                        reservation_flags[reservation['id']].update(
+                            {'resources_changed': True})
+                else:
+                    if reservation['id'] not in reservation_flags:
+                        reservation_flags[reservation['id']] = {}
+                    reservation_flags[reservation['id']].update(
+                        {'missing_resources': True})
+
+        return reservation_flags
 
     def _reallocate(self, allocation, force=False):
         """Allocate an alternative host.

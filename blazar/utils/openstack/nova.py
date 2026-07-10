@@ -486,7 +486,7 @@ class ReservationPool(NovaClientWrapper):
     def terminate_preemptibles(self, host):
         """Terminate preemptible instances running on host"""
         for server in self.nova.servers.list(
-                search_opts={"host": host, "all_tenants": 1}):
+                search_opts={"node": host, "all_tenants": 1}):
             try:
                 LOG.info('Terminating preemptible instance %s (%s)',
                          server.name, server.id)

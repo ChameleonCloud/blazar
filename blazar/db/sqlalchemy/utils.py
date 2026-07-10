@@ -29,155 +29,152 @@ from collections import defaultdict
 import sqlalchemy as sa
 
 
-get_session = facade_wrapper.get_session
-
-
 def get_backend():
     """The backend is this module itself."""
     return sys.modules[__name__]
 
 
 def _get_leases_from_network_id(network_id, start_date, end_date):
-    session = get_session()
-    border0 = sa.and_(models.Lease.start_date < start_date,
-                      models.Lease.end_date < start_date)
-    border1 = sa.and_(models.Lease.start_date > end_date,
-                      models.Lease.end_date > end_date)
-    query = (api.model_query(models.Lease, session=session)
-             .join(models.Reservation)
-             .join(models.NetworkAllocation)
-             .filter(models.NetworkAllocation.deleted.is_(None))
-             .filter(models.NetworkAllocation.network_id == network_id)
-             .filter(~sa.or_(border0, border1)))
-    for lease in query:
-        yield lease
+    with facade_wrapper.session_for_read() as session:
+        border0 = sa.and_(models.Lease.start_date < start_date,
+                        models.Lease.end_date < start_date)
+        border1 = sa.and_(models.Lease.start_date > end_date,
+                        models.Lease.end_date > end_date)
+        query = (api.model_query(models.Lease, session=session)
+                .join(models.Reservation)
+                .join(models.NetworkAllocation)
+                .filter(models.NetworkAllocation.deleted.is_(None))
+                .filter(models.NetworkAllocation.network_id == network_id)
+                .filter(~sa.or_(border0, border1)))
+        for lease in query:
+            yield lease
 
 
 def _get_leases_from_host_id(host_id, start_date, end_date):
-    session = get_session()
-    border0 = start_date <= models.Lease.end_date
-    border1 = models.Lease.start_date <= end_date
-    query = (session.query(models.Lease).join(models.Reservation)
-             .join(models.ComputeHostAllocation)
-             .filter(models.ComputeHostAllocation.deleted.is_(None))
-             .filter(models.ComputeHostAllocation.compute_host_id == host_id)
-             .filter(sa.and_(border0, border1)))
-    for lease in query:
-        yield lease
+    with facade_wrapper.session_for_read() as session:
+        border0 = start_date <= models.Lease.end_date
+        border1 = models.Lease.start_date <= end_date
+        query = (session.query(models.Lease).join(models.Reservation)
+                .join(models.ComputeHostAllocation)
+                .filter(models.ComputeHostAllocation.deleted.is_(None))
+                .filter(models.ComputeHostAllocation.compute_host_id == host_id)
+                .filter(sa.and_(border0, border1)))
+        for lease in query:
+            yield lease
 
 
 def _get_leases_from_fip_id(fip_id, start_date, end_date):
-    session = get_session()
-    border0 = sa.and_(models.Lease.start_date < start_date,
-                      models.Lease.end_date < start_date)
-    border1 = sa.and_(models.Lease.start_date > end_date,
-                      models.Lease.end_date > end_date)
-    query = (session.query(models.Lease).join(models.Reservation)
-             .join(models.FloatingIPAllocation)
-             .filter(models.FloatingIPAllocation.deleted.is_(None))
-             .filter(models.FloatingIPAllocation.floatingip_id == fip_id)
-             .filter(~sa.or_(border0, border1)))
-    for lease in query:
-        yield lease
+    with facade_wrapper.session_for_read() as session:
+        border0 = sa.and_(models.Lease.start_date < start_date,
+                        models.Lease.end_date < start_date)
+        border1 = sa.and_(models.Lease.start_date > end_date,
+                        models.Lease.end_date > end_date)
+        query = (session.query(models.Lease).join(models.Reservation)
+                .join(models.FloatingIPAllocation)
+                .filter(models.FloatingIPAllocation.deleted.is_(None))
+                .filter(models.FloatingIPAllocation.floatingip_id == fip_id)
+                .filter(~sa.or_(border0, border1)))
+        for lease in query:
+            yield lease
 
 
 def _get_leases_from_device_id(device_id, start_date, end_date):
-    session = get_session()
-    border0 = start_date <= models.Lease.end_date
-    border1 = models.Lease.start_date <= end_date
-    query = (session.query(models.Lease).join(models.Reservation)
-             .join(models.DeviceAllocation)
-             .filter(models.DeviceAllocation.deleted.is_(None))
-             .filter(models.DeviceAllocation.device_id == device_id)
-             .filter(sa.and_(border0, border1)))
-    for lease in query:
-        yield lease
+    with facade_wrapper.session_for_read() as session:
+        border0 = start_date <= models.Lease.end_date
+        border1 = models.Lease.start_date <= end_date
+        query = (session.query(models.Lease).join(models.Reservation)
+                .join(models.DeviceAllocation)
+                .filter(models.DeviceAllocation.deleted.is_(None))
+                .filter(models.DeviceAllocation.device_id == device_id)
+                .filter(sa.and_(border0, border1)))
+        for lease in query:
+            yield lease
 
 
 def get_reservations_by_host_id(host_id, start_date, end_date):
-    session = get_session()
-    border0 = start_date <= models.Lease.end_date
-    border1 = models.Lease.start_date <= end_date
-    query = (session.query(models.Reservation).join(models.Lease)
-             .join(models.ComputeHostAllocation)
-             .filter(models.ComputeHostAllocation.deleted.is_(None))
-             .filter(models.ComputeHostAllocation.compute_host_id == host_id)
-             .filter(sa.and_(border0, border1)))
-    return query.all()
+    with facade_wrapper.session_for_read() as session:
+        border0 = start_date <= models.Lease.end_date
+        border1 = models.Lease.start_date <= end_date
+        query = (session.query(models.Reservation).join(models.Lease)
+                .join(models.ComputeHostAllocation)
+                .filter(models.ComputeHostAllocation.deleted.is_(None))
+                .filter(models.ComputeHostAllocation.compute_host_id == host_id)
+                .filter(sa.and_(border0, border1)))
+        return query.all()
 
 
 def get_reservations_by_host_ids(host_ids, start_date, end_date):
-    session = get_session()
-    border0 = start_date <= models.Lease.end_date
-    border1 = models.Lease.start_date <= end_date
-    query = (session.query(models.Reservation).join(models.Lease)
-             .join(models.ComputeHostAllocation)
-             .filter(models.ComputeHostAllocation.deleted.is_(None))
-             .filter(models.ComputeHostAllocation.compute_host_id
-                     .in_(host_ids))
-             .filter(sa.and_(border0, border1)))
-    return query.all()
+    with facade_wrapper.session_for_read() as session:
+        border0 = start_date <= models.Lease.end_date
+        border1 = models.Lease.start_date <= end_date
+        query = (session.query(models.Reservation).join(models.Lease)
+                .join(models.ComputeHostAllocation)
+                .filter(models.ComputeHostAllocation.deleted.is_(None))
+                .filter(models.ComputeHostAllocation.compute_host_id
+                        .in_(host_ids))
+                .filter(sa.and_(border0, border1)))
+        return query.all()
 
 
 def get_reservations_by_network_id(network_id, start_date, end_date):
-    session = get_session()
-    border0 = sa.and_(models.Lease.start_date < start_date,
-                      models.Lease.end_date < start_date)
-    border1 = sa.and_(models.Lease.start_date > end_date,
-                      models.Lease.end_date > end_date)
-    query = (api.model_query(models.Reservation, session=session)
-             .join(models.Lease)
-             .join(models.NetworkAllocation)
-             .filter(models.NetworkAllocation.deleted.is_(None))
-             .filter(models.NetworkAllocation.network_id == network_id)
-             .filter(~sa.or_(border0, border1)))
-    return query.all()
+    with facade_wrapper.session_for_read() as session:
+        border0 = sa.and_(models.Lease.start_date < start_date,
+                        models.Lease.end_date < start_date)
+        border1 = sa.and_(models.Lease.start_date > end_date,
+                        models.Lease.end_date > end_date)
+        query = (api.model_query(models.Reservation, session=session)
+                .join(models.Lease)
+                .join(models.NetworkAllocation)
+                .filter(models.NetworkAllocation.deleted.is_(None))
+                .filter(models.NetworkAllocation.network_id == network_id)
+                .filter(~sa.or_(border0, border1)))
+        return query.all()
 
 
 def get_reservations_by_device_id(device_id, start_date, end_date):
-    session = get_session()
-    border0 = start_date <= models.Lease.end_date
-    border1 = models.Lease.start_date <= end_date
-    query = (session.query(models.Reservation).join(models.Lease)
-             .join(models.DeviceAllocation)
-             .filter(models.DeviceAllocation.deleted.is_(None))
-             .filter(models.DeviceAllocation.device_id == device_id)
-             .filter(sa.and_(border0, border1)))
-    return query.all()
+    with facade_wrapper.session_for_read() as session:
+        border0 = start_date <= models.Lease.end_date
+        border1 = models.Lease.start_date <= end_date
+        query = (session.query(models.Reservation).join(models.Lease)
+                .join(models.DeviceAllocation)
+                .filter(models.DeviceAllocation.deleted.is_(None))
+                .filter(models.DeviceAllocation.device_id == device_id)
+                .filter(sa.and_(border0, border1)))
+        return query.all()
 
 
 def get_reservations_by_device_ids(device_ids, start_date, end_date):
-    session = get_session()
-    border0 = start_date <= models.Lease.end_date
-    border1 = models.Lease.start_date <= end_date
-    query = (session.query(models.Reservation).join(models.Lease)
-             .join(models.DeviceAllocation)
-             .filter(models.DeviceAllocation.deleted.is_(None))
-             .filter(models.DeviceAllocation.device_id
-                     .in_(device_ids))
-             .filter(sa.and_(border0, border1)))
-    return query.all()
+    with facade_wrapper.session_for_read() as session:
+        border0 = start_date <= models.Lease.end_date
+        border1 = models.Lease.start_date <= end_date
+        query = (session.query(models.Reservation).join(models.Lease)
+                .join(models.DeviceAllocation)
+                .filter(models.DeviceAllocation.deleted.is_(None))
+                .filter(models.DeviceAllocation.device_id
+                        .in_(device_ids))
+                .filter(sa.and_(border0, border1)))
+        return query.all()
 
 
 def get_reservations_by_floatingip_ids(floatingip_ids, start_date, end_date):
-    session = get_session()
-    border0 = sa.and_(models.Lease.start_date < start_date,
-                      models.Lease.end_date < start_date)
-    border1 = sa.and_(models.Lease.start_date > end_date,
-                      models.Lease.end_date > end_date)
-    query = (api.model_query(models.Reservation, session=session)
-             .join(
-                models.Lease,
-                models.Lease.id == models.Reservation.lease_id
-             )
-             .join(
-                models.FloatingIPAllocation,
-                models.FloatingIPAllocation.reservation_id == models.Reservation.lease_id
-             )
-             .filter(models.FloatingIPAllocation.deleted.is_(None))
-             .filter(models.FloatingIPAllocation.floatingip_id.in_(floatingip_ids))
-             .filter(~sa.or_(border0, border1)))
-    return query.all()
+    with facade_wrapper.session_for_read() as session:
+        border0 = sa.and_(models.Lease.start_date < start_date,
+                        models.Lease.end_date < start_date)
+        border1 = sa.and_(models.Lease.start_date > end_date,
+                        models.Lease.end_date > end_date)
+        query = (api.model_query(models.Reservation, session=session)
+                .join(
+                    models.Lease,
+                    models.Lease.id == models.Reservation.lease_id
+                )
+                .join(
+                    models.FloatingIPAllocation,
+                    models.FloatingIPAllocation.reservation_id == models.Reservation.lease_id
+                )
+                .filter(models.FloatingIPAllocation.deleted.is_(None))
+                .filter(models.FloatingIPAllocation.floatingip_id.in_(floatingip_ids))
+                .filter(~sa.or_(border0, border1)))
+        return query.all()
 
 
 def get_reservations_for_allocations(session, start_date, end_date,
@@ -217,80 +214,80 @@ def get_reservations_for_allocations(session, start_date, end_date,
 def get_reservation_allocations_by_host_ids(host_ids, start_date, end_date,
                                             lease_id=None,
                                             reservation_id=None):
-    session = get_session()
-    # Get all reservations applicable
-    reservations = get_reservations_for_allocations(
-        session, start_date, end_date, lease_id, reservation_id)
+    with facade_wrapper.session_for_read() as session:
+        # Get all reservations applicable
+        reservations = get_reservations_for_allocations(
+            session, start_date, end_date, lease_id, reservation_id)
 
-    # Select (reservation_id, host_id) for all reservations
-    allocations_query = (session.query(
-        models.ComputeHostAllocation.reservation_id,
-        models.ComputeHostAllocation.compute_host_id)
-        .filter(models.ComputeHostAllocation.deleted.is_(None))
-        .filter(models.ComputeHostAllocation.compute_host_id.in_(host_ids))
-        .filter(models.ComputeHostAllocation.reservation_id.in_(
-            list(set([x['id'] for x in reservations])))))
+        # Select (reservation_id, host_id) for all reservations
+        allocations_query = (session.query(
+            models.ComputeHostAllocation.reservation_id,
+            models.ComputeHostAllocation.compute_host_id)
+            .filter(models.ComputeHostAllocation.deleted.is_(None))
+            .filter(models.ComputeHostAllocation.compute_host_id.in_(host_ids))
+            .filter(models.ComputeHostAllocation.reservation_id.in_(
+                list(set([x['id'] for x in reservations])))))
 
-    # Create a mapping of reservation_id to list of host_ids
-    allocations = defaultdict(list)
-    for row in allocations_query.all():
-        allocations[row[0]].append(row[1])
+        # Create a mapping of reservation_id to list of host_ids
+        allocations = defaultdict(list)
+        for row in allocations_query.all():
+            allocations[row[0]].append(row[1])
 
-    # Copy the host id lists to the corresponding reservation
-    for r in reservations:
-        r['host_ids'] = allocations[r['id']]
-    return reservations
+        # Copy the host id lists to the corresponding reservation
+        for r in reservations:
+            r['host_ids'] = allocations[r['id']]
+        return reservations
 
 
 def get_reservation_allocations_by_fip_ids(fip_ids, start_date, end_date,
                                            lease_id=None, reservation_id=None):
-    session = get_session()
-    reservations = get_reservations_for_allocations(
-        session, start_date, end_date, lease_id, reservation_id)
+    with facade_wrapper.session_for_read() as session:
+        reservations = get_reservations_for_allocations(
+            session, start_date, end_date, lease_id, reservation_id)
 
-    allocations_query = (session.query(
-        models.FloatingIPAllocation.reservation_id,
-        models.FloatingIPAllocation.floatingip_id)
-        .filter(models.FloatingIPAllocation.deleted.is_(None))
-        .filter(models.FloatingIPAllocation.floatingip_id.in_(fip_ids))
-        .filter(models.FloatingIPAllocation.reservation_id.in_(
-            list(set([x['id'] for x in reservations])))))
+        allocations_query = (session.query(
+            models.FloatingIPAllocation.reservation_id,
+            models.FloatingIPAllocation.floatingip_id)
+            .filter(models.FloatingIPAllocation.deleted.is_(None))
+            .filter(models.FloatingIPAllocation.floatingip_id.in_(fip_ids))
+            .filter(models.FloatingIPAllocation.reservation_id.in_(
+                list(set([x['id'] for x in reservations])))))
 
-    allocations = defaultdict(list)
+        allocations = defaultdict(list)
 
-    for row in allocations_query.all():
-        allocations[row[0]].append(row[1])
+        for row in allocations_query.all():
+            allocations[row[0]].append(row[1])
 
-    for r in reservations:
-        r['floatingip_ids'] = allocations[r['id']]
+        for r in reservations:
+            r['floatingip_ids'] = allocations[r['id']]
 
-    return reservations
+        return reservations
 
 
 def get_reservation_allocations_by_network_ids(network_ids, start_date,
                                                end_date, lease_id=None,
                                                reservation_id=None):
-    session = get_session()
-    reservations = get_reservations_for_allocations(
-        session, start_date, end_date, lease_id, reservation_id)
+    with facade_wrapper.session_for_read() as session:
+        reservations = get_reservations_for_allocations(
+            session, start_date, end_date, lease_id, reservation_id)
 
-    allocations_query = (session.query(
-        models.NetworkAllocation.reservation_id,
-        models.NetworkAllocation.network_id)
-        .filter(models.NetworkAllocation.deleted.is_(None))
-        .filter(models.NetworkAllocation.network_id.in_(network_ids))
-        .filter(models.NetworkAllocation.reservation_id.in_(
-            list(set([x['id'] for x in reservations])))))
+        allocations_query = (session.query(
+            models.NetworkAllocation.reservation_id,
+            models.NetworkAllocation.network_id)
+            .filter(models.NetworkAllocation.deleted.is_(None))
+            .filter(models.NetworkAllocation.network_id.in_(network_ids))
+            .filter(models.NetworkAllocation.reservation_id.in_(
+                list(set([x['id'] for x in reservations])))))
 
-    allocations = defaultdict(list)
+        allocations = defaultdict(list)
 
-    for row in allocations_query.all():
-        allocations[row[0]].append(row[1])
+        for row in allocations_query.all():
+            allocations[row[0]].append(row[1])
 
-    for r in reservations:
-        r['network_ids'] = allocations[r['id']]
+        for r in reservations:
+            r['network_ids'] = allocations[r['id']]
 
-    return reservations
+        return reservations
 
 
 def get_most_recent_reservation_info_by_network_id(network_id):
@@ -300,61 +297,61 @@ def get_most_recent_reservation_info_by_network_id(network_id):
     Args:
         network_id (): network id - primary key of NetworkSegment table
     """
-    session = get_session()
-    curr_date = datetime.utcnow() + timedelta(seconds=300)
-    query = (
-        session.query(
-            models.NetworkSegment.id.label('network_id'),
-            models.NetworkSegment.segment_id,
-            models.Lease.start_date,
-            models.Lease.end_date,
-            models.Reservation.status.label('status'),
-            models.Reservation.id,
+    with facade_wrapper.session_for_read() as session:
+        curr_date = datetime.utcnow() + timedelta(seconds=300)
+        query = (
+            session.query(
+                models.NetworkSegment.id.label('network_id'),
+                models.NetworkSegment.segment_id,
+                models.Lease.start_date,
+                models.Lease.end_date,
+                models.Reservation.status.label('status'),
+                models.Reservation.id,
+            )
+            .filter(models.NetworkSegment.id == network_id)
+            .join(
+                models.NetworkAllocation,
+                models.NetworkAllocation.network_id == models.NetworkSegment.id
+            )
+            .join(
+                models.Reservation,
+                models.Reservation.id == models.NetworkAllocation.reservation_id
+            )
+            .join(
+                models.Lease,
+                models.Lease.id == models.Reservation.lease_id
+            )
+            .filter(models.Lease.start_date < curr_date)
+            .filter(models.Reservation.status != status.reservation.PENDING)
+            .order_by(models.Lease.start_date.desc())
         )
-        .filter(models.NetworkSegment.id == network_id)
-        .join(
-            models.NetworkAllocation,
-            models.NetworkAllocation.network_id == models.NetworkSegment.id
-        )
-        .join(
-            models.Reservation,
-            models.Reservation.id == models.NetworkAllocation.reservation_id
-        )
-        .join(
-            models.Lease,
-            models.Lease.id == models.Reservation.lease_id
-        )
-        .filter(models.Lease.start_date < curr_date)
-        .filter(models.Reservation.status != status.reservation.PENDING)
-        .order_by(models.Lease.start_date.desc())
-    )
-    return query.first()
+        return query.first()
 
 
 def get_reservation_allocations_by_device_ids(device_ids, start_date, end_date,
                                               lease_id=None,
                                               reservation_id=None):
-    session = get_session()
-    reservations = get_reservations_for_allocations(
-        session, start_date, end_date, lease_id, reservation_id)
+    with facade_wrapper.session_for_read() as session:
+        reservations = get_reservations_for_allocations(
+            session, start_date, end_date, lease_id, reservation_id)
 
-    allocations_query = (session.query(
-        models.DeviceAllocation.reservation_id,
-        models.DeviceAllocation.device_id)
-        .filter(models.DeviceAllocation.deleted.is_(None))
-        .filter(models.DeviceAllocation.device_id.in_(device_ids))
-        .filter(models.DeviceAllocation.reservation_id.in_(
-            list(set([x['id'] for x in reservations])))))
+        allocations_query = (session.query(
+            models.DeviceAllocation.reservation_id,
+            models.DeviceAllocation.device_id)
+            .filter(models.DeviceAllocation.deleted.is_(None))
+            .filter(models.DeviceAllocation.device_id.in_(device_ids))
+            .filter(models.DeviceAllocation.reservation_id.in_(
+                list(set([x['id'] for x in reservations])))))
 
-    allocations = defaultdict(list)
+        allocations = defaultdict(list)
 
-    for row in allocations_query.all():
-        allocations[row[0]].append(row[1])
+        for row in allocations_query.all():
+            allocations[row[0]].append(row[1])
 
-    for r in reservations:
-        r['device_ids'] = allocations[r['id']]
+        for r in reservations:
+            r['device_ids'] = allocations[r['id']]
 
-    return reservations
+        return reservations
 
 
 def get_most_recent_reservation_info_by_host_id(host_id):
@@ -364,40 +361,40 @@ def get_most_recent_reservation_info_by_host_id(host_id):
     Args:
         host_id (): Host id - primary key of ComputeHost table
     """
-    session = get_session()
-    curr_date = datetime.utcnow() + timedelta(seconds=300)
-    query = (
-        session.query(
-            models.ComputeHost.id.label('host_id'),
-            models.ComputeHost.hypervisor_hostname,
-            models.Reservation.status.label('reservation_status'),
-            models.Lease.start_date,
-            models.Lease.end_date,
-            models.ComputeHostReservation.aggregate_id,
-            models.ComputeHostReservation.reservation_id,
+    with facade_wrapper.session_for_read() as session:
+        curr_date = datetime.utcnow() + timedelta(seconds=300)
+        query = (
+            session.query(
+                models.ComputeHost.id.label('host_id'),
+                models.ComputeHost.hypervisor_hostname,
+                models.Reservation.status.label('reservation_status'),
+                models.Lease.start_date,
+                models.Lease.end_date,
+                models.ComputeHostReservation.aggregate_id,
+                models.ComputeHostReservation.reservation_id,
+            )
+            .filter(models.ComputeHost.id == host_id)
+            .join(
+                models.ComputeHostAllocation,
+                models.ComputeHostAllocation.compute_host_id == models.ComputeHost.id
+            )
+            .join(
+                models.ComputeHostReservation,
+                models.ComputeHostReservation.reservation_id == models.ComputeHostAllocation.reservation_id
+            )
+            .join(
+                models.Reservation,
+                models.Reservation.id == models.ComputeHostReservation.reservation_id
+            )
+            .join(
+                models.Lease,
+                models.Lease.id == models.Reservation.lease_id
+            )
+            .filter(models.Lease.start_date < curr_date)
+            .filter(models.Reservation.status != status.reservation.PENDING)
+            .order_by(models.Lease.start_date.desc())
         )
-        .filter(models.ComputeHost.id == host_id)
-        .join(
-            models.ComputeHostAllocation,
-            models.ComputeHostAllocation.compute_host_id == models.ComputeHost.id
-        )
-        .join(
-            models.ComputeHostReservation,
-            models.ComputeHostReservation.reservation_id == models.ComputeHostAllocation.reservation_id
-        )
-        .join(
-            models.Reservation,
-            models.Reservation.id == models.ComputeHostReservation.reservation_id
-        )
-        .join(
-            models.Lease,
-            models.Lease.id == models.Reservation.lease_id
-        )
-        .filter(models.Lease.start_date < curr_date)
-        .filter(models.Reservation.status != status.reservation.PENDING)
-        .order_by(models.Lease.start_date.desc())
-    )
-    return query.first()
+        return query.first()
 
 
 def get_most_recent_reservation_info_by_fip_id(fip_id):
@@ -407,44 +404,43 @@ def get_most_recent_reservation_info_by_fip_id(fip_id):
     Args:
         host_id (): Host id - primary key of ComputeHost table
     """
-    session = get_session()
-    curr_date = datetime.utcnow() + timedelta(seconds=300)
-    query = (
-        session.query(
-            models.FloatingIP.id.label('fip_id'),
-            models.FloatingIP.floating_ip_address,
-            models.Lease.start_date,
-            models.Lease.end_date,
-            models.Reservation.status.label('status'),
-            models.Reservation.id,
+    with facade_wrapper.session_for_read() as session:
+        curr_date = datetime.utcnow() + timedelta(seconds=300)
+        query = (
+            session.query(
+                models.FloatingIP.id.label('fip_id'),
+                models.FloatingIP.floating_ip_address,
+                models.Lease.start_date,
+                models.Lease.end_date,
+                models.Reservation.status.label('status'),
+                models.Reservation.id,
+            )
+            .filter(models.FloatingIP.id == fip_id)
+            .join(
+                models.FloatingIPAllocation,
+                models.FloatingIPAllocation.floatingip_id == models.FloatingIP.id
+            )
+            .join(
+                models.Reservation,
+                models.Reservation.id == models.FloatingIPAllocation.reservation_id
+            )
+            .join(
+                models.Lease,
+                models.Lease.id == models.Reservation.lease_id
+            )
+            .filter(models.Lease.start_date < curr_date)
+            .filter(models.Reservation.status != status.reservation.PENDING)
+            .order_by(models.Lease.start_date.desc())
         )
-        .filter(models.FloatingIP.id == fip_id)
-        .join(
-            models.FloatingIPAllocation,
-            models.FloatingIPAllocation.floatingip_id == models.FloatingIP.id
-        )
-        .join(
-            models.Reservation,
-            models.Reservation.id == models.FloatingIPAllocation.reservation_id
-        )
-        .join(
-            models.Lease,
-            models.Lease.id == models.Reservation.lease_id
-        )
-        .filter(models.Lease.start_date < curr_date)
-        .filter(models.Reservation.status != status.reservation.PENDING)
-        .order_by(models.Lease.start_date.desc())
-    )
-    return query.first()
+        return query.first()
 
 
 def get_user_ids_for_lease_ids(lease_ids):
-    session = get_session()
+    with facade_wrapper.session_for_read() as session:
+        leases_query = (session.query(models.Lease.id, models.Lease.user_id)
+                        .filter(models.Lease.id.in_(lease_ids)))
 
-    leases_query = (session.query(models.Lease.id, models.Lease.user_id)
-                    .filter(models.Lease.id.in_(lease_ids)))
-
-    return leases_query.all()
+        return leases_query.all()
 
 
 def get_plugin_reservation(resource_type, resource_id):
