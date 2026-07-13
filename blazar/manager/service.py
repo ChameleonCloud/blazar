@@ -25,6 +25,7 @@ from oslo_log import log as logging
 from oslo_utils.excutils import save_and_reraise_exception
 from oslo_utils import strutils
 from oslo_service import periodic_task
+from oslo_utils import timeutils
 from stevedore import enabled
 
 from blazar import context
@@ -87,7 +88,7 @@ class ManagerService(service_utils.RPCServer):
     """
 
     def __init__(self):
-        target = manager.get_target()
+        target = manager.get_service_target()
         super(ManagerService, self).__init__(target)
         self.plugins = get_plugins()
         self.resource_actions = self._setup_actions()
@@ -169,7 +170,7 @@ class ManagerService(service_utils.RPCServer):
                               event_id)
 
     def _select_for_execution(self, events):
-        """Selects the first events that can be safely executed concurrently.
+        """Orders the events such that they can be safely executed concurrently
 
         Events are selected to be executed concurrently if they are of the same
         type, while keeping strict time ordering and the following priority of
@@ -230,7 +231,7 @@ class ManagerService(service_utils.RPCServer):
             sort_dir='asc',
             filters={'status': status.event.UNDONE,
                      'time': {'op': 'le',
-                              'border': datetime.datetime.utcnow()}}
+                              'border': timeutils.utcnow()}}
         )
 
         for batch in self._select_for_execution(events):
@@ -246,7 +247,7 @@ class ManagerService(service_utils.RPCServer):
         try:
             event_fn(lease_id=event['lease_id'], event_id=event['id'])
         except common_ex.InvalidStatus:
-            now = datetime.datetime.utcnow()
+            now = timeutils.utcnow()
             if now < event['time'] + datetime.timedelta(
                     seconds=CONF.manager.event_max_retries * 10):
                 # Set the event status UNDONE for retrying the event
@@ -277,7 +278,7 @@ class ManagerService(service_utils.RPCServer):
         return date
 
     def _parse_lease_dates(self, start_date, end_date):
-        now = datetime.datetime.utcnow()
+        now = timeutils.utcnow()
         now = datetime.datetime(now.year,
                                 now.month,
                                 now.day,

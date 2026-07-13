@@ -19,6 +19,9 @@ import uuid
 
 import ddt
 from novaclient import exceptions as nova_exceptions
+from oslo_config import cfg
+from oslo_config import fixture as conf_fixture
+from oslo_utils import timeutils
 
 from blazar import context
 from blazar.db import api as db_api
@@ -29,7 +32,6 @@ from blazar.plugins.instances import instance_plugin
 from blazar.plugins import oshosts
 from blazar import tests
 from blazar.utils.openstack import nova
-from oslo_config import cfg
 
 CONF = cfg.CONF
 
@@ -394,6 +396,61 @@ class TestVirtualInstancePlugin(tests.TestCase):
             }
 
         expected = {'added': ['host-1', 'host-1'], 'removed': []}
+        ret = plugin.pickup_hosts('reservation-id1', params)
+
+        self.assertEqual(expected, ret)
+        expected_query = ['vcpus >= 2', 'memory_mb >= 2048', 'local_gb >= 100']
+        mock_host_get_query.assert_called_once_with(expected_query)
+
+    def test_pickup_host_with_anti_affinity(self):
+        def fake_get_reservation_by_host(host_id, start, end):
+            if host_id in ['host-1', 'host-3']:
+                return [
+                    {'id': '1',
+                     'resource_type': instances.RESOURCE_TYPE},
+                    {'id': '2',
+                     'resource_type': instances.RESOURCE_TYPE}
+                    ]
+            else:
+                return []
+
+        plugin = instance_plugin.VirtualInstancePlugin()
+
+        mock_host_allocation_get = self.patch(
+            db_api, 'host_allocation_get_all_by_values')
+        mock_host_allocation_get.return_value = []
+
+        mock_host_get_query = self.patch(db_api,
+                                         'reservable_host_get_all_by_queries')
+        hosts_list = [self.generate_host_info('host-1', 8, 8192, 1000),
+                      self.generate_host_info('host-2', 2, 2048, 500)]
+        mock_host_get_query.return_value = hosts_list
+
+        mock_get_reservations = self.patch(db_utils,
+                                           'get_reservations_by_host_id')
+
+        mock_get_reservations.side_effect = fake_get_reservation_by_host
+
+        mock_max_usages = self.patch(plugin, 'max_usages')
+        mock_max_usages.return_value = (0, 0, 0)
+
+        mock_reservation_get = self.patch(db_api, 'reservation_get')
+        mock_reservation_get.return_value = {
+            'status': 'pending'
+            }
+
+        params = {
+            'vcpus': 2,
+            'memory_mb': 2048,
+            'disk_gb': 100,
+            'amount': 2,
+            'affinity': False,
+            'resource_properties': '',
+            'start_date': datetime.datetime(2030, 1, 1, 8, 00),
+            'end_date': datetime.datetime(2030, 1, 1, 12, 00)
+            }
+
+        expected = {'added': ['host-1', 'host-2'], 'removed': []}
         ret = plugin.pickup_hosts('reservation-id1', params)
 
         self.assertEqual(expected, ret)
@@ -1354,10 +1411,8 @@ class TestVirtualInstancePlugin(tests.TestCase):
         pickup_hosts.return_value = {'added': [new_host['id']], 'removed': []}
         alloc_update = self.patch(db_api, 'host_allocation_update')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
-                2020, 1, 1, 11, 00)
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(2020, 1, 1, 11, 00)
             result = plugin._heal_reservation(
                 dummy_reservation, list(failed_host.values()))
 
@@ -1413,10 +1468,8 @@ class TestVirtualInstancePlugin(tests.TestCase):
         mock_update_reservation_inventory = self.patch(
             plugin.placement_client, 'update_reservation_inventory')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
-                2020, 1, 1, 13, 00)
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(2020, 1, 1, 13, 00)
             result = plugin._heal_reservation(
                 dummy_reservation, list(failed_host.values()))
 
@@ -1470,10 +1523,8 @@ class TestVirtualInstancePlugin(tests.TestCase):
         pickup_hosts.side_effect = mgr_exceptions.NotEnoughHostsAvailable
         alloc_destroy = self.patch(db_api, 'host_allocation_destroy')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
-                2020, 1, 1, 11, 00)
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(2020, 1, 1, 11, 00)
             result = plugin._heal_reservation(
                 dummy_reservation, list(failed_host.values()))
 
@@ -1516,10 +1567,8 @@ class TestVirtualInstancePlugin(tests.TestCase):
         pickup_hosts.return_value = {'added': [new_host['id']], 'removed': []}
         alloc_update = self.patch(db_api, 'host_allocation_update')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
-                2020, 1, 1, 11, 00)
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(2020, 1, 1, 11, 00)
             result = plugin._heal_reservation(
                 dummy_reservation, list(failed_host.values()))
 
@@ -1579,10 +1628,8 @@ class TestVirtualInstancePlugin(tests.TestCase):
         mock_update_reservation_inventory = self.patch(
             plugin.placement_client, 'update_reservation_inventory')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
-                2020, 1, 1, 13, 00)
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(2020, 1, 1, 13, 00)
             result = plugin._heal_reservation(
                 dummy_reservation, list(failed_host.values()))
 
@@ -1640,10 +1687,8 @@ class TestVirtualInstancePlugin(tests.TestCase):
         pickup_hosts.side_effect = mgr_exceptions.NotEnoughHostsAvailable
         alloc_destroy = self.patch(db_api, 'host_allocation_destroy')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
-                2020, 1, 1, 11, 00)
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(2020, 1, 1, 11, 00)
             result = plugin._heal_reservation(
                 dummy_reservation, list(failed_host.values()))
 
@@ -1651,3 +1696,33 @@ class TestVirtualInstancePlugin(tests.TestCase):
         destroy_calls = [mock.call('alloc-1'), mock.call('alloc-2')]
         alloc_destroy.assert_has_calls(destroy_calls)
         self.assertEqual(False, result)
+
+    @ddt.data(False, True, None)
+    def test_cleanup_resources(self, affinity):
+        instance_reservation = {
+            'reservation_id': 'reservation-id1',
+            'vcpus': 2,
+            'memory_mb': 1024,
+            'disk_gb': 20,
+            'affinity': affinity
+        }
+
+        # Set server_group_id according to the affinity value
+        server_group_id = 'group-1' if affinity is not None else None
+        instance_reservation['server_group_id'] = server_group_id
+
+        mock_nova_client = self.patch(nova, 'NovaClientWrapper')
+        mock_nova_client.return_value = mock.MagicMock()
+        mock_nova_pool = self.patch(nova, 'ReservationPool')
+        mock_nova_pool.return_value = mock.MagicMock()
+        plugin = instance_plugin.VirtualInstancePlugin()
+        mock_nova = mock.MagicMock()
+        type(plugin).nova = mock_nova
+
+        plugin.cleanup_resources(instance_reservation)
+
+        if affinity is not None:
+            mock_nova.nova.server_groups.delete.assert_called_once_with(
+                'group-1')
+        mock_nova.nova.flavors.delete.assert_called_once_with(
+            'reservation-id1')

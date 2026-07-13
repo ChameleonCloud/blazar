@@ -34,13 +34,15 @@ class BlazarPolicyTestCase(tests.TestCase):
 
         self.context = context.BlazarContext(user_id='fake',
                                              project_id='fake',
-                                             roles=['member'])
+                                             roles=['member', 'reader'])
 
     def test_standardpolicy(self):
         target_good = {'user': self.context.user_id,
-                       'project': self.context.project_id}
+                       'project': self.context.project_id,
+                       'project_id': self.context.project_id}
         target_wrong = {'user': self.context.user_id,
-                        'project': 'bad_project'}
+                        'project': 'bad_project',
+                        'project_id': 'bad_project'}
         action = "blazar:leases:get"
         self.assertTrue(policy.enforce(self.context, action,
                                        target_good))

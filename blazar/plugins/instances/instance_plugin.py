@@ -18,6 +18,7 @@ from novaclient import exceptions as nova_exceptions
 from oslo_config import cfg
 from oslo_utils import strutils
 from oslo_utils.strutils import bool_from_string
+from oslo_utils import timeutils
 
 from blazar import context
 from blazar.db import api as db_api
@@ -169,7 +170,7 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
                      ]
         }.
         """
-        start = datetime.datetime.utcnow()
+        start = timeutils.utcnow()
         end = datetime.date.max
 
         # To reduce overhead, this method only executes one query
@@ -319,7 +320,8 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
 
         return {'added': added_host_ids, 'removed': removed_host_ids}
 
-    def _create_flavor(self, reservation_id, vcpus, memory, disk, group_id):
+    def _create_flavor(self, reservation_id, vcpus, memory, disk,
+                       group_id=None):
         flavor_details = {
             'flavorid': reservation_id,
             'name': RESERVATION_PREFIX + ":" + reservation_id,
@@ -335,9 +337,10 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
         reservation_rc = "resources:CUSTOM_RESERVATION_" + rsv_id_rc_format
         extra_specs = {
             FLAVOR_EXTRA_SPEC: reservation_id,
-            "affinity_id": group_id,
             reservation_rc: "1"
             }
+        if group_id is not None:
+            extra_specs["affinity_id"] = group_id
         reserved_flavor.set_keys(extra_specs)
 
         return reserved_flavor
@@ -347,23 +350,31 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
 
         user_client = nova.NovaClientWrapper()
 
-        reserved_group = user_client.nova.server_groups.create(
-            RESERVATION_PREFIX + ':' + reservation_id,
-            'affinity' if inst_reservation['affinity'] else 'anti-affinity'
-            )
+        flavor_args = {
+            'reservation_id': reservation_id,
+            'vcpus': inst_reservation['vcpus'],
+            'memory': inst_reservation['memory_mb'],
+            'disk': inst_reservation['disk_gb']
+        }
 
-        reserved_flavor = self._create_flavor(reservation_id,
-                                              inst_reservation['vcpus'],
-                                              inst_reservation['memory_mb'],
-                                              inst_reservation['disk_gb'],
-                                              reserved_group.id)
-
-        pool = nova.ReservationPool()
         pool_metadata = {
             RESERVATION_PREFIX: reservation_id,
             'filter_tenant_id': ctx.project_id,
-            'affinity_id': reserved_group.id
             }
+
+        if inst_reservation['affinity'] is not None:
+            reserved_group = user_client.nova.server_groups.create(
+                RESERVATION_PREFIX + ':' + reservation_id,
+                'affinity' if inst_reservation['affinity'] else 'anti-affinity'
+                )
+            flavor_args['group_id'] = reserved_group.id
+            pool_metadata['affinity_id'] = reserved_group.id
+        else:
+            reserved_group = None
+
+        reserved_flavor = self._create_flavor(**flavor_args)
+
+        pool = nova.ReservationPool()
         agg = pool.create(name=reservation_id, project_id=ctx.project_id,
                           metadata=pool_metadata)
 
@@ -380,8 +391,10 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
 
         reservation_id = instance_reservation['reservation_id']
 
-        check_and_delete_resource(self.nova.nova.server_groups,
-                                  instance_reservation['server_group_id'])
+        server_group_id = instance_reservation['server_group_id']
+        if server_group_id:
+            check_and_delete_resource(self.nova.nova.server_groups,
+                                      server_group_id)
         check_and_delete_resource(self.nova.nova.flavors, reservation_id)
         check_and_delete_resource(nova.ReservationPool(), reservation_id)
 
@@ -487,9 +500,10 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
             self.cleanup_resources(instance_reservation)
             raise mgr_exceptions.NovaClientError()
 
+        server_group_id = group.id if group is not None else None
         db_api.instance_reservation_update(instance_reservation['id'],
                                            {'flavor_id': flavor.id,
-                                            'server_group_id': group.id,
+                                            'server_group_id': server_group_id,
                                             'aggregate_id': pool.id})
 
         return instance_reservation['id']
@@ -580,6 +594,8 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
         instance_reservation = db_api.instance_reservation_get(resource_id)
         reservation_id = instance_reservation['reservation_id']
 
+        # TODO(johngarbutt): create flavor after updating placement?
+        # else we will race with automation looking for the flavor here
         try:
             self.nova.flavor_access.add_tenant_access(reservation_id,
                                                       ctx.project_id)
@@ -760,8 +776,7 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
     def _select_host(self, reservation, lease):
         """Returns the alternative host id or None if not found."""
         values = {}
-        values['start_date'] = max(datetime.datetime.utcnow(),
-                                   lease['start_date'])
+        values['start_date'] = max(timeutils.utcnow(), lease['start_date'])
         values['end_date'] = lease['end_date']
         specs = ['vcpus', 'memory_mb', 'disk_gb', 'affinity', 'amount',
                  'resource_properties']

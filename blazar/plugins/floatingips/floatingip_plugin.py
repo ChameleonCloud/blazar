@@ -20,6 +20,7 @@ from oslo_log import log as logging
 from oslo_utils.excutils import save_and_reraise_exception
 from oslo_utils import netutils
 from oslo_utils import strutils
+from oslo_utils import timeutils
 
 from blazar.db import api as db_api
 from blazar.db import exceptions as db_ex
@@ -113,9 +114,8 @@ class FloatingIpPlugin(base.BasePlugin):
             for fip_id in fip_ids_to_add:
                 try:
                     fip = db_api.floatingip_get(fip_id)
-                    LOG.debug(
-                        'Creating floating IP {} for reservation {}'.format(
-                            fip['floating_ip_address'], reservation_id))
+                    LOG.debug('Creating floating IP %s for reservation %s',
+                              fip['floating_ip_address'], reservation_id)
                     fip_pool.create_reserved_floatingip(
                         fip['subnet_id'], fip['floating_ip_address'],
                         lease['project_id'], reservation_id)
@@ -127,8 +127,8 @@ class FloatingIpPlugin(base.BasePlugin):
                     raise manager_ex.NeutronClientError(err_msg)
 
         for fip_id in fip_ids_to_add:
-            LOG.debug('Adding floating IP {} to reservation {}'.format(
-                fip_id, reservation_id))
+            LOG.debug('Adding floating IP %s to reservation %s',
+                      fip_id, reservation_id)
             db_api.fip_allocation_create({
                 'floatingip_id': fip_id,
                 'reservation_id': reservation_id})
@@ -435,7 +435,7 @@ class FloatingIpPlugin(base.BasePlugin):
                      ]
         }.
         """
-        start = datetime.datetime.utcnow()
+        start = timeutils.utcnow()
         end = datetime.date.max
 
         reservations = db_utils.get_reservation_allocations_by_fip_ids(

@@ -16,6 +16,7 @@
 import collections
 import collections
 import datetime
+import random
 from unittest import mock
 
 import ddt
@@ -24,8 +25,7 @@ from novaclient import client as nova_client
 from novaclient import exceptions as nova_exceptions
 from oslo_config import cfg
 from oslo_config import fixture as conf_fixture
-import random
-import random
+from oslo_utils import timeutils
 import testtools
 
 from blazar import context, policy
@@ -211,14 +211,90 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         self.fake_phys_plugin.list_computehosts({})
         self.db_host_list.assert_called_once_with()
 
-    def test_create_host_without_extra_capabilities(self):
-        self.get_extra_capabilities.return_value = {}
-        host = self.fake_phys_plugin.create_computehost(self.fake_host)
-        self.db_host_create.assert_called_once_with(self.fake_host)
-        self.prov_create.assert_called_once_with('hypvsr1')
-        self.assertEqual(self.fake_host, host)
+    @mock.patch.object(db_api, 'host_trait_create')
+    @mock.patch.object(db_api, 'host_resource_inventory_create')
+    @mock.patch.object(placement.BlazarPlacementClient, 'get_traits')
+    @mock.patch.object(placement.BlazarPlacementClient, 'get_inventory')
+    @mock.patch.object(placement.BlazarPlacementClient,
+                       'get_resource_provider')
+    def test_create_host_without_extra_capabilities(
+            self, mock_get_rp, mock_get_inventory, mock_get_traits,
+            mock_db_inv, mock_db_trait):
 
-    def test_create_host_with_extra_capabilities(self):
+        mock_get_rp.return_value = {"uuid": "fake_rp_uuid"}
+        mock_get_traits.return_value = ["CUSTOM_HW_FPGA_CLASS1"]
+        mock_get_inventory.return_value = {
+            "inventories": {
+                "MEMORY_MB": {
+                    "allocation_ratio": 1.5,
+                    "max_unit": 5825,
+                    "min_unit": 1,
+                    "reserved": 512,
+                    "step_size": 1,
+                    "total": 5825
+                },
+                "VCPU": {
+                    "allocation_ratio": 16.0,
+                    "max_unit": 4,
+                    "min_unit": 1,
+                    "reserved": 0,
+                    "step_size": 1,
+                    "total": 4
+                }
+            },
+            "resource_provider_generation": 7
+        }
+        self.get_extra_capabilities.return_value = {}
+        fake_request = self.fake_host.copy()
+        self.db_host_create.return_value = self.fake_host.copy()
+
+        host = self.fake_phys_plugin.create_computehost(fake_request)
+
+        self.assertEqual(self.fake_host, host)
+        self.db_host_create.assert_called_once()
+        self.prov_create.assert_called_once_with('hypvsr1')
+        mock_get_inventory.assert_called_once_with("fake_rp_uuid")
+        mock_get_traits.assert_called_once_with("fake_rp_uuid")
+        mock_db_trait.assert_called_once_with({
+            'computehost_id': '1',
+            'trait': "CUSTOM_HW_FPGA_CLASS1",
+        })
+        mock_db_inv.assert_any_call({
+            'computehost_id': '1',
+            'resource_class': "MEMORY_MB",
+            "allocation_ratio": 1.5,
+            "max_unit": 5825,
+            "min_unit": 1,
+            "reserved": 512,
+            "step_size": 1,
+            "total": 5825
+        })
+
+    @mock.patch.object(db_api, 'host_trait_create')
+    @mock.patch.object(db_api, 'host_resource_inventory_create')
+    @mock.patch.object(placement.BlazarPlacementClient, 'get_traits')
+    @mock.patch.object(placement.BlazarPlacementClient, 'get_inventory')
+    @mock.patch.object(placement.BlazarPlacementClient,
+                       'get_resource_provider')
+    def test_create_host_with_extra_capabilities(
+            self, mock_get_rp, mock_get_inventory, mock_get_traits,
+            mock_db_inv, mock_db_trait):
+
+        mock_get_rp.return_value = {"uuid": "fake_rp_uuid"}
+        mock_get_traits.return_value = []
+        mock_get_inventory.return_value = {
+            "inventories": {
+                "MEMORY_MB": {
+                    "allocation_ratio": 1.5,
+                    "max_unit": 5825,
+                    "min_unit": 1,
+                    "reserved": 512,
+                    "step_size": 1,
+                    "total": 5825
+                }
+            },
+            "resource_provider_generation": 7
+        }
         fake_host = self.fake_host.copy()
         fake_host.update({'foo': 'bar'})
         # NOTE(sbauza): 'id' will be pop'd, we need to keep track of it
@@ -229,14 +305,29 @@ class PhysicalHostPluginTestCase(tests.TestCase):
                      'capability_value': 'bar',
                      }
         self.get_extra_capabilities.return_value = {'foo': 'bar'}
-        self.db_host_create.return_value = fake_host
+        self.db_host_create.return_value = self.fake_host.copy()
+
         host = self.fake_phys_plugin.create_computehost(fake_request)
-        self.db_host_create.assert_called_once_with(self.fake_host)
+
+        self.db_host_create.assert_called_once()
         self.prov_create.assert_called_once_with('hypvsr1')
         self.db_host_extra_capability_create.assert_called_once_with(fake_capa)
         # the returned host will not have id
         fake_host.pop('id')
         self.assertEqual(fake_host, host)
+        mock_get_inventory.assert_called_once_with("fake_rp_uuid")
+        mock_get_traits.assert_called_once_with("fake_rp_uuid")
+        mock_db_trait.assert_not_called()
+        mock_db_inv.assert_called_once_with({
+            'computehost_id': '1',
+            'resource_class': "MEMORY_MB",
+            "allocation_ratio": 1.5,
+            "max_unit": 5825,
+            "min_unit": 1,
+            "step_size": 1,
+            "reserved": 512,
+            "total": 5825
+        })
 
     def test_create_host_with_capabilities_too_long(self):
         fake_host = self.fake_host.copy()
@@ -752,7 +843,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         self.assertDictEqual(expected, ret)
 
     def test_create_reservation_no_hosts_available(self):
-        now = datetime.datetime.utcnow()
+        now = timeutils.utcnow()
         values = {
             'lease_id': '018c1b43-e69e-4aef-a543-09681539cf4c',
             'min': 1,
@@ -2442,9 +2533,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         matching_hosts.return_value = [new_host['id']]
         alloc_update = self.patch(self.db_api, 'host_allocation_update')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(
                 2020, 1, 1, 11, 00)
             result = self.fake_phys_plugin._reallocate(dummy_allocation, force=True)
 
@@ -2502,9 +2592,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         matching_hosts.return_value = [new_host['id']]
         alloc_update = self.patch(self.db_api, 'host_allocation_update')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(
                 2020, 1, 1, 13, 00)
             self.nova_client.client.get.return_value = None, {'servers': []}
             result = self.fake_phys_plugin._reallocate(dummy_allocation, force=True)
@@ -2565,9 +2654,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         matching_hosts.return_value = []
         alloc_destroy = self.patch(self.db_api, 'host_allocation_destroy')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(
                 2020, 1, 1, 11, 00)
             result = self.fake_phys_plugin._reallocate(dummy_allocation, force=True)
 
@@ -2618,9 +2706,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         matching_hosts.return_value = []
         alloc_destroy = self.patch(self.db_api, 'host_allocation_destroy')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(
                 2020, 1, 1, 11, 00)
             result = self.fake_phys_plugin._reallocate(dummy_allocation, force=False)
 
@@ -3286,9 +3373,24 @@ class PhysicalHostMonitorPluginTestCase(tests.TestCase):
         get_reservations = self.patch(db_utils, 'get_reservations_by_host_ids')
         get_reservations.return_value = [dummy_reservation]
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = start_date
+        dummy_reservation = {
+            'id': 'rsrv-1',
+            'resource_type': plugin.RESOURCE_TYPE,
+            'lease_id': 'lease-1',
+            'status': 'pending',
+            'hypervisor_properties': [],
+            'resource_properties': [],
+            'resource_id': 'resource-1',
+            'computehost_allocations': [{
+                'id': 'alloc-1', 'compute_host_id': failed_hosts[0]['id'],
+                'reservation_id': 'rsrv-1'
+            }]
+        }
+        get_reservations = self.patch(db_utils, 'get_reservations_by_host_ids')
+        get_reservations.return_value = [dummy_reservation]
+
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = start_date
             result = self.host_monitor_plugin.heal()
 
         self.assertEqual(reservation_flags, result)
