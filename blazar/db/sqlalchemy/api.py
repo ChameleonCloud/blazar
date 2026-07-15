@@ -749,7 +749,7 @@ def host_get(host_id):
 
 def host_list():
     with facade_wrapper.session_for_read() as session:
-        return session.query(models.ComputeHost).all()
+        return model_query(models.ComputeHost, session).all()
 
 
 def host_get_all_by_filters(filters):
