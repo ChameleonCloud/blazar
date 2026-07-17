@@ -49,12 +49,12 @@ def upgrade():
     if op.get_bind().engine.name != 'sqlite':
         connection = op.get_bind()
 
-        host_query = connection.execute("""
+        host_query = connection.execute(sa.text("""
             SELECT DISTINCT "physical:host", capability_name
-            FROM computehost_extra_capabilities;""")
-        network_query = connection.execute("""
+            FROM computehost_extra_capabilities;"""))
+        network_query = connection.execute(sa.text("""
             SELECT DISTINCT "network", capability_name
-            FROM networksegment_extra_capabilities;""")
+            FROM networksegment_extra_capabilities;"""))
 
         capability_values = [
             (str(uuid.uuid4()), resource_type, capability_name)
@@ -66,8 +66,9 @@ def upgrade():
                 INSERT INTO extra_capabilities
                 (id, resource_type, capability_name)
                 VALUES {};"""
-            connection.execute(
+            connection.execute(sa.text(
                 insert.format(', '.join(map(str, capability_values))))
+            )
 
         op.add_column('computehost_extra_capabilities',
                       sa.Column('capability_id', sa.String(length=255),
@@ -76,16 +77,16 @@ def upgrade():
                       sa.Column('capability_id', sa.String(length=255),
                                 nullable=False))
 
-        connection.execute("""
+        connection.execute(sa.text("""
             UPDATE computehost_extra_capabilities c
             LEFT JOIN extra_capabilities e
             ON e.capability_name = c.capability_name
-            SET c.capability_id = e.id;""")
-        connection.execute("""
+            SET c.capability_id = e.id;"""))
+        connection.execute(sa.text("""
             UPDATE networksegment_extra_capabilities n
             LEFT JOIN extra_capabilities e
             ON e.capability_name = n.capability_name
-            SET n.capability_id = e.id;""")
+            SET n.capability_id = e.id;"""))
 
         op.create_foreign_key('computehost_extra_capability_id_fk',
                               'computehost_extra_capabilities',
@@ -109,17 +110,17 @@ def downgrade():
 
     if op.get_bind().engine.name != 'sqlite':
         connection = op.get_bind()
-        connection.execute("""
+        connection.execute(sa.text("""
             UPDATE networksegment_extra_capabilities n
             LEFT JOIN extra_capabilities e
             ON e.id = n.capability_id
-            SET n.capability_name = e.capability_name;""")
+            SET n.capability_name = e.capability_name;"""))
 
-        connection.execute("""
+        connection.execute(sa.text("""
             UPDATE computehost_extra_capabilities c
             LEFT JOIN extra_capabilities e
             ON e.id=c.capability_id
-            SET c.capability_name = e.capability_name;""")
+            SET c.capability_name = e.capability_name;"""))
 
         op.drop_constraint('networksegment_extra_capability_id_fk',
                            'networksegment_extra_capabilities',

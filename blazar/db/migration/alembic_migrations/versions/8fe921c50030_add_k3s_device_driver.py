@@ -26,16 +26,16 @@ revision = '8fe921c50030'
 down_revision = '42c7fd6e792e'
 
 from alembic import op
-
+import sqlalchemy as sa
 
 def upgrade():
     connection = op.get_bind()
-    connection.execute(
-        "ALTER TABLE devices MODIFY COLUMN device_driver ENUM('zun', 'k8s');")
+    connection.execute(sa.text(
+        "ALTER TABLE devices MODIFY COLUMN device_driver ENUM('zun', 'k8s');"))
 
 
 def downgrade():
     connection = op.get_bind()
-    connection.execute("UPDATE devices SET device_driver = 'zun';")
-    connection.execute(
-        "ALTER TABLE devices MODIFY COLUMN device_driver ENUM('zun')")
+    connection.execute(sa.text("UPDATE devices SET device_driver = 'zun';"))
+    connection.execute(sa.text(
+        "ALTER TABLE devices MODIFY COLUMN device_driver ENUM('zun')"))
