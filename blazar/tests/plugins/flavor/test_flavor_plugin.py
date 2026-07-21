@@ -15,6 +15,7 @@ import json
 from unittest import mock
 
 from novaclient.v2 import flavors
+from oslo_config import cfg
 
 from blazar import context
 from blazar.db.sqlalchemy import api as db_api
@@ -26,6 +27,8 @@ from blazar import tests
 from blazar.tests.db.sqlalchemy import test_sqlalchemy_api as fake
 from blazar.utils.openstack import nova
 from blazar.utils.openstack import placement
+
+CONF = cfg.CONF
 
 
 class TestFlavorPlugin(tests.DBTestCase):
@@ -762,3 +765,279 @@ class TestFlavorPlugin(tests.DBTestCase):
         self.assertEqual(1, result2['VCPU'])
         self.assertEqual(1024, result2['MEMORY_MB'])
         self.assertEqual(10, result2['DISK_GB'])
+
+    _FAKE_SOURCE_FLAVOR = {
+        'vcpus': 1,
+        'ram': 1024,
+        'disk': 10,
+        'OS-FLV-EXT-DATA:ephemeral': 0,
+        'extra_specs': {},
+    }
+
+    def _create_host_with_inventory(self, host_id, vcpus, vcpu_max=None):
+        if vcpu_max is None:
+            vcpu_max = vcpus
+        self._create_fake_host(id=host_id, hypervisor_hostname=str(host_id))
+        db_api.host_resource_inventory_create({
+            'computehost_id': host_id,
+            'resource_class': 'VCPU',
+            'total': vcpus,
+            'reserved': 0,
+            'min_unit': 1,
+            'max_unit': vcpu_max,
+            'step_size': 1,
+            'allocation_ratio': 1.0,
+        })
+
+    def _create_phys_host_reservation(self, lease_id, start_date, end_date,
+                                      host_id, reservation_id):
+        db_api.lease_create({
+            'id': lease_id,
+            'name': lease_id,
+            'project_id': 'proj1',
+            'start_date': start_date,
+            'end_date': end_date,
+            'user_id': 'user1',
+            'trust_id': 'trust1',
+        })
+        for event_type, event_time in [('start_lease', start_date),
+                                       ('end_lease', end_date)]:
+            db_api.event_create({
+                'lease_id': lease_id,
+                'event_type': event_type,
+                'time': event_time,
+                'status': 'pending',
+            })
+        db_api.reservation_create({
+            'id': reservation_id,
+            'lease_id': lease_id,
+            'resource_id': 'host-' + reservation_id,
+            'resource_type': 'physical:host',
+            'status': 'active',
+            'start_date': start_date,
+            'end_date': end_date,
+            'project_id': 'proj1',
+        })
+        db_api.host_allocation_create({
+            'compute_host_id': host_id,
+            'reservation_id': reservation_id,
+        })
+
+    @mock.patch.object(flavor_plugin.FlavorPlugin, '_get_flavor_details')
+    def test_compute_availability_no_eligible_hosts(self, mock_get_flavor):
+        mock_get_flavor.return_value = ({'VCPU': 1}, {}, self._FAKE_SOURCE_FLAVOR)
+        plugin = flavor_plugin.FlavorPlugin()
+        start = datetime.datetime(2030, 1, 1, 8, 0)
+        end = datetime.datetime(2030, 1, 1, 12, 0)
+
+        result = plugin.compute_availability('flavor-1', start, end, 'proj1')
+
+        self.assertEqual('flavor-1', result['flavor_id'])
+        self.assertEqual({'vcpus': 1, 'memory_mb': 1024, 'disk_gb': 10},
+                         result['resource_spec'])
+        self.assertEqual(
+            [{'start': start, 'end': end, 'available': 0, 'total': 0}],
+            result['availability'])
+
+    @mock.patch.object(flavor_plugin.FlavorPlugin, '_get_flavor_details')
+    def test_compute_availability_no_reservations(self, mock_get_flavor):
+        mock_get_flavor.return_value = ({'VCPU': 1}, {}, self._FAKE_SOURCE_FLAVOR)
+        self._create_host_with_inventory('host1', vcpus=4)
+        plugin = flavor_plugin.FlavorPlugin()
+        start = datetime.datetime(2030, 1, 1, 8, 0)
+        end = datetime.datetime(2030, 1, 1, 12, 0)
+
+        result = plugin.compute_availability('flavor-1', start, end, 'proj1')
+
+        self.assertEqual({'vcpus': 1, 'memory_mb': 1024, 'disk_gb': 10},
+                         result['resource_spec'])
+        self.assertEqual(
+            [{'start': start, 'end': end, 'available': 4, 'total': 4}],
+            result['availability'])
+
+    @mock.patch.object(flavor_plugin.FlavorPlugin, '_get_flavor_details')
+    def test_compute_availability_with_instance_reservation(self, mock_get_flavor):
+        mock_get_flavor.return_value = ({'VCPU': 1}, {}, self._FAKE_SOURCE_FLAVOR)
+        self._create_host_with_inventory('host1', vcpus=4)
+        start = datetime.datetime(2030, 1, 1, 8, 0)
+        mid1 = datetime.datetime(2030, 1, 1, 9, 0)
+        mid2 = datetime.datetime(2030, 1, 1, 11, 0)
+        end = datetime.datetime(2030, 1, 1, 12, 0)
+        self._create_lease_and_reservation(
+            lease_id='lease-1', start_date=mid1, end_date=mid2,
+            host_id='host1', reservation_id='res-1')
+        plugin = flavor_plugin.FlavorPlugin()
+
+        result = plugin.compute_availability('flavor-1', start, end, 'proj1')
+
+        # One VCPU consumed during [mid1, mid2]; 4-1=3 available in that window
+        self.assertEqual([
+            {'start': start, 'end': mid1, 'available': 4, 'total': 4},
+            {'start': mid1, 'end': mid2, 'available': 3, 'total': 4},
+            {'start': mid2, 'end': end, 'available': 4, 'total': 4},
+        ], result['availability'])
+
+    @mock.patch.object(flavor_plugin.FlavorPlugin, '_get_flavor_details')
+    def test_compute_availability_reservation_fills_host(self, mock_get_flavor):
+        mock_get_flavor.return_value = ({'VCPU': 1}, {}, self._FAKE_SOURCE_FLAVOR)
+        self._create_host_with_inventory('host1', vcpus=1)
+        start = datetime.datetime(2030, 1, 1, 8, 0)
+        mid1 = datetime.datetime(2030, 1, 1, 9, 0)
+        mid2 = datetime.datetime(2030, 1, 1, 11, 0)
+        end = datetime.datetime(2030, 1, 1, 12, 0)
+        self._create_lease_and_reservation(
+            lease_id='lease-1', start_date=mid1, end_date=mid2,
+            host_id='host1', reservation_id='res-1')
+        plugin = flavor_plugin.FlavorPlugin()
+
+        result = plugin.compute_availability('flavor-1', start, end, 'proj1')
+
+        self.assertEqual([
+            {'start': start, 'end': mid1, 'available': 1, 'total': 1},
+            {'start': mid1, 'end': mid2, 'available': 0, 'total': 1},
+            {'start': mid2, 'end': end, 'available': 1, 'total': 1},
+        ], result['availability'])
+
+    @mock.patch.object(flavor_plugin.FlavorPlugin, '_get_flavor_details')
+    def test_compute_availability_physical_host_blocks_host(self, mock_get_flavor):
+        mock_get_flavor.return_value = ({'VCPU': 1}, {}, self._FAKE_SOURCE_FLAVOR)
+        self._create_host_with_inventory('host1', vcpus=4)
+        start = datetime.datetime(2030, 1, 1, 8, 0)
+        mid1 = datetime.datetime(2030, 1, 1, 9, 0)
+        mid2 = datetime.datetime(2030, 1, 1, 11, 0)
+        end = datetime.datetime(2030, 1, 1, 12, 0)
+        self._create_phys_host_reservation(
+            lease_id='lease-1', start_date=mid1, end_date=mid2,
+            host_id='host1', reservation_id='res-1')
+        plugin = flavor_plugin.FlavorPlugin()
+
+        result = plugin.compute_availability('flavor-1', start, end, 'proj1')
+
+        # Physical host reservation zeros out the entire host
+        self.assertEqual([
+            {'start': start, 'end': mid1, 'available': 4, 'total': 4},
+            {'start': mid1, 'end': mid2, 'available': 0, 'total': 4},
+            {'start': mid2, 'end': end, 'available': 4, 'total': 4},
+        ], result['availability'])
+
+    @mock.patch.object(flavor_plugin.FlavorPlugin, '_get_flavor_details')
+    def test_compute_availability_merges_adjacent_segments(self, mock_get_flavor):
+        mock_get_flavor.return_value = ({'VCPU': 1}, {}, self._FAKE_SOURCE_FLAVOR)
+        self._create_host_with_inventory('host1', vcpus=2)
+        T0 = datetime.datetime(2030, 1, 1, 8, 0)
+        T1 = datetime.datetime(2030, 1, 1, 9, 0)
+        T2 = datetime.datetime(2030, 1, 1, 10, 0)
+        T3 = datetime.datetime(2030, 1, 1, 11, 0)
+        T4 = datetime.datetime(2030, 1, 1, 12, 0)
+        # Two back-to-back reservations each consuming 1 VCPU: [T1,T2] and [T2,T3]
+        self._create_lease_and_reservation(
+            lease_id='lease-1', start_date=T1, end_date=T2,
+            host_id='host1', reservation_id='res-1')
+        self._create_lease_and_reservation(
+            lease_id='lease-2', start_date=T2, end_date=T3,
+            host_id='host1', reservation_id='res-2')
+        plugin = flavor_plugin.FlavorPlugin()
+
+        result = plugin.compute_availability('flavor-1', T0, T4, 'proj1')
+
+        # Both segments have available=1; they should be merged into [T1, T3]
+        self.assertEqual([
+            {'start': T0, 'end': T1, 'available': 2, 'total': 2},
+            {'start': T1, 'end': T3, 'available': 1, 'total': 2},
+            {'start': T3, 'end': T4, 'available': 2, 'total': 2},
+        ], result['availability'])
+
+    @mock.patch.object(flavor_plugin.FlavorPlugin, '_get_flavor_details')
+    def test_compute_availability_cleaning_time_extends_block(self, mock_get_flavor):
+        CONF.set_override('cleaning_time', 60)
+        self.addCleanup(CONF.clear_override, 'cleaning_time')
+        mock_get_flavor.return_value = ({'VCPU': 1}, {}, self._FAKE_SOURCE_FLAVOR)
+        self._create_host_with_inventory('host1', vcpus=1)
+        start = datetime.datetime(2030, 1, 1, 8, 0)
+        mid1 = datetime.datetime(2030, 1, 1, 9, 0)
+        mid2 = datetime.datetime(2030, 1, 1, 10, 0)
+        mid3 = datetime.datetime(2030, 1, 1, 11, 0)  # mid2 + 60 min cleaning
+        end = datetime.datetime(2030, 1, 1, 12, 0)
+        self._create_lease_and_reservation(
+            lease_id='lease-1', start_date=mid1, end_date=mid2,
+            host_id='host1', reservation_id='res-1')
+        plugin = flavor_plugin.FlavorPlugin()
+
+        result = plugin.compute_availability('flavor-1', start, end, 'proj1')
+
+        # Cleaning time extends the blocked window from mid2 to mid3
+        self.assertEqual([
+            {'start': start, 'end': mid1, 'available': 1, 'total': 1},
+            {'start': mid1, 'end': mid3, 'available': 0, 'total': 1},
+            {'start': mid3, 'end': end, 'available': 1, 'total': 1},
+        ], result['availability'])
+
+    @mock.patch.object(flavor_plugin.FlavorPlugin, 'compute_availability')
+    @mock.patch.object(nova.NovaClientWrapper, 'nova',
+                       new_callable=mock.PropertyMock)
+    def test_compute_all_availability_calls_each_flavor(
+            self, mock_nova_prop, mock_compute_av):
+        mock_client = mock.Mock()
+        mock_nova_prop.return_value = mock_client
+        flavor1 = mock.Mock()
+        flavor1.id = 'flavor-1'
+        flavor2 = mock.Mock()
+        flavor2.id = 'flavor-2'
+        mock_client.nova.flavors.list.return_value = [flavor1, flavor2]
+        fake_result = {'flavor_id': 'x', 'resource_spec': {}, 'availability': []}
+        mock_compute_av.return_value = fake_result
+        plugin = flavor_plugin.FlavorPlugin()
+        start = datetime.datetime(2030, 1, 1, 8, 0)
+        end = datetime.datetime(2030, 1, 1, 12, 0)
+
+        results = plugin.compute_all_availability(start, end, 'proj1')
+
+        self.assertEqual(2, len(results))
+        mock_compute_av.assert_any_call('flavor-1', start, end, 'proj1')
+        mock_compute_av.assert_any_call('flavor-2', start, end, 'proj1')
+
+    @mock.patch.object(flavor_plugin.FlavorPlugin, 'compute_availability')
+    @mock.patch.object(nova.NovaClientWrapper, 'nova',
+                       new_callable=mock.PropertyMock)
+    def test_compute_all_availability_skips_failed_flavor(
+            self, mock_nova_prop, mock_compute_av):
+        mock_client = mock.Mock()
+        mock_nova_prop.return_value = mock_client
+        flavor1 = mock.Mock()
+        flavor1.id = 'flavor-1'
+        flavor2 = mock.Mock()
+        flavor2.id = 'flavor-2'
+        mock_client.nova.flavors.list.return_value = [flavor1, flavor2]
+        good_result = {'flavor_id': 'flavor-2', 'resource_spec': {},
+                       'availability': []}
+        mock_compute_av.side_effect = [Exception("not found"), good_result]
+        plugin = flavor_plugin.FlavorPlugin()
+        start = datetime.datetime(2030, 1, 1, 8, 0)
+        end = datetime.datetime(2030, 1, 1, 12, 0)
+
+        results = plugin.compute_all_availability(start, end, 'proj1')
+
+        self.assertEqual(1, len(results))
+        self.assertEqual('flavor-2', results[0]['flavor_id'])
+
+    def test_get_eligible_hosts_with_capacity(self):
+        self._create_host_with_inventory('host1', vcpus=4)
+        self._create_host_with_inventory('host2', vcpus=2)
+        plugin = flavor_plugin.FlavorPlugin()
+
+        result = plugin._get_eligible_hosts_with_capacity(
+            {'VCPU': 1}, {}, 'proj1')
+
+        self.assertEqual({'host1': 4, 'host2': 2}, result)
+
+    def test_get_eligible_hosts_with_capacity_skips_no_inventory(self):
+        self._create_host_with_inventory('host1', vcpus=4)
+        # host2 has no inventory
+        self._create_fake_host(id='host2', hypervisor_hostname='host2')
+        plugin = flavor_plugin.FlavorPlugin()
+
+        result = plugin._get_eligible_hosts_with_capacity(
+            {'VCPU': 1}, {}, 'proj1')
+
+        self.assertIn('host1', result)
+        self.assertNotIn('host2', result)
