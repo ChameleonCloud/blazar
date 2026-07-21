@@ -23,9 +23,12 @@ from oslo_utils import strutils
 
 from blazar import context, status
 from blazar.db import api as db_api
+from blazar.db import utils as db_utils
 from blazar.manager import exceptions as mgr_exceptions
 from blazar.plugins import base
 from blazar.plugins import flavor as plugin
+from blazar.plugins import instances as instances_plugin
+from blazar.plugins import oshosts as oshosts_plugin
 from blazar.plugins.instances import instance_plugin
 from blazar.plugins.oshosts import host_plugin
 from blazar.utils.openstack import nova
@@ -145,26 +148,12 @@ class FlavorPlugin(base.BasePlugin):
             )
         )
 
-    def _query_available_hosts(self, start_date, end_date,
-                               resource_request, resource_traits, project_id, excludes=[]):
-        # TODO(johngarbutt): offload more of this to the db
-        # we should be able to exclude hosts that don't match the
-        # resource requests, e.g. baremetal vs virtual
-        # or missing traits
-
+    def _get_eligible_hosts(self, resource_traits, project_id):
         hosts = db_api.reservable_host_get_all_by_queries([])
 
         hosts = [
             host for host in hosts if self._host_passes(host, project_id)
         ]
-
-        # find reservations for each host in our time period
-        free_hosts, reserved_hosts = \
-            self._instance_plugin.filter_hosts_by_reservation(
-                hosts,
-                start_date - datetime.timedelta(minutes=CONF.cleaning_time),
-                end_date + datetime.timedelta(minutes=CONF.cleaning_time),
-                excludes)
 
         placement_rps_matching_traits = None
         # Only query placement if we have traits to match
@@ -188,9 +177,9 @@ class FlavorPlugin(base.BasePlugin):
             rp['name'] for rp in placement_rps_matching_traits
         } if placement_rps_matching_traits else set()
 
-        available_hosts = []
-        for host_info in (reserved_hosts + free_hosts):
-            hypervisor_hostname = host_info['host']['hypervisor_hostname']
+        eligible_hosts = []
+        for host in hosts:
+            hypervisor_hostname = host['hypervisor_hostname']
             if (
                 resource_traits and
                 hypervisor_hostname not in placment_rps_matching_traits_hostnames
@@ -200,6 +189,27 @@ class FlavorPlugin(base.BasePlugin):
                     hypervisor_hostname
                 )
                 continue
+            eligible_hosts.append(host)
+        return eligible_hosts
+
+    def _query_available_hosts(self, start_date, end_date,
+                               resource_request, resource_traits, project_id, excludes=[]):
+        # TODO(johngarbutt): offload more of this to the db
+        # we should be able to exclude hosts that don't match the
+        # resource requests, e.g. baremetal vs virtual
+        # or missing traits
+        hosts = self._get_eligible_hosts(resource_traits, project_id)
+
+        # find reservations for each host in our time period
+        free_hosts, reserved_hosts = \
+            self._instance_plugin.filter_hosts_by_reservation(
+                hosts,
+                start_date - datetime.timedelta(minutes=CONF.cleaning_time),
+                end_date + datetime.timedelta(minutes=CONF.cleaning_time),
+                excludes)
+
+        available_hosts = []
+        for host_info in (reserved_hosts + free_hosts):
             # check how many instances can fit on this host
             hosts_list = self._get_hosts_list(host_info, resource_request, excludes)
             available_hosts.extend(hosts_list)
@@ -554,3 +564,204 @@ class FlavorPlugin(base.BasePlugin):
         if action == 'email':
             plugins_utils.send_lease_extension_reminder(
                 lease, CONF.os_region_name)
+
+    def _get_eligible_hosts_with_capacity(self, resource_request,
+                                          resource_traits, project_id):
+        """Return {host_id: total_slots} for hosts that can run resource_request.
+
+        Passes empty reservations to _get_hosts_list to get raw max capacity
+        (no existing reservations subtracted).
+        """
+        hosts = self._get_eligible_hosts(resource_traits, project_id)
+        host_capacity = {}
+        for host in hosts:
+            slots = len(self._get_hosts_list(
+                {'host': host, 'reservations': []}, resource_request))
+            if slots:
+                host_capacity[host['id']] = slots
+        return host_capacity
+
+    def compute_all_availability(self, start_date, end_date, project_id):
+        """Return compute_availability results for every public Nova flavor."""
+        user_client = nova.NovaClientWrapper()
+        flavors = user_client.nova.nova.flavors.list()
+        results = []
+        for flavor in flavors:
+            try:
+                results.append(self.compute_availability(
+                    flavor.id, start_date, end_date, project_id))
+            except Exception:
+                LOG.warning("Skipping flavor %s during availability scan",
+                            flavor.id, exc_info=True)
+        return results
+
+    def compute_availability(self, flavor_id, start_date, end_date,
+                             project_id):
+        """Return a change-point timeline of available slot counts for flavor_id.
+
+        Returns a dict with keys:
+          'flavor_id': the Nova flavor UUID
+          'resource_spec': basic flavor dimensions
+          'availability': list of {'start', 'end', 'available', 'total'}
+                          segments covering [start_date, end_date] with no gaps.
+
+        Uses the same resource-accounting logic as _query_available_hosts /
+        _max_usages: tracks per-host per-resource-class usage so that
+        reservations with different resource footprints are handled correctly.
+        Cleaning time is applied to match the window expansion done by
+        _query_available_hosts.
+        """
+        resource_request, resource_traits, source_flavor = \
+            self._get_flavor_details(flavor_id)
+
+        eligible_hosts = self._get_eligible_hosts(resource_traits, project_id)
+
+        # Per-host: inventory (for resource-class capacity) and max slot count
+        # (for capping available() output).  Mirrors the data _get_hosts_list
+        # uses so that slots_for_host() gives results identical to it.
+        host_inventory = {}   # host_id -> {rc: inventory_row}
+        host_max_slots = {}   # host_id -> max slots when the host is empty
+        for host in eligible_hosts:
+            host_crs = db_api.host_resource_inventory_get_all_per_host(
+                host['id'])
+            inv = {cr['resource_class']: cr for cr in host_crs}
+            if not inv:
+                continue
+            slots = len(self._get_hosts_list(
+                {'host': host, 'reservations': []}, resource_request))
+            if not slots:
+                continue
+            host_inventory[host['id']] = inv
+            host_max_slots[host['id']] = slots
+
+        total_slots = sum(host_max_slots.values())
+        host_ids = list(host_max_slots.keys())
+
+        # Expand query window by cleaning_time on both sides, matching
+        # _query_available_hosts which passes padded dates to
+        # filter_hosts_by_reservation.
+        cleaning = datetime.timedelta(minutes=CONF.cleaning_time)
+        all_reservations = db_utils.get_reservations_by_host_ids(
+            host_ids, start_date - cleaning, end_date + cleaning)
+
+        instance_types = frozenset([
+            instances_plugin.RESOURCE_TYPE, plugin.RESOURCE_TYPE])
+
+        # Build a time-bucketed event map.
+        # Instance/flavor reservations: track per-(host, rc) resource deltas
+        #   so that slots_for_host() can compute remaining capacity correctly
+        #   regardless of whether the existing reservations use the same flavor.
+        # Physical:host reservations: set a block flag that zeroes the host.
+        # Cleaning time extends the "occupied" period past lease.end_date.
+        event_map = collections.defaultdict(list)
+        for reservation in all_reservations:
+            lease = reservation.lease
+            blk_start = max(lease.start_date, start_date)
+            blk_end = min(lease.end_date + cleaning, end_date)
+            if blk_start >= blk_end:
+                continue
+
+            if reservation.resource_type in instance_types:
+                ir = reservation.instance_reservation
+                cached = self._get_cached_flavor(ir)
+                if cached:
+                    slot_resources, _ = self._estimate_flavor_resources(cached)
+                else:
+                    slot_resources = {
+                        'VCPU': ir.vcpus,
+                        'MEMORY_MB': ir.memory_mb,
+                        'DISK_GB': ir.disk_gb,
+                    }
+                slots_by_host = collections.Counter(
+                    a.compute_host_id
+                    for a in reservation.computehost_allocations
+                    if a.deleted is None
+                    and a.compute_host_id in host_max_slots
+                )
+                for h_id, slot_count in slots_by_host.items():
+                    rc_delta = {
+                        rc: slot_count * amt
+                        for rc, amt in slot_resources.items()
+                        if amt > 0
+                    }
+                    event_map[blk_start].append((h_id, rc_delta, 0))
+                    event_map[blk_end].append(
+                        (h_id, {rc: -v for rc, v in rc_delta.items()}, 0))
+
+            elif reservation.resource_type == oshosts_plugin.RESOURCE_TYPE:
+                for alloc in reservation.computehost_allocations:
+                    if (alloc.deleted is None
+                            and alloc.compute_host_id in host_max_slots):
+                        h = alloc.compute_host_id
+                        event_map[blk_start].append((h, {}, +1))
+                        event_map[blk_end].append((h, {}, -1))
+
+        host_rc_used = collections.defaultdict(
+            lambda: collections.defaultdict(int))
+        host_block_count = collections.defaultdict(int)
+
+        def slots_for_host(h_id):
+            """Available slots for h_id given current resource usage."""
+            if host_block_count[h_id] > 0:
+                return 0
+            inv = host_inventory[h_id]
+            min_slots = host_max_slots[h_id]
+            for rc, requested in resource_request.items():
+                if not requested:
+                    continue
+                host_inv = inv.get(rc)
+                if not host_inv:
+                    return 0
+                capacity = ((host_inv['total'] - host_inv['reserved'])
+                            * host_inv['allocation_ratio'])
+                used = host_rc_used[h_id][rc]
+                slots = int(max(0.0, capacity - used) / requested)
+                min_slots = min(min_slots, slots)
+            return max(0, min_slots)
+
+        def available_now():
+            return sum(slots_for_host(h_id) for h_id in host_max_slots)
+
+        segments = []
+        prev_time = start_date
+
+        for time in sorted(event_map.keys()):
+            if time >= end_date:
+                break
+            if time > prev_time:
+                segments.append({
+                    'start': prev_time,
+                    'end': time,
+                    'available': available_now(),
+                    'total': total_slots,
+                })
+                prev_time = time
+            for h_id, rc_delta, delta_block in event_map[time]:
+                for rc, delta in rc_delta.items():
+                    host_rc_used[h_id][rc] += delta
+                host_block_count[h_id] += delta_block
+
+        segments.append({
+            'start': prev_time,
+            'end': end_date,
+            'available': available_now(),
+            'total': total_slots,
+        })
+
+        # Merge adjacent segments with the same available count
+        merged = []
+        for seg in segments:
+            if merged and merged[-1]['available'] == seg['available']:
+                merged[-1]['end'] = seg['end']
+            else:
+                merged.append(dict(seg))
+
+        return {
+            'flavor_id': flavor_id,
+            'resource_spec': {
+                'vcpus': source_flavor.get('vcpus'),
+                'memory_mb': source_flavor.get('ram'),
+                'disk_gb': source_flavor.get('disk'),
+            },
+            'availability': merged,
+        }
