@@ -73,10 +73,10 @@ LOG = logging.getLogger(__name__)
 
 
 class BlazarNovaClient(object):
-    def __init__(self, **kwargs):
+    def __init__(self, version=None, **kwargs):
         client_kwargs = base.client_kwargs(**kwargs)
         self.nova = nova_client.Client(
-            CONF.nova.nova_client_version, **client_kwargs)
+            version or CONF.nova.nova_client_version, **client_kwargs)
         self.nova.servers = ServerManager(self.nova)
         self.exceptions = nova_exception
 
@@ -96,9 +96,16 @@ class ServerManager(servers.ServerManager):
 
 
 class NovaClientWrapper(object):
+    _version = None
+
+    def __init__(self, version=None):
+        self._version = version
+
     @property
     def nova(self):
-        nova = BlazarNovaClient(endpoint_override=CONF.nova.endpoint_override)
+        nova = BlazarNovaClient(
+            version=self._version,
+            endpoint_override=CONF.nova.endpoint_override)
         return nova
 
 
