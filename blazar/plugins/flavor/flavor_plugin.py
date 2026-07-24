@@ -414,8 +414,8 @@ class FlavorPlugin(base.BasePlugin):
         raise mgr_exceptions.NotImplemented(
             error="Flavor-based reservation update not yet supported")
 
-    def on_start(self, resource_id):
-        self._instance_plugin.on_start(resource_id)
+    def on_start(self, resource_id, lease=None):
+        self._instance_plugin.on_start(resource_id, lease)
 
-    def on_end(self, resource_id):
-        self._instance_plugin.on_end(resource_id)
+    def on_end(self, resource_id, lease=None):
+        self._instance_plugin.on_end(resource_id, lease)
