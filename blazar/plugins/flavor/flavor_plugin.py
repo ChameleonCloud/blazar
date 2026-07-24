@@ -27,10 +27,23 @@ from blazar.plugins import flavor as plugin
 from blazar.plugins.instances import instance_plugin
 from blazar.plugins.oshosts import host_plugin
 from blazar.utils.openstack import nova
+from blazar.utils import plugins as plugins_utils
 from blazar.utils.openstack import placement
 
+plugin_opts = [
+    cfg.StrOpt('before_end',
+               default='',
+               help='Actions which we will be taken before the end of '
+                    'the lease'),
+]
+
 CONF = cfg.CONF
+CONF.register_opts(plugin_opts, group=plugin.RESOURCE_TYPE)
+
 LOG = logging.getLogger(__name__)
+
+
+before_end_options = ['', 'snapshot', 'default', 'email']
 
 QUERY_TYPE_ALLOCATION = 'allocation'
 
@@ -318,6 +331,11 @@ class FlavorPlugin(base.BasePlugin):
     def reserve_resource(self, reservation_id, values):
         host_ids, source_flavor = self._pick_hosts(values)
 
+        if 'before_end' not in values:
+            values['before_end'] = 'default'
+        if values['before_end'] not in before_end_options:
+            raise mgr_exceptions.MalformedParameter(param='before_end')
+
         instance_reservation_val = {
             'reservation_id': reservation_id,
             # use flavor display values,
@@ -327,7 +345,8 @@ class FlavorPlugin(base.BasePlugin):
             'disk_gb': source_flavor["disk"],
             'amount': values['amount'],
             'affinity': None,
-            'resource_properties': json.dumps(source_flavor)
+            'resource_properties': json.dumps(source_flavor),
+            'before_end': values['before_end'],
         }
         instance_reservation = db_api.instance_reservation_create(
             instance_reservation_val)
@@ -419,3 +438,15 @@ class FlavorPlugin(base.BasePlugin):
 
     def on_end(self, resource_id, lease=None):
         self._instance_plugin.on_end(resource_id, lease)
+
+    def before_end(self, resource_id, lease=None):
+        """Take an action before the end of a lease."""
+        instance_reservation = db_api.instance_reservation_get(resource_id)
+
+        action = instance_reservation['before_end']
+        if action == 'default':
+            action = CONF[plugin.RESOURCE_TYPE].before_end
+
+        if action == 'email':
+            plugins_utils.send_lease_extension_reminder(
+                lease, CONF.os_region_name)
