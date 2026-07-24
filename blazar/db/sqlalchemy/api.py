@@ -1026,6 +1026,57 @@ def host_extra_capability_get_all_per_name(host_id, property_name):
             models.ResourceProperty.property_name == property_name).all()
 
 
+# ComputeHostResourceInventory
+
+def host_resource_inventory_create(values):
+    values = values.copy()
+
+    host_resource_inventory = models.ComputeHostResourceInventory()
+    host_resource_inventory.update(values)
+
+    session = get_session()
+
+    with session.begin():
+        try:
+            host_resource_inventory.save(session=session)
+        except common_db_exc.DBDuplicateEntry as e:
+            # raise exception about duplicated columns (e.columns)
+            raise db_exc.BlazarDBDuplicateEntry(
+                model=host_resource_inventory.__class__.__name__,
+                columns=e.columns)
+
+    return None
+
+
+def host_resource_inventory_get_all_per_host(host_id):
+    session = get_session()
+    with session.begin():
+        query = session.query(models.ComputeHostResourceInventory)
+        return query.filter_by(computehost_id=host_id).all()
+
+
+# ComputeHostTrait
+
+def host_trait_create(values):
+    values = values.copy()
+
+    host_trait = models.ComputeHostTrait()
+    host_trait.update(values)
+
+    session = get_session()
+
+    with session.begin():
+        try:
+            host_trait.save(session=session)
+        except common_db_exc.DBDuplicateEntry as e:
+            # raise exception about duplicated columns (e.columns)
+            raise db_exc.BlazarDBDuplicateEntry(
+                model=host_trait.__class__.__name__,
+                columns=e.columns)
+
+    return None
+
+
 # FloatingIP reservation
 
 def fip_reservation_create(fip_reservation_values):
