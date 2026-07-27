@@ -79,6 +79,7 @@ class TestFlavorPlugin(tests.DBTestCase):
         reservation = {
             'flavor_id': "34eb7166-0e9b-432c-96fd-dff37f22e36e",
             'amount': 4,
+            'project_id': 'fake',
             'affinity': None,
             'start_date': datetime.datetime(2030, 1, 1, 8, 00),
             'end_date': datetime.datetime(2030, 1, 1, 12, 00)
@@ -110,6 +111,7 @@ class TestFlavorPlugin(tests.DBTestCase):
         reservation = {
             'flavor_id': "34eb7166-0e9b-432c-96fd-dff37f22e36e",
             'amount': 5,
+            'project_id': 'fake',
             'affinity': None,
             'start_date': datetime.datetime(2030, 1, 1, 8, 00),
             'end_date': datetime.datetime(2030, 1, 1, 12, 00)
@@ -141,6 +143,7 @@ class TestFlavorPlugin(tests.DBTestCase):
         new_reservation = {
             'flavor_id': "34eb7166-0e9b-432c-96fd-dff37f22e36e",
             'amount': 3,
+            'project_id': 'fake',
             'affinity': None,
             'start_date': datetime.datetime(2030, 1, 1, 8, 00),
             'end_date': datetime.datetime(2030, 1, 1, 12, 00)
@@ -376,7 +379,8 @@ class TestFlavorPlugin(tests.DBTestCase):
             'resource_request': {
                 'VCPU': 1,
             },
-            'resource_traits': {}
+            'resource_traits': {},
+            'project_id': 'fake',
         }
         ret = plugin._query_available_hosts(**query_params)
         self.assertEqual(4, len(ret))
@@ -401,7 +405,8 @@ class TestFlavorPlugin(tests.DBTestCase):
                 'VCPU': 1,
                 'MEMORY_MB': 1024
             },
-            'resource_traits': {}
+            'resource_traits': {},
+            'project_id': 'fake',
         }
         ret = plugin._query_available_hosts(**query_params)
         self.assertEqual(2, len(ret))
@@ -435,6 +440,7 @@ class TestFlavorPlugin(tests.DBTestCase):
             'end_date': datetime.datetime(2020, 7, 7, 19, 0),
             'resource_request': {'VCPU': 1},
             'resource_traits': {},
+            'project_id': 'fake',
         }
 
         # Default (filter_ironic_hosts=True): the ironic host is excluded, so
@@ -450,3 +456,42 @@ class TestFlavorPlugin(tests.DBTestCase):
                         group=plugin.resource_type)
         ret = plugin._query_available_hosts(**query_params)
         self.assertEqual(8, len(ret))
+
+    def test__query_available_hosts_honors_project_restriction(self):
+        get_reservations = self.patch(db_utils,
+                                      'get_reservations_by_host_id')
+        get_reservations.return_value = []
+        plugin = flavor_plugin.FlavorPlugin()
+
+        # A host restricted to project "proj-a" via the authorized_projects
+        # extra capability.
+        self._create_fake_host()
+        db_api.host_extra_capability_create(
+            fake._get_fake_host_extra_capabilities(
+                computehost_id=123, name='authorized_projects',
+                value='proj-a'))
+        db_api.host_resource_inventory_create({
+            'computehost_id': 123,
+            'resource_class': 'VCPU',
+            'total': 4,
+            'reserved': 0,
+            'min_unit': 1,
+            'max_unit': 4,
+            'step_size': 1,
+            'allocation_ratio': 1.0,
+        })
+
+        query_params = {
+            'start_date': datetime.datetime(2020, 7, 7, 18, 0),
+            'end_date': datetime.datetime(2020, 7, 7, 19, 0),
+            'resource_request': {'VCPU': 1},
+            'resource_traits': {},
+        }
+
+        # Authorized project sees the host's 4 slots.
+        ret = plugin._query_available_hosts(project_id='proj-a', **query_params)
+        self.assertEqual(4, len(ret))
+
+        # Unauthorized project sees none.
+        ret = plugin._query_available_hosts(project_id='proj-b', **query_params)
+        self.assertEqual(0, len(ret))

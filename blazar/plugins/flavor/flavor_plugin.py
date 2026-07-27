@@ -96,7 +96,8 @@ class FlavorPlugin(base.BasePlugin):
         start_date = reservation['start_date']
         end_date = reservation['end_date']
         candidates = self._query_available_hosts(
-            start_date, end_date, resource_request, resource_traits)
+            start_date, end_date, resource_request, resource_traits,
+            reservation['project_id'])
 
         # Fail if we have fewer candidates than amount requested
         req_amount = reservation['amount']
@@ -128,7 +129,7 @@ class FlavorPlugin(base.BasePlugin):
             raise mgr_exceptions.MalformedParameter(str(e))
 
     def _query_available_hosts(self, start_date, end_date,
-                               resource_request, resource_traits):
+                               resource_request, resource_traits, project_id):
         # TODO(johngarbutt): offload more of this to the db
         # we should be able to exclude hosts that don't match the
         # resource requests, e.g. baremetal vs virtual
@@ -143,6 +144,14 @@ class FlavorPlugin(base.BasePlugin):
             # ironic (baremetal) hosts; exclude them so they stay available to
             # the physical:host plugin.
             hosts = [h for h in hosts if h['hypervisor_type'] != 'ironic']
+
+        # Honor per-host project restrictions. authorized_projects is an extra
+        # capability, which get_computehost joins to the host for us.
+        hosts = [
+            h for h in hosts
+            if self.is_project_allowed(
+                project_id, self._host_plugin.get_computehost(h['id']))
+        ]
 
         # find reservations for each host in our time period
         free_hosts, reserved_hosts = \
