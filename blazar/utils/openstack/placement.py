@@ -701,15 +701,33 @@ class BlazarPlacementClient(object):
             rp_uuid,
             [self._get_custom_reservation_trait_name(reserv_uuid, project_id)])
 
-    def list_resource_providers(self):
-        """Get all resource providers."""
-        resp = self.get('/resource_providers')
-        resource_providers = []
+    def list_resource_providers(
+            self, query="", microversion=PLACEMENT_MICROVERSION):
+        """Get all resource providers.
+
+        :param query: A string of query parameters, e.g.
+                      "required=CUSTOM_FOO" or "in_tree=<rp_uuid>".
+        :param microversion: The microversion to use for the request.
+        :return: A list of resource provider information
+        :raise: ResourceProviderListFailed on error.
+        """
+        resp = self.get(
+            f'/resource_providers?{query}', microversion=microversion)
         if resp:
             json_resp = resp.json()
             if json_resp['resource_providers']:
-                resource_providers = json_resp['resource_providers']
-        return resource_providers
+                return json_resp['resource_providers']
+            else:
+                return []
+
+        msg = ("Failed to get resource providers. "
+               "Got %(status_code)d: %(err_text)s.")
+        args = {
+            'status_code': resp.status_code,
+            'err_text': resp.text,
+        }
+        LOG.error(msg, args)
+        raise exceptions.ResourceProviderListFailed()
 
     def get_trait_resource_providers(self, trait_name):
         """Get all resource providers that associate with the trait
