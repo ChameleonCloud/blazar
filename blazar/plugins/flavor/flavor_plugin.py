@@ -129,7 +129,8 @@ class FlavorPlugin(base.BasePlugin):
             raise mgr_exceptions.MalformedParameter(str(e))
 
     def _query_available_hosts(self, start_date, end_date,
-                               resource_request, resource_traits, project_id):
+                               resource_request, resource_traits, project_id,
+                               excludes=[]):
         # TODO(johngarbutt): offload more of this to the db
         # we should be able to exclude hosts that don't match the
         # resource requests, e.g. baremetal vs virtual
@@ -159,7 +160,7 @@ class FlavorPlugin(base.BasePlugin):
                 hosts,
                 start_date - datetime.timedelta(minutes=CONF.cleaning_time),
                 end_date + datetime.timedelta(minutes=CONF.cleaning_time),
-                [])
+                excludes)
 
         available_hosts = []
         for host_info in (reserved_hosts + free_hosts):
@@ -449,8 +450,54 @@ class FlavorPlugin(base.BasePlugin):
         self._instance_plugin.cleanup_resources(instance_reservation)
 
     def update_reservation(self, reservation_id, values):
-        raise mgr_exceptions.NotImplemented(
-            error="Flavor-based reservation update not yet supported")
+        """Only supports updating lease start and end date."""
+
+        reservation = db_api.reservation_get(reservation_id)
+        instance_reservation = db_api.instance_reservation_get(
+            reservation['resource_id'])
+
+        if ('flavor_id' in values and
+                values.get('flavor_id') != instance_reservation['flavor_id']):
+            raise mgr_exceptions.CantUpdateParameter(param="flavor_id")
+        if ('amount' in values and
+                values.get('amount') != instance_reservation['amount']):
+            raise mgr_exceptions.CantUpdateParameter(param="amount")
+
+        flavor_id = instance_reservation['flavor_id']
+        resource_request, resource_traits, _ = self._get_flavor_details(
+            flavor_id)
+
+        # The Nova flavor includes this reservation as a custom resource. As it
+        # isn't in the host inventory DB, querying for it won't match anything,
+        # so pop the reservation resource before querying available hosts.
+        rsv_id_rc_format = reservation_id.upper().replace("-", "_")
+        reservation_rc = "CUSTOM_RESERVATION_" + rsv_id_rc_format
+        if reservation_rc in resource_request:
+            resource_request.pop(reservation_rc)
+
+        existing_allocations = db_api.host_allocation_get_all_by_values(
+            reservation_id=reservation_id)
+        lease = db_api.lease_get(reservation['lease_id'])
+        candidates = self._query_available_hosts(
+            values['start_date'],
+            values['end_date'],
+            resource_request, resource_traits,
+            lease['project_id'],
+            [reservation_id]
+        )
+
+        # Ensure that every existing allocation still has a candidate host, so
+        # the reservation can stay where it is over the new time window.
+        alloc_count = collections.Counter(
+            [alloc["compute_host_id"] for alloc in existing_allocations]
+        )
+        candidate_count = collections.Counter(
+            [can["id"] for can in candidates]
+        )
+        # TODO(Mark):  We could support changing "amount" pretty easy here.
+        if not all(alloc_count[key] <= candidate_count.get(key, 0)
+                   for key in alloc_count):
+            raise mgr_exceptions.NotEnoughHostsAvailable()
 
     def on_start(self, resource_id, lease=None):
         self._instance_plugin.on_start(resource_id, lease)
