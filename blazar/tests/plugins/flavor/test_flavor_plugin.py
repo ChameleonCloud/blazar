@@ -555,6 +555,70 @@ class TestFlavorPlugin(tests.DBTestCase):
         ret = plugin._query_available_hosts(project_id='proj-b', **query_params)
         self.assertEqual(0, len(ret))
 
+    @mock.patch.object(
+        placement.BlazarPlacementClient, "list_resource_providers"
+    )
+    def test__hostnames_matching_traits(self, mock_list):
+        plugin = flavor_plugin.FlavorPlugin()
+        mock_list.return_value = [{"name": "def"}]
+
+        result = plugin._hostnames_matching_traits(
+            {"CUSTOM_1": "forbidden", "CUSTOM_2": "required"}
+        )
+
+        self.assertEqual({"def"}, result)
+        mock_list.assert_called_once_with(query="required=!CUSTOM_1,CUSTOM_2")
+
+    def test__hostnames_matching_traits_rejects_invalid_value(self):
+        plugin = flavor_plugin.FlavorPlugin()
+        self.assertRaises(
+            mgr_exceptions.MalformedParameter,
+            plugin._hostnames_matching_traits,
+            {"CUSTOM_1": "bogus"},
+        )
+
+    @mock.patch.object(
+        flavor_plugin.FlavorPlugin, "_hostnames_matching_traits"
+    )
+    def test__query_available_hosts_filters_by_traits(self, mock_matching):
+        self.patch(db_utils, "get_reservations_by_host_id").return_value = []
+        plugin = flavor_plugin.FlavorPlugin()
+
+        # Two hosts with VCPU inventory and distinct hypervisor hostnames.
+        for host_id, hv_name in ((456, "def"), (789, "ghi")):
+            self._create_fake_host(id=host_id, hypervisor_hostname=hv_name)
+            db_api.host_resource_inventory_create(
+                {
+                    "computehost_id": host_id,
+                    "resource_class": "VCPU",
+                    "total": 3,
+                    "reserved": 0,
+                    "min_unit": 1,
+                    "max_unit": 4,
+                    "step_size": 1,
+                    "allocation_ratio": 1.0,
+                }
+            )
+
+        query_params = {
+            "start_date": datetime.datetime(2020, 7, 7, 18, 0),
+            "end_date": datetime.datetime(2020, 7, 7, 19, 0),
+            "resource_request": {"VCPU": 1},
+            "resource_traits": {"CUSTOM_1": "required"},
+            "project_id": "fake",
+        }
+
+        # Only hosts Placement matched are kept (3 slots on host 456).
+        mock_matching.return_value = {"def"}
+        ret = plugin._query_available_hosts(**query_params)
+        self.assertEqual(3, len(ret))
+        self.assertTrue(all(h["id"] == "456" for h in ret))
+
+        # No host matches the required trait -> no candidates.
+        mock_matching.return_value = set()
+        ret = plugin._query_available_hosts(**query_params)
+        self.assertEqual(0, len(ret))
+
     def _fake_flavor_details(self):
         return (
             {"VCPU": 1},
