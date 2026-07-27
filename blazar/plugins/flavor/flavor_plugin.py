@@ -35,6 +35,10 @@ plugin_opts = [
                default='',
                help='Actions which we will be taken before the end of '
                     'the lease'),
+    cfg.BoolOpt('filter_ironic_hosts',
+                default=True,
+                help='Filter out ironic (baremetal) hosts from flavor '
+                     'reservation candidates.'),
 ]
 
 CONF = cfg.CONF
@@ -133,6 +137,12 @@ class FlavorPlugin(base.BasePlugin):
             raise mgr_exceptions.NotImplemented(
                 error="Resource traits not supported yet")
         hosts = db_api.reservable_host_get_all_by_queries([])
+
+        if CONF[self.resource_type].filter_ironic_hosts:
+            # Flavor reservations schedule Nova instances, which cannot run on
+            # ironic (baremetal) hosts; exclude them so they stay available to
+            # the physical:host plugin.
+            hosts = [h for h in hosts if h['hypervisor_type'] != 'ironic']
 
         # find reservations for each host in our time period
         free_hosts, reserved_hosts = \

@@ -15,6 +15,7 @@ import json
 from unittest import mock
 
 from novaclient.v2 import flavors
+from oslo_config import cfg
 
 from blazar import context
 from blazar.db.sqlalchemy import api as db_api
@@ -404,3 +405,48 @@ class TestFlavorPlugin(tests.DBTestCase):
         }
         ret = plugin._query_available_hosts(**query_params)
         self.assertEqual(2, len(ret))
+
+    def test__query_available_hosts_excludes_ironic_hosts(self):
+        get_reservations = self.patch(db_utils,
+                                      'get_reservations_by_host_id')
+        get_reservations.return_value = []
+        plugin = flavor_plugin.FlavorPlugin()
+
+        # A QEMU (virtual) host and an ironic (baremetal) host, both
+        # reservable with identical VCPU inventory.
+        for host_id, hv_type in ((123, 'QEMU'), (456, 'ironic')):
+            host_values = fake._get_fake_host_values(id=host_id)
+            host_values['reservable'] = 1
+            host_values['hypervisor_type'] = hv_type
+            db_api.host_create(host_values)
+            db_api.host_resource_inventory_create({
+                'computehost_id': host_id,
+                'resource_class': 'VCPU',
+                'total': 4,
+                'reserved': 0,
+                'min_unit': 1,
+                'max_unit': 4,
+                'step_size': 1,
+                'allocation_ratio': 1.0,
+            })
+
+        query_params = {
+            'start_date': datetime.datetime(2020, 7, 7, 18, 0),
+            'end_date': datetime.datetime(2020, 7, 7, 19, 0),
+            'resource_request': {'VCPU': 1},
+            'resource_traits': {},
+        }
+
+        # Default (filter_ironic_hosts=True): the ironic host is excluded, so
+        # only the QEMU host's 4 slots are returned.
+        ret = plugin._query_available_hosts(**query_params)
+        self.assertEqual(4, len(ret))
+        self.assertTrue(all(h['hypervisor_type'] != 'ironic' for h in ret))
+
+        # When disabled, both hosts contribute (4 + 4 slots).
+        cfg.CONF.set_override('filter_ironic_hosts', False,
+                              group=plugin.resource_type)
+        self.addCleanup(cfg.CONF.clear_override, 'filter_ironic_hosts',
+                        group=plugin.resource_type)
+        ret = plugin._query_available_hosts(**query_params)
+        self.assertEqual(8, len(ret))
