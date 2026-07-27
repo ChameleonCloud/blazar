@@ -565,22 +565,6 @@ class FlavorPlugin(base.BasePlugin):
             plugins_utils.send_lease_extension_reminder(
                 lease, CONF.os_region_name)
 
-    def _get_eligible_hosts_with_capacity(self, resource_request,
-                                          resource_traits, project_id):
-        """Return {host_id: total_slots} for hosts that can run resource_request.
-
-        Passes empty reservations to _get_hosts_list to get raw max capacity
-        (no existing reservations subtracted).
-        """
-        hosts = self._get_eligible_hosts(resource_traits, project_id)
-        host_capacity = {}
-        for host in hosts:
-            slots = len(self._get_hosts_list(
-                {'host': host, 'reservations': []}, resource_request))
-            if slots:
-                host_capacity[host['id']] = slots
-        return host_capacity
-
     def compute_all_availability(self, start_date, end_date, project_id):
         """Return compute_availability results for every public Nova flavor."""
         user_client = nova.NovaClientWrapper()

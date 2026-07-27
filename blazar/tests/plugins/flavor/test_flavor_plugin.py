@@ -1020,24 +1020,3 @@ class TestFlavorPlugin(tests.DBTestCase):
         self.assertEqual(1, len(results))
         self.assertEqual('flavor-2', results[0]['flavor_id'])
 
-    def test_get_eligible_hosts_with_capacity(self):
-        self._create_host_with_inventory('host1', vcpus=4)
-        self._create_host_with_inventory('host2', vcpus=2)
-        plugin = flavor_plugin.FlavorPlugin()
-
-        result = plugin._get_eligible_hosts_with_capacity(
-            {'VCPU': 1}, {}, 'proj1')
-
-        self.assertEqual({'host1': 4, 'host2': 2}, result)
-
-    def test_get_eligible_hosts_with_capacity_skips_no_inventory(self):
-        self._create_host_with_inventory('host1', vcpus=4)
-        # host2 has no inventory
-        self._create_fake_host(id='host2', hypervisor_hostname='host2')
-        plugin = flavor_plugin.FlavorPlugin()
-
-        result = plugin._get_eligible_hosts_with_capacity(
-            {'VCPU': 1}, {}, 'proj1')
-
-        self.assertIn('host1', result)
-        self.assertNotIn('host2', result)
