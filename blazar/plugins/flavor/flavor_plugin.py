@@ -424,16 +424,22 @@ class FlavorPlugin(base.BasePlugin):
             raise mgr_exceptions.ReservationTypeConflict()
 
         reservation_id = instance_reservation['reservation_id']
+        # instance_reservation doesn't include lease_id, look it up
+        res = db_api.reservation_get(reservation_id)
+        lease = db_api.lease_get(res['lease_id'])
         flavor_details = {
             'flavorid': reservation_id,
             'name': instance_plugin.RESERVATION_PREFIX + ":" + reservation_id,
             'vcpus': source_flavor['vcpus'],
             'ram': source_flavor['ram'],
             'disk': source_flavor['disk'],
-            'is_public': False
+            'is_public': False,
+            'description': f'{lease["name"]} (ID: {lease["id"]})',
         }
-        # create flavor using admin access
-        reserved_flavor = self._instance_plugin.nova.nova.flavors.create(
+        # create flavor using admin access. Need nova microversion >= 2.55 to 
+        # support 'description' field for flavors.
+        nova_client = nova.NovaClientWrapper(version='2.55')
+        reserved_flavor = nova_client.nova.flavors.create(
             **flavor_details)
 
         # Set extra specs to the flavor

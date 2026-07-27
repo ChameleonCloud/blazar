@@ -395,6 +395,10 @@ class TestFlavorPlugin(tests.DBTestCase):
         }
         mock_flavor = mock.Mock()
         mock_create.return_value = mock_flavor
+        res_get = self.patch(flavor_plugin.db_api, 'reservation_get')
+        res_get.return_value = {'lease_id': 'lease-1'}
+        lease_get = self.patch(flavor_plugin.db_api, 'lease_get')
+        lease_get.return_value = {'name': 'my-lease', 'id': 'lease-1'}
 
         plugin._create_flavor(fake_reservation)
 
@@ -405,7 +409,8 @@ class TestFlavorPlugin(tests.DBTestCase):
         })
         mock_create.assert_called_once_with(
             flavorid='12345', name='reservation:12345', vcpus=2, ram=1024,
-            disk=10, is_public=False)
+            disk=10, is_public=False,
+            description='my-lease (ID: lease-1)')
 
     def test__query_available_hosts(self):
         get_reservations = self.patch(db_utils,
