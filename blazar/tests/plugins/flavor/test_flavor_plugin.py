@@ -30,10 +30,64 @@ from blazar.utils.openstack import placement
 
 
 class TestFlavorPlugin(tests.DBTestCase):
-    def _create_fake_host(self):
-        host_values = fake._get_fake_host_values(id=123)
+    def _create_fake_host(self, id=123, hypervisor_hostname=None, **kwargs):
+        host_values = fake._get_fake_host_values(id=id)
+        if hypervisor_hostname:
+            host_values['hypervisor_hostname'] = hypervisor_hostname
+        host_values.update(kwargs)
         host_values["reservable"] = 1
         db_api.host_create(host_values)
+
+    def _create_lease_and_reservation(self, lease_id, start_date, end_date,
+                                      host_id, reservation_id,
+                                      flavor_id='flavor1'):
+        db_api.lease_create({
+            'id': lease_id,
+            'name': lease_id,
+            'project_id': 'proj1',
+            'start_date': start_date,
+            'end_date': end_date,
+            'user_id': 'user1',
+            'trust_id': 'trust1',
+        })
+        for event_type, event_time in [('start_lease', start_date),
+                                       ('end_lease', end_date)]:
+            db_api.event_create({
+                'lease_id': lease_id,
+                'event_type': event_type,
+                'time': event_time,
+                'status': 'pending' if event_type == 'end_lease' else 'done',
+            })
+
+        inst_res = {
+            'id': reservation_id,
+            'lease_id': lease_id,
+            'resource_id': 'inst-' + reservation_id,
+            'resource_type': 'virtual:instance',
+            'status': 'active',
+            'start_date': start_date,
+            'end_date': end_date,
+            'project_id': 'proj1',
+        }
+        db_api.reservation_create(inst_res)
+        inst_res_details = {
+            'id': 'inst-' + reservation_id,
+            'reservation_id': reservation_id,
+            'flavor_id': flavor_id,
+            'amount': 1,
+            'vcpus': 1,
+            'memory_mb': 1024,
+            'disk_gb': 10,
+            'affinity': False,
+            'resource_properties': (
+                '{"OS-FLV-EXT-DATA:ephemeral": 0, "disk": 10, "ram": 1024, '
+                '"vcpus": 1, "extra_specs": {}}'),
+        }
+        db_api.instance_reservation_create(inst_res_details)
+        db_api.host_allocation_create({
+            'compute_host_id': host_id,
+            'reservation_id': reservation_id,
+        })
 
     def test_get(self):
         plugin = flavor_plugin.FlavorPlugin()
@@ -495,3 +549,149 @@ class TestFlavorPlugin(tests.DBTestCase):
         # Unauthorized project sees none.
         ret = plugin._query_available_hosts(project_id='proj-b', **query_params)
         self.assertEqual(0, len(ret))
+
+    def _fake_flavor_details(self):
+        return (
+            {"VCPU": 1},
+            {},
+            {
+                "vcpus": 1,
+                "ram": 1024,
+                "disk": 10,
+                "OS-FLV-EXT-DATA:ephemeral": 0,
+            },
+        )
+
+    def _create_host_with_vcpu(self, host_id):
+        self._create_fake_host(
+            id=host_id, hypervisor_hostname=host_id, vcpus=1)
+        db_api.host_resource_inventory_create({
+            'computehost_id': host_id,
+            'resource_class': 'VCPU',
+            'total': 1,
+            'reserved': 0,
+            'min_unit': 1,
+            'max_unit': 1,
+            'step_size': 1,
+            'allocation_ratio': 1.0,
+        })
+
+    def test_update_reservation_extension_should_pass_with_full_host(self):
+        # Scenario: Host has 1 VCPU.
+        # Reservation consumes 1 VCPU.
+        # User extends Reservation.
+        # Should succeed because the reservation's own usage should be excluded.
+
+        plugin = flavor_plugin.FlavorPlugin()
+
+        # 1. Setup Host
+        self._create_host_with_vcpu('host1')
+
+        # 2. Setup Existing Reservation
+        self._create_lease_and_reservation(
+            lease_id='lease-1',
+            start_date=datetime.datetime(2030, 1, 1, 10, 0),
+            end_date=datetime.datetime(2030, 1, 1, 11, 0),
+            host_id='host1',
+            reservation_id='res-1'
+        )
+
+        new_values = {
+            'start_date': datetime.datetime(2030, 1, 1, 10, 0),
+            'end_date': datetime.datetime(2030, 1, 1, 12, 0),
+            'project_id': 'proj1',
+            'amount': 1,
+            'flavor_id': 'flavor1',
+        }
+
+        # Mock Nova/Flavor/Placement calls to avoid external calls
+        # We need _get_flavor_details to return our VCPU requirement
+        with mock.patch.object(plugin, '_get_flavor_details') as mock_get_flavor:
+            mock_get_flavor.return_value = self._fake_flavor_details()
+            plugin.update_reservation('res-1', new_values)
+
+    def test_update_reservation_extension_should_fail_if_blocked(self):
+        # Scenario: Host has 1 VCPU.
+        # Lease 1: 10:00-11:00 (1 VCPU).
+        # Lease 2: 11:00-12:00 (1 VCPU).
+        # User extends Lease 1 to 12:00.
+        # Should FAIL because Lease 2 consumes the resource 11:00-12:00.
+
+        plugin = flavor_plugin.FlavorPlugin()
+
+        # 1. Setup Host
+        self._create_host_with_vcpu('host1')
+
+        # 2. Setup Lease 1 (The one we update)
+        self._create_lease_and_reservation(
+            lease_id='lease-1',
+            start_date=datetime.datetime(2030, 1, 1, 10, 0),
+            end_date=datetime.datetime(2030, 1, 1, 11, 0),
+            host_id='host1',
+            reservation_id='res-1')
+
+        # 3. Setup Lease 2 (Blocking lease)
+        self._create_lease_and_reservation(
+            lease_id='lease-2',
+            start_date=datetime.datetime(2030, 1, 1, 11, 0),
+            end_date=datetime.datetime(2030, 1, 1, 12, 0),
+            host_id='host1',
+            reservation_id='res-2')
+
+        new_values = {
+            'start_date': datetime.datetime(2030, 1, 1, 10, 0),
+            'end_date': datetime.datetime(2030, 1, 1, 12, 0),
+            'project_id': 'proj1',
+            'amount': 1,
+            'flavor_id': 'flavor1',
+        }
+
+        with mock.patch.object(plugin, '_get_flavor_details') as mock_get_flavor:
+            mock_get_flavor.return_value = self._fake_flavor_details()
+            self.assertRaises(mgr_exceptions.NotEnoughHostsAvailable,
+                              plugin.update_reservation,
+                              'res-1', new_values)
+
+    def test_update_reservation_extension_mixed_hosts(self):
+        # Scenario:
+        # Host 1 (1 VCPU). Lease 1 (1 VCPU) 10:00-11:00.
+        # Host 2 (1 VCPU). Lease 2 (1 VCPU) 10:00-12:00.
+        # User extends Lease 1 to 12:00.
+        # Host 1 should be available (exclude self).
+        # Host 2 should be unavailable (Lease 2).
+
+        plugin = flavor_plugin.FlavorPlugin()
+
+        # 1. Setup Hosts
+        self._create_host_with_vcpu('host1')
+        self._create_host_with_vcpu('host2')
+
+        # 2. Setup Lease 1 on Host 1
+        self._create_lease_and_reservation(
+            lease_id='lease-1',
+            start_date=datetime.datetime(2030, 1, 1, 10, 0),
+            end_date=datetime.datetime(2030, 1, 1, 11, 0),
+            host_id='host1',
+            reservation_id='res-1'
+        )
+
+        # 3. Setup Lease 2 on Host 2 (Blocking)
+        self._create_lease_and_reservation(
+            lease_id='lease-2',
+            start_date=datetime.datetime(2030, 1, 1, 10, 0),
+            end_date=datetime.datetime(2030, 1, 1, 12, 0),
+            host_id='host2',
+            reservation_id='res-2'
+        )
+
+        new_values = {
+            'start_date': datetime.datetime(2030, 1, 1, 10, 0),
+            'end_date': datetime.datetime(2030, 1, 1, 12, 0),
+            'project_id': 'proj1',
+            'amount': 1,
+            'flavor_id': 'flavor1',
+        }
+
+        with mock.patch.object(plugin, '_get_flavor_details') as mock_get_flavor:
+            mock_get_flavor.return_value = self._fake_flavor_details()
+            plugin.update_reservation('res-1', new_values)
