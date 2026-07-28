@@ -764,3 +764,65 @@ class TestFlavorPlugin(tests.DBTestCase):
         with mock.patch.object(plugin, '_get_flavor_details') as mock_get_flavor:
             mock_get_flavor.return_value = self._fake_flavor_details()
             plugin.update_reservation('res-1', new_values)
+
+    def test__max_usages_spread_hosts(self):
+        # Scenario:
+        # Reservation R (amount=2)
+        # Allocation 1: Host A
+        # Allocation 2: Host B
+        # _max_usages(Host A, [R]) should return 1 instance worth of resources.
+
+        plugin = flavor_plugin.FlavorPlugin()
+
+        # 1. Setup Hosts
+        self._create_fake_host(id='host1', hypervisor_hostname='host1')
+        self._create_fake_host(id='host2', hypervisor_hostname='host2')
+
+        # 2. Setup Lease and Reservation
+        start_date = datetime.datetime(2030, 1, 1, 10, 0)
+        end_date = datetime.datetime(2030, 1, 1, 11, 0)
+
+        lease_id = 'lease-1'
+        reservation_id = 'res-1'
+
+        self._create_lease_and_reservation(
+            lease_id=lease_id,
+            start_date=start_date,
+            end_date=end_date,
+            host_id='host1',
+            reservation_id=reservation_id,
+            flavor_id='flavor1'
+        )
+
+        # 3. Add second allocation on host2
+        db_api.host_allocation_create({
+            'compute_host_id': 'host2',
+            'reservation_id': reservation_id
+        })
+
+        # 4. Update reservation amount to 2
+        instance_res = db_api.instance_reservation_get(
+            'inst-' + reservation_id)
+        db_api.instance_reservation_update(instance_res['id'], {'amount': 2})
+
+        host1 = db_api.host_get('host1')
+        reservations = db_utils.get_reservations_by_host_id(
+            'host1', start_date, end_date)
+
+        # 5. Call _max_usages
+        result = plugin._max_usages(host1, reservations)
+
+        # Expected: 1 instance on host1 (even if total amount is 2)
+        self.assertEqual(1, result['VCPU'])
+        self.assertEqual(1024, result['MEMORY_MB'])
+        self.assertEqual(10, result['DISK_GB'])
+
+        # 6. Verify for host2 as well
+        host2 = db_api.host_get('host2')
+        reservations2 = db_utils.get_reservations_by_host_id(
+            'host2', start_date, end_date)
+        result2 = plugin._max_usages(host2, reservations2)
+
+        self.assertEqual(1, result2['VCPU'])
+        self.assertEqual(1024, result2['MEMORY_MB'])
+        self.assertEqual(10, result2['DISK_GB'])

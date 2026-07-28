@@ -203,7 +203,8 @@ class FlavorPlugin(base.BasePlugin):
         # target time window for this host
 
         # get high water mark of usage during all reservations
-        max_usage = self._max_usages(host_info['reservations'])
+        max_usage = self._max_usages(host_info['host'],
+                                     host_info['reservations'])
         LOG.debug(f"Max usage {host_info['host']['hypervisor_hostname']} "
                   f"is {max_usage}")
 
@@ -267,11 +268,16 @@ class FlavorPlugin(base.BasePlugin):
         if source_flavor and "OS-FLV-EXT-DATA:ephemeral" in source_flavor:
             return json.loads(source_flavor)
 
-    def _max_usages(self, reservations):
+    def _max_usages(self, host, reservations):
         """For reservation list for a host, find resource high watermark."""
         def resource_usage_by_event(event):
             instance_reservation = event['reservation']['instance_reservation']
-            request_count = instance_reservation["amount"]
+            # 'amount' is the total instance count across all hosts; count
+            # only the allocations of this reservation on this host.
+            request_count = len([
+                c for c in event['reservation'].computehost_allocations
+                if c.compute_host_id == host['id']
+            ])
             source_flavor = self._get_cached_flavor(instance_reservation)
             if source_flavor:
                 flavor_resource_inventory, _ = \
