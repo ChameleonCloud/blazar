@@ -211,12 +211,15 @@ class PhysicalHostPluginTestCase(tests.TestCase):
     @mock.patch.object(placement.BlazarPlacementClient, 'get_traits')
     @mock.patch.object(placement.BlazarPlacementClient, 'get_inventory')
     @mock.patch.object(placement.BlazarPlacementClient,
+                       'list_resource_providers')
+    @mock.patch.object(placement.BlazarPlacementClient,
                        'get_resource_provider')
     def test_create_host_without_extra_capabilities(
-            self, mock_get_rp, mock_get_inventory, mock_get_traits,
-            mock_db_inv, mock_db_trait):
+            self, mock_get_rp, mock_list_rp, mock_get_inventory,
+            mock_get_traits, mock_db_inv, mock_db_trait):
 
         mock_get_rp.return_value = {"uuid": "fake_rp_uuid"}
+        mock_list_rp.return_value = [{"uuid": "fake_rp_uuid"}]
         mock_get_traits.return_value = ["CUSTOM_HW_FPGA_CLASS1"]
         mock_get_inventory.return_value = {
             "inventories": {
@@ -250,6 +253,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         fake_db_return.pop("id")
         self.db_host_create.assert_called_once_with(fake_db_return)
         self.prov_create.assert_called_once_with('hypvsr1')
+        mock_list_rp.assert_called_once_with(query="in_tree=fake_rp_uuid")
         mock_get_inventory.assert_called_once_with("fake_rp_uuid")
         mock_get_traits.assert_called_once_with("fake_rp_uuid")
         mock_db_trait.assert_called_once_with({
@@ -272,12 +276,15 @@ class PhysicalHostPluginTestCase(tests.TestCase):
     @mock.patch.object(placement.BlazarPlacementClient, 'get_traits')
     @mock.patch.object(placement.BlazarPlacementClient, 'get_inventory')
     @mock.patch.object(placement.BlazarPlacementClient,
+                       'list_resource_providers')
+    @mock.patch.object(placement.BlazarPlacementClient,
                        'get_resource_provider')
     def test_create_host_with_extra_capabilities(
-            self, mock_get_rp, mock_get_inventory, mock_get_traits,
-            mock_db_inv, mock_db_trait):
+            self, mock_get_rp, mock_list_rp, mock_get_inventory,
+            mock_get_traits, mock_db_inv, mock_db_trait):
 
         mock_get_rp.return_value = {"uuid": "fake_rp_uuid"}
+        mock_list_rp.return_value = [{"uuid": "fake_rp_uuid"}]
         mock_get_traits.return_value = []
         mock_get_inventory.return_value = {
             "inventories": {
@@ -312,6 +319,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         self.prov_create.assert_called_once_with('hypvsr1')
         self.db_host_extra_capability_create.assert_called_once_with(fake_capa)
         self.assertEqual(fake_host, host)
+        mock_list_rp.assert_called_once_with(query="in_tree=fake_rp_uuid")
         mock_get_inventory.assert_called_once_with("fake_rp_uuid")
         mock_get_traits.assert_called_once_with("fake_rp_uuid")
         mock_db_trait.assert_not_called()
@@ -326,14 +334,139 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             "total": 5825
         })
 
+    @mock.patch.object(db_api, 'host_trait_create')
+    @mock.patch.object(db_api, 'host_resource_inventory_create')
+    @mock.patch.object(placement.BlazarPlacementClient, 'get_traits')
+    @mock.patch.object(placement.BlazarPlacementClient, 'get_inventory')
+    @mock.patch.object(placement.BlazarPlacementClient,
+                       'list_resource_providers')
     @mock.patch.object(placement.BlazarPlacementClient,
                        'get_resource_provider')
+    def test_create_host_with_child_resource_providers(
+            self, mock_get_rp, mock_list_rp, mock_get_inventory,
+            mock_get_traits, mock_db_inv, mock_db_trait):
+
+        mock_get_rp.return_value = {"uuid": "fake_rp_uuid"}
+        mock_list_rp.return_value = [{"uuid": "fake_rp_uuid"},
+                                     {"uuid": "fake_child_rp_uuid"}]
+
+        def fake_get_traits(rp_uuid):
+            if rp_uuid == "fake_rp_uuid":
+                return ["CUSTOM_PARENT_TRAIT"]
+            else:
+                return ["CUSTOM_CHILD_TRAIT"]
+        mock_get_traits.side_effect = fake_get_traits
+
+        def fake_get_inventory(rp_uuid):
+            if rp_uuid == "fake_rp_uuid":
+                return {
+                    "inventories": {
+                        "MEMORY_MB": {
+                            "allocation_ratio": 1.5,
+                            "max_unit": 5825,
+                            "min_unit": 1,
+                            "reserved": 512,
+                            "step_size": 1,
+                            "total": 5825
+                        },
+                        "CUSTOM_RESOURCE": {
+                            "allocation_ratio": 1.0,
+                            "max_unit": 10,
+                            "min_unit": 1,
+                            "reserved": 2,
+                            "step_size": 1,
+                            "total": 10
+                        }
+                    },
+                    "resource_provider_generation": 7
+                }
+            else:
+                return {
+                    "inventories": {
+                        "CUSTOM_RESOURCE": {
+                            "allocation_ratio": 1.0,
+                            "max_unit": 5,
+                            "min_unit": 1,
+                            "reserved": 1,
+                            "step_size": 1,
+                            "total": 20
+                        }
+                    },
+                    "resource_provider_generation": 2
+                }
+        mock_get_inventory.side_effect = fake_get_inventory
+
+        fake_host = self.fake_host.copy()
+        fake_request = fake_host.copy()
+        self.get_extra_capabilities.return_value = {}
+        self.db_host_create.return_value = fake_host
+
+        self.fake_phys_plugin.create_computehost(fake_request)
+
+        expected_fake_host = self.fake_host.copy()
+        expected_fake_host.pop("id")
+        self.db_host_create.assert_called_once_with(expected_fake_host)
+
+        mock_list_rp.assert_called_once_with(query="in_tree=fake_rp_uuid")
+
+        expected_traits = [
+            mock.call({
+                'computehost_id': '1',
+                'trait': "CUSTOM_PARENT_TRAIT",
+            })
+        ]
+        mock_db_trait.assert_has_calls(expected_traits, any_order=True)
+
+        expected_inv = [
+            mock.call({
+                'computehost_id': '1',
+                'resource_class': "MEMORY_MB",
+                "allocation_ratio": 1.5,
+                "max_unit": 5825,
+                "min_unit": 1,
+                "step_size": 1,
+                "reserved": 512,
+                "total": 5825
+            }),
+            mock.call({
+                'computehost_id': '1',
+                'resource_class': "CUSTOM_RESOURCE",
+                "allocation_ratio": 1.0,
+                "max_unit": 10,
+                "min_unit": 1,
+                "step_size": 1,
+                "reserved": 3,
+                "total": 30
+            })
+        ]
+        mock_db_inv.assert_has_calls(expected_inv, any_order=True)
+
+    @mock.patch.object(
+        placement.BlazarPlacementClient, "get_resource_provider"
+    )
     def test_create_host_without_resource_provider(self, mock_get_rp):
         mock_get_rp.return_value = None
         fake_host = self.fake_host.copy()
-        self.assertRaises(manager_exceptions.ResourceProviderNotFound,
-                          self.fake_phys_plugin.create_computehost,
-                          fake_host)
+        self.assertRaises(
+            manager_exceptions.ResourceProviderNotFound,
+            self.fake_phys_plugin.create_computehost,
+            fake_host,
+        )
+
+    @mock.patch.object(placement.BlazarPlacementClient,
+                       'list_resource_providers')
+    @mock.patch.object(placement.BlazarPlacementClient,
+                       'get_resource_provider')
+    def test_create_host_with_empty_resource_provider_tree(
+            self, mock_get_rp, mock_list_rp):
+        mock_get_rp.return_value = {"uuid": "fake_rp_uuid"}
+        mock_list_rp.return_value = []
+        fake_host = self.fake_host.copy()
+        self.assertRaises(
+            manager_exceptions.ResourceProviderNotFound,
+            self.fake_phys_plugin.create_computehost,
+            fake_host,
+        )
 
     def test_create_host_with_capabilities_too_long(self):
         fake_host = self.fake_host.copy()
