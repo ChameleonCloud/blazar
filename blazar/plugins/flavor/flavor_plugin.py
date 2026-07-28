@@ -135,9 +135,6 @@ class FlavorPlugin(base.BasePlugin):
         # we should be able to exclude hosts that don't match the
         # resource requests, e.g. baremetal vs virtual
         # or missing traits
-        if resource_traits:
-            raise mgr_exceptions.NotImplemented(
-                error="Resource traits not supported yet")
         hosts = db_api.reservable_host_get_all_by_queries([])
 
         if CONF[self.resource_type].filter_ironic_hosts:
@@ -154,6 +151,12 @@ class FlavorPlugin(base.BasePlugin):
                 project_id, self._host_plugin.get_computehost(h['id']))
         ]
 
+        # Keep only hosts Placement says satisfy the flavor's required and
+        # forbidden traits.
+        if resource_traits:
+            matching = self._hostnames_matching_traits(resource_traits)
+            hosts = [h for h in hosts if h["hypervisor_hostname"] in matching]
+
         # find reservations for each host in our time period
         free_hosts, reserved_hosts = \
             self._instance_plugin.filter_hosts_by_reservation(
@@ -168,6 +171,29 @@ class FlavorPlugin(base.BasePlugin):
             hosts_list = self._get_hosts_list(host_info, resource_request)
             available_hosts.extend(hosts_list)
         return available_hosts
+
+    def _hostnames_matching_traits(self, resource_traits):
+        """Hypervisor hostnames whose Placement RP satisfies the traits.
+
+        resource_traits maps a trait name to "required" or "forbidden".
+        Returns the set of matching hostnames (empty if none match).
+        """
+        query_traits = []
+        for trait, value in resource_traits.items():
+            if value == "required":
+                query_traits.append(trait)
+            elif value == "forbidden":
+                # placement expresses a forbidden trait as `!<trait>`
+                query_traits.append(f"!{trait}")
+            else:
+                raise mgr_exceptions.MalformedParameter(
+                    param="trait:%s" % trait
+                )
+
+        rps = self._placement_client.list_resource_providers(
+            query="required=%s" % ",".join(query_traits)
+        )
+        return {rp["name"] for rp in rps or []}
 
     def _get_hosts_list(self, host_info, resource_request):
         """For given host, work out how many instances can fit on it."""
