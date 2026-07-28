@@ -862,7 +862,7 @@ class ManagerService(service_utils.RPCServer):
             except exceptions.NotEnoughResourcesAvailable:
                 candidate_ids = None
                 # Retry this function if allowed
-                if hasattr(
+                if plugin.resource_type in CONF and hasattr(
                     CONF[plugin.resource_type],
                     "retry_allocation_without_defaults"
                 ) and CONF[plugin.resource_type]\
@@ -877,7 +877,7 @@ class ManagerService(service_utils.RPCServer):
 
                 # If the retry didn't get candidate IDs, raise an exception
                 if candidate_ids is None:
-                    if hasattr(
+                    if plugin.resource_type in CONF and hasattr(
                         CONF[plugin.resource_type],
                         "display_default_resource_properties"
                     ) and CONF[plugin.resource_type]\
