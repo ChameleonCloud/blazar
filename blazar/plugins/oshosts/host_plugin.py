@@ -425,8 +425,44 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         if rp is None:
             raise manager_ex.ResourceProviderNotFound(host=hostname)
 
-        inventories = self.placement_client.get_inventory(rp['uuid'])
-        for rc, inventory in inventories['inventories'].items():
+        # Sum inventory across the resource-provider and all child RPs. Nested
+        # RPs such as GPUs carry their own inventory in placement.
+        tree_rps = self.placement_client.list_resource_providers(
+            query="in_tree=%s" % rp['uuid'])
+        # This shouldn't happen, since a resource provider is always in its own
+        # tree. Make sure we bail out instead of creating an empty host.
+        if not tree_rps:
+            raise manager_ex.ResourceProviderNotFound(host=hostname)
+
+        aggregated_inventories = {}
+        for tree_rp in tree_rps:
+            inventories = self.placement_client.get_inventory(
+                tree_rp['uuid'])['inventories']
+            for resource_class, inventory in inventories.items():
+                if resource_class not in aggregated_inventories:
+                    # 'total' and 'reserved' sum across all RPs in the tree.
+                    # Per-unit fields come from the first RP for this resource.
+                    aggregated_inventories[resource_class] = {
+                        'total': 0,
+                        'reserved': 0,
+                        'min_unit': inventory['min_unit'],
+                        'max_unit': inventory['max_unit'],
+                        'step_size': inventory['step_size'],
+                        'allocation_ratio': inventory['allocation_ratio'],
+                    }
+
+                agg = aggregated_inventories[resource_class]
+                if agg['max_unit'] != inventory['max_unit']:
+                    new_max = max(agg['max_unit'], inventory['max_unit'])
+                    LOG.warning(
+                        "Different max_units for resource %s on host %s, "
+                        "using max value %s",
+                        resource_class, hostname, new_max)
+                    agg['max_unit'] = new_max
+                agg['total'] += inventory['total']
+                agg['reserved'] += inventory['reserved']
+
+        for rc, inventory in aggregated_inventories.items():
             resource_inventory = {
                 'computehost_id': host['id'],
                 'resource_class': rc,
