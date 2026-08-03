@@ -449,7 +449,12 @@ class FlavorPlugin(base.BasePlugin):
             # [scheduler]placement_aggregate_required_for_tenants=True
             'filter_tenant_id': ctx.project_id,
         }
-        agg = pool.create(name=reservation_id, metadata=pool_metadata)
+
+        agg = pool.create(
+            name=reservation_id,
+            metadata=pool_metadata,
+            project_id=ctx.project_id,
+        )
 
         # TODO(johngarbutt) maybe add inventory here, but mark
         # then inventory as reserved to start with?

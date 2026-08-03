@@ -368,8 +368,9 @@ class TestFlavorPlugin(tests.DBTestCase):
         mock_pool_create.assert_called_once_with(
             name="12345",
             metadata={'reservation': '12345',
-                      'filter_tenant_id': 'fake-project-id'}
-        ),
+                      'filter_tenant_id': 'fake-project-id'},
+            project_id='fake-project-id'
+        )
 
     @mock.patch.object(flavors.FlavorManager, 'create')
     def test_create_flavor(self, mock_create):
