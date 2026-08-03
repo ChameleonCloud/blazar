@@ -29,6 +29,7 @@ from blazar.manager import exceptions as manager_ex
 from blazar.plugins import base
 from blazar.plugins import monitor
 from blazar.plugins import oshosts as plugin
+from blazar.plugins import flavor as flavor_plugin
 from blazar import status
 from blazar.utils.openstack import heat
 from blazar.utils.openstack import ironic
@@ -525,6 +526,8 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             datetime.date.max)
 
         for r in reservations:
+            if r['resource_type'] == flavor_plugin.RESOURCE_TYPE:
+                continue
             plugin_reservation = db_utils.get_plugin_reservation(
                 r['resource_type'], r['resource_id'])
 
