@@ -3124,6 +3124,41 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         )
         self.assertEqual(set(['host-ironic', 'host-vm']), set(result))
 
+    def test_matching_hosts_admin_bypass_scoped_to_own_project(self):
+        """
+        Admins can skip filters for their own reservations, but not when acting
+        on reservations owned by owhter projects.
+        """
+        self.patch(self.db_api, "host_get_all_by_queries").return_value = [
+            {"id": "host-restricted"}
+        ]
+        self.db_host_get.return_value = {
+            "id": "host-restricted",
+            "authorized_projects": "some-other-project",
+        }
+        self.patch(
+            self.db_api, "host_allocation_get_all_by_values"
+        ).return_value = []
+        self.patch(policy, "enforce").return_value = True
+        self.patch(
+            self.context, "current"
+        ).return_value.project_id = "admin-project"
+
+        def matching(project_id):
+            return self.fake_phys_plugin._matching_hosts(
+                "[]",
+                "[]",
+                "1-1",
+                datetime.datetime(2013, 12, 19, 20, 00),
+                datetime.datetime(2013, 12, 19, 21, 00),
+                project_id,
+            )
+
+        # reserving for themselves, an admin may pick a restricted host
+        self.assertEqual(["host-restricted"], matching("admin-project"))
+        # acting on someone else's lease, they may not
+        self.assertEqual([], matching("owner-project"))
+
     def test_check_params_with_valid_before_end(self):
         values = {
             'min': 1,

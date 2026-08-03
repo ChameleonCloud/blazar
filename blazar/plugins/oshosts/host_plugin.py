@@ -81,6 +81,9 @@ plugin_opts = [
         help='Allow users to create host reservations. This plugin must be enabled '
              'for flavor reservations, but it may not be desirable to allow an '
              'entire host to be reserved.'),
+    cfg.BoolOpt('permit_admin_reservation',
+        default=True,
+        help='Allow admin users to create host reservations, even if allow_reservation is False.'),
     cfg.BoolOpt('filter_vm_hosts',
             default=False,
             help='Only permit ironic (baremetal) hosts to be reserved.'),
@@ -118,9 +121,30 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         self.monitor.register_reallocater(self._reallocate)
         self.placement_client = placement.BlazarPlacementClient()
 
+    def _is_admin_reservation(self, project_id) -> bool:
+        """Check if admin bypass should be applied.
+
+        Returns true IFF
+        1. plugin for current resource type has admin bypass enabled
+        2. the user in current request context has the admin role
+        3. the project being acted upon is owned by the admin user.
+
+        As this check is used to gate various filter mechanisms, check #3 is
+        required to prevent an admin reallocating a non-admin user's reservation
+        onto a project-restricted host.
+        """
+
+        return (
+            CONF[self.resource_type].permit_admin_reservation
+            and self._is_admin()
+            and context.current().project_id == project_id
+        )
+
     def reserve_resource(self, reservation_id, values):
         """Create reservation."""
-        if not CONF[self.resource_type].allow_reservation:
+
+        # Reject reservation if it is not allowed, and the user is not an admin
+        if not CONF[self.resource_type].allow_reservation and not self._is_admin_reservation(values['project_id']):
             raise manager_ex.UnsupportedResourceType(resource_type=self.resource_type)
 
         ctx = context.current()
@@ -825,12 +849,15 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             hosts = db_api.host_get_all_by_queries(filter_array)
         else:
             hosts = db_api.reservable_host_get_all_by_queries(filter_array)
+        is_admin_reservation = self._is_admin_reservation(project_id)
         for host in hosts:
             full_host = self.get_computehost(host["id"])
-            if CONF[self.resource_type].filter_vm_hosts and full_host.get('hypervisor_type') != 'ironic':
-                continue
-            if not self.is_project_allowed(project_id, full_host):
-                continue
+            # Only apply extra filters if not an admin res
+            if not is_admin_reservation:
+                if CONF[self.resource_type].filter_vm_hosts and full_host.get('hypervisor_type') != 'ironic':
+                    continue
+                if not self.is_project_allowed(project_id, full_host):
+                    continue
             if not db_api.host_allocation_get_all_by_values(
                     compute_host_id=host['id']):
                 not_allocated_host_ids.append(host['id'])
