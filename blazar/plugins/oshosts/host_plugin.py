@@ -81,6 +81,9 @@ plugin_opts = [
         help='Allow users to create host reservations. This plugin must be enabled '
              'for flavor reservations, but it may not be desirable to allow an '
              'entire host to be reserved.'),
+    cfg.BoolOpt('filter_vm_hosts',
+            default=False,
+            help='Only permit ironic (baremetal) hosts to be reserved.'),
 ]
 
 plugin_opts.extend(monitor.monitor_opts)
@@ -809,7 +812,10 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         else:
             hosts = db_api.reservable_host_get_all_by_queries(filter_array)
         for host in hosts:
-            if not self.is_project_allowed(project_id, self.get_computehost(host["id"])):
+            full_host = self.get_computehost(host["id"])
+            if CONF[self.resource_type].filter_vm_hosts and full_host.get('hypervisor_type') != 'ironic':
+                continue
+            if not self.is_project_allowed(project_id, full_host):
                 continue
             if not db_api.host_allocation_get_all_by_values(
                     compute_host_id=host['id']):
