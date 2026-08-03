@@ -108,9 +108,10 @@ class FlavorPlugin(base.BasePlugin):
         if len(candidates) < req_amount:
             raise mgr_exceptions.NotEnoughHostsAvailable()
 
+        # TODO: Support affinity instead of raising a 400
         if affinity is not None:
-            raise mgr_exceptions.NotImplemented(
-                error="Affinity not supported yet")
+            raise mgr_exceptions.MalformedParameter(
+                param='affinity (not supported for flavor reservations)')
 
         if CONF[self.resource_type].randomize_host_selection:
             random.shuffle(candidates)
