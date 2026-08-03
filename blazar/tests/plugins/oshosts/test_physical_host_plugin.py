@@ -3074,6 +3074,50 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         )
         self.assertEqual([], result)
 
+    def test_matching_hosts_filter_vm_hosts(self):
+        """When filter_vm_hosts=True, only ironic hosts are eligible for host reservations."""
+        # Two hosts: one baremetal (ironic), one virtual (QEMU)
+        self.patch(
+            self.db_api,
+            'reservable_host_get_all_by_queries'
+        ).return_value = [
+            {'id': 'host-ironic'},
+            {'id': 'host-vm'},
+        ]
+
+        def fake_host_get(host_id, *args, **kwargs):
+            if host_id == 'host-ironic':
+                return {'id': 'host-ironic', 'hypervisor_type': 'ironic'}
+            return {'id': 'host-vm', 'hypervisor_type': 'QEMU'}
+
+        self.db_host_get.side_effect = fake_host_get
+
+        self.patch(self.db_api, 'host_allocation_get_all_by_values')\
+            .return_value = []
+        self.patch(policy, 'enforce').return_value = False
+
+        # With filter_vm_hosts=True, only the ironic host is returned
+        self.cfg.CONF.set_override(
+            'filter_vm_hosts', True, group='physical:host')
+        result = self.fake_phys_plugin._matching_hosts(
+            '[]', '[]', '1-2',
+            datetime.datetime(2013, 12, 19, 20, 00),
+            datetime.datetime(2013, 12, 19, 21, 00),
+            'fake-project'
+        )
+        self.assertEqual(['host-ironic'], result)
+
+        # With filter_vm_hosts=False (default), both hosts are eligible
+        self.cfg.CONF.set_override(
+            'filter_vm_hosts', False, group='physical:host')
+        result = self.fake_phys_plugin._matching_hosts(
+            '[]', '[]', '1-2',
+            datetime.datetime(2013, 12, 19, 20, 00),
+            datetime.datetime(2013, 12, 19, 21, 00),
+            'fake-project'
+        )
+        self.assertEqual(set(['host-ironic', 'host-vm']), set(result))
+
     def test_check_params_with_valid_before_end(self):
         values = {
             'min': 1,
