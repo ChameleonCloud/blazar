@@ -27,9 +27,6 @@ from blazar.manager import exceptions
 CONF = cfg.CONF
 
 
-CONF = cfg.CONF
-
-
 def get_os_auth_host(conf):
     """Description
 
