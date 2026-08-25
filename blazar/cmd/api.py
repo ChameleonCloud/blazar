@@ -13,16 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import eventlet
-eventlet.monkey_patch(
-    os=True, select=True, socket=True, thread=True, time=True)
-
 import gettext
 import sys
+import threading
 
-from eventlet import wsgi
 from oslo_config import cfg
 from oslo_log import log as logging
+from wsgiref.simple_server import make_server
 
 gettext.install('blazar')
 
@@ -56,7 +53,14 @@ def main():
     else:
         app = wsgi_app.VersionSelectorApplication()
 
-    wsgi.server(eventlet.listen((CONF.host, CONF.port), backlog=500), app)
+    def run_server():
+        httpd = make_server(CONF.host, CONF.port, app)
+        httpd.serve_forever()
+
+    # Start in a separate thread
+    server_thread = threading.Thread(target=run_server)
+    server_thread.daemon = True  # Allow app to exit if this is the only thread
+    server_thread.start()
 
 
 if __name__ == '__main__':
