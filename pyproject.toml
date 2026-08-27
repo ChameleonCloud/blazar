@@ -1,0 +1,69 @@
+[build-system]
+requires = ["pbr>=6.1.1"]
+build-backend = "pbr.build"
+
+[project]
+name = "blazar"
+description = "Reservation Service for OpenStack clouds"
+authors = [
+    {name = "OpenStack", email = "openstack-discuss@lists.openstack.org"},
+]
+dynamic = ["version", "dependencies"]
+readme = {file = "README.rst", content-type = "text/x-rst"}
+license = "Apache-2.0"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Environment :: OpenStack",
+    "Development Status :: 3 - Alpha",
+    "Framework :: Setuptools Plugin",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: System Administrators",
+    "Operating System :: POSIX :: Linux",
+]
+
+[project.urls]
+Homepage = "https://docs.openstack.org/blazar/latest/"
+Documentation = "https://docs.openstack.org/blazar/latest/"
+Issues = "https://bugs.launchpad.net/blazar"
+Source = "https://opendev.org/openstack/blazar"
+GitHub = "https://github.com/openstack/blazar"
+"Release Notes" = "http://docs.openstack.org/releasenotes/blazar/"
+
+[project.scripts]
+blazar-db-manage = "blazar.db.migration.cli:main"
+blazar-api = "blazar.cmd.api:main"
+blazar-rpc-zmq-receiver = "blazar.cmd.rpc_zmq_receiver:main"
+blazar-manager = "blazar.cmd.manager:main"
+blazar-status = "blazar.cmd.status:main"
+
+[project.entry-points."blazar.resource.plugins"]
+"dummy.vm.plugin" = "blazar.plugins.dummy_vm_plugin:DummyVMPlugin"
+"physical.host.plugin" = "blazar.plugins.oshosts.host_plugin:PhysicalHostPlugin"
+"virtual.instance.plugin" = "blazar.plugins.instances.instance_plugin:VirtualInstancePlugin"
+"virtual.floatingip.plugin" = "blazar.plugins.floatingips.floatingip_plugin:FloatingIpPlugin"
+"flavor.instance.plugin" = "blazar.plugins.flavor.flavor_plugin:FlavorPlugin"
+
+[project.entry-points."blazar.api.v1.extensions"]
+leases = "blazar.api.v1.leases.v1_0:get_rest"
+"physical.host.plugin" = "blazar.api.v1.oshosts.v1_0:get_rest"
+"virtual.floatingip.plugin" = "blazar.api.v1.floatingips.v1_0:get_rest"
+
+[project.entry-points."blazar.api.v2.controllers.extensions"]
+oshosts = "blazar.api.v2.controllers.extensions.host:HostsController"
+leases = "blazar.api.v2.controllers.extensions.lease:LeasesController"
+
+[project.entry-points."oslo.config.opts"]
+blazar = "blazar.opts:list_opts"
+
+[project.entry-points."oslo.policy.policies"]
+blazar = "blazar.policies:list_rules"
+
+[tool.setuptools]
+packages = ["blazar"]
