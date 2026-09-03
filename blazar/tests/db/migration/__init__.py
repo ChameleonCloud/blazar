@@ -402,7 +402,7 @@ class BaseWalkMigrationTestCase(BaseMigrationTestCase):
         For each type of repository we should do some of configure steps.
         For migrate_repo we should set under version control our database.
         For alembic we should configure database settings. For this goal we
-        should use oslo.config and openstack.commom.db.sqlalchemy.session with
+        should use oslo.config and openstack.common.db.sqlalchemy.session with
         database functionality (reset default settings).
         """
         CONF.set_override('connection', str(engine.url), group='database')
