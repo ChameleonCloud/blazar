@@ -180,8 +180,6 @@ def url_for(service_catalog, service_type, admin=False,
                                                     os_region_name))
         try:
             # if Keystone API v3 endpoints returned
-            print(endpoints)
-            print(endpoint_interface)
             endpoint = [e for e in endpoints
                         if e['interface'] == endpoint_interface][0]
             return endpoint['url']
