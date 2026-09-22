@@ -101,7 +101,7 @@ def _get_plugins():
                        "Please set one plugin per device driver.")
                 raise manager_ex.PluginConfigurationError(error=msg)
 
-        plugins[plugin_obj.device_driver] = plugin_obj
+            plugins[plugin_obj.device_driver] = plugin_obj
     return plugins
 
 
