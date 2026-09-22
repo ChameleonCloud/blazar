@@ -29,41 +29,73 @@ cli_opts = [
                      'headers and bodies'),
 ]
 
+_DEPRECATED_AUTH = (
+    'Blazar now loads its service credential with keystoneauth, from a '
+    'section per service. Set auth_type there instead of these options. '
+    'See the [identity], [nova], [neutron] and [placement] groups.')
+
 os_opts = [
     cfg.StrOpt('os_auth_protocol',
                default='http',
+               deprecated_for_removal=True,
+               deprecated_reason=_DEPRECATED_AUTH,
                help='Protocol used to access OpenStack Identity service'),
     cfg.HostAddressOpt('os_auth_host',
                        default='127.0.0.1',
+                       deprecated_for_removal=True,
+                       deprecated_reason=_DEPRECATED_AUTH,
                        help='IP or hostname of machine on which OpenStack '
                             'Identity service is located'),
     cfg.StrOpt('os_auth_port',
                default='5000',
+               deprecated_for_removal=True,
+               deprecated_reason=_DEPRECATED_AUTH,
                help='Port of OpenStack Identity service.'),
     cfg.StrOpt('os_auth_prefix',
                default='',
+               deprecated_for_removal=True,
+               deprecated_reason=_DEPRECATED_AUTH,
                help='Prefix of URL to access OpenStack Identity service.'),
     cfg.StrOpt('os_admin_username',
                default='admin',
+               deprecated_for_removal=True,
+               deprecated_reason=_DEPRECATED_AUTH,
                help='This OpenStack user is used to treat trusts. '
                     'The user must have admin role in <os_admin_project_name> '
                     'project.'),
     cfg.StrOpt('os_admin_password',
                default='blazar',
+               secret=True,
+               deprecated_for_removal=True,
+               deprecated_reason=_DEPRECATED_AUTH,
                help='Password of the admin user to treat trusts.'),
     cfg.StrOpt('os_admin_project_name',
                default='admin',
+               deprecated_for_removal=True,
+               deprecated_reason=_DEPRECATED_AUTH,
                help='Name of project where the user is admin.'),
     cfg.StrOpt('os_auth_version',
                default='v3',
+               deprecated_for_removal=True,
+               deprecated_reason=_DEPRECATED_AUTH,
                help='Blazar uses API v3 to allow trusts using.'),
     cfg.StrOpt('os_admin_user_domain_name',
                default='Default',
+               deprecated_for_removal=True,
+               deprecated_reason=_DEPRECATED_AUTH,
                help='A domain name the os_admin_username belongs to.'),
     cfg.StrOpt('os_admin_project_domain_name',
                default='Default',
+               deprecated_for_removal=True,
+               deprecated_reason=_DEPRECATED_AUTH,
                help='A domain name the os_admin_project_name belongs to'),
     cfg.StrOpt('cafile',
+               deprecated_for_removal=True,
+               deprecated_reason='Superseded by the cafile option of each '
+                                 'service group, which also accepts the '
+                                 'other keystoneauth TLS and timeout '
+                                 'options. This value is still honoured as '
+                                 'the default for those.',
                help='Path of the custom CA certificates bundle.'),
 ]
 

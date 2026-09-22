@@ -1,0 +1,32 @@
+---
+features:
+  - |
+    Endpoint selection now uses keystoneauth's adapter options, so each of
+    the ``[identity]``, ``[nova]``, ``[neutron]`` and ``[placement]`` groups
+    accepts ``valid_interfaces``, ``service_type``, ``service_name``,
+    ``region_name``, ``endpoint_override`` and the connect- and
+    status-code-retry options.
+
+    ``valid_interfaces`` is a list tried in order, where the
+    ``endpoint_type`` it replaces named a single interface. A deployment
+    whose internal endpoint is not always present can now fall back::
+
+        [nova]
+        valid_interfaces = internal,public
+
+    ``region_name`` can also be set per service, where previously only the
+    global ``[DEFAULT] os_region_name`` was available. It is still used
+    when a group does not set one.
+upgrade:
+  - |
+    Blazar no longer resolves service endpoints by walking the service
+    catalog itself; keystoneauth does it. When Blazar acts as the
+    requesting user it reuses the catalog from that user's own token, so
+    this costs no extra call to keystone.
+deprecations:
+  - |
+    ``[nova] endpoint_type``, ``[neutron] endpoint_type``,
+    ``[placement] endpoint_type`` and ``[DEFAULT] endpoint_type`` are
+    deprecated in favour of ``valid_interfaces`` in the matching group, and
+    ``[DEFAULT] identity_service`` and ``[nova] compute_service`` in favour
+    of ``service_type``. The old names continue to be read.

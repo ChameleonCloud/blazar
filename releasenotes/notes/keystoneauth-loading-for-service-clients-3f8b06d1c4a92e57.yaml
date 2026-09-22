@@ -1,0 +1,40 @@
+---
+features:
+  - |
+    Blazar now loads the credential it uses to call other OpenStack services
+    with ``keystoneauth1.loading``, from a configuration section per service:
+    ``[identity]``, ``[nova]``, ``[neutron]`` and ``[placement]``. Any
+    keystoneauth plugin may be used, selected with ``auth_type`` -- for
+    example ``v3applicationcredential`` or one of the ``v3oidc*`` plugins,
+    where previously only a v3 password grant was possible.
+
+    Each service is configured on its own, as in other OpenStack
+    services::
+
+        [nova]
+        auth_type = password
+        auth_url = https://keystone.example.org:5000/v3
+        username = blazar
+        password = <secret>
+        project_name = services
+        user_domain_name = Default
+        project_domain_name = Default
+
+    Each group also accepts keystoneauth's session options, so ``certfile``,
+    ``keyfile``, ``insecure`` and ``timeout`` can now be set per service.
+    Previously only a CA bundle could be configured, and only globally.
+deprecations:
+  - |
+    The ``[DEFAULT]`` options ``os_auth_protocol``, ``os_auth_host``,
+    ``os_auth_port``, ``os_auth_prefix``, ``os_auth_version``,
+    ``os_admin_username``, ``os_admin_password``, ``os_admin_project_name``,
+    ``os_admin_user_domain_name``, ``os_admin_project_domain_name`` and
+    ``cafile`` are deprecated in favour of the per-service keystoneauth
+    sections described above.
+
+    They continue to work: when a service group has no ``auth_type``, Blazar
+    still builds a v3 password grant from them and logs a warning. The five
+    options that made up the identity URL collapse into a single
+    ``auth_url``, which cannot be expressed as an option rename, so this
+    fallback rather than a deprecated alias is what preserves existing
+    configurations.

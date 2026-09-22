@@ -35,7 +35,7 @@ from blazar.manager import service
 from blazar.plugins import oshosts as plugin
 from blazar.plugins.oshosts import host_plugin
 from blazar import tests
-from blazar.utils.openstack import base
+from blazar.utils.openstack import base as client_base
 from blazar.utils.openstack import nova
 from blazar.utils.openstack import placement
 from blazar.utils import trusts
@@ -65,7 +65,6 @@ class PhysicalHostPluginSetupOnlyTestCase(tests.TestCase):
 
         self.context = context
         self.patch(self.context, 'BlazarContext')
-        self.patch(base, 'url_for').return_value = 'http://foo.bar'
         self.host_plugin = host_plugin
         self.fake_phys_plugin = self.host_plugin.PhysicalHostPlugin()
         self.nova = nova
@@ -75,13 +74,8 @@ class PhysicalHostPluginSetupOnlyTestCase(tests.TestCase):
             self.patch(self.db_api, 'host_extra_capability_get_all_per_host'))
 
     def test_configuration(self):
-        self.assertEqual("fake-user", self.fake_phys_plugin.username)
-        self.assertEqual("fake-passwd", self.fake_phys_plugin.password)
-        self.assertEqual("fake-user-domain",
-                         self.fake_phys_plugin.user_domain_name)
-        self.assertEqual("fake-pj-name", self.fake_phys_plugin.project_name)
-        self.assertEqual("fake-pj-domain",
-                         self.fake_phys_plugin.project_domain_name)
+        self.assertEqual(client_base.Identity.SERVICE,
+                         self.fake_phys_plugin.identity)
 
     def test__get_extra_capabilities_with_values(self):
         ComputeHostExtraCapability = collections.namedtuple(
@@ -129,7 +123,6 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             'trust_id': 'exxee111qwwwwe',
         }
 
-        self.patch(base, 'url_for').return_value = 'http://foo.bar'
         self.host_plugin = host_plugin
         self.fake_phys_plugin = self.host_plugin.PhysicalHostPlugin()
         self.db_api = db_api
@@ -2693,20 +2686,9 @@ class PhysicalHostMonitorPluginTestCase(tests.TestCase):
     def test_configuration(self):
         # reset the singleton at first
         host_plugin.PhysicalHostMonitorPlugin._instance = None
-        self.cfg = self.useFixture(conf_fixture.Config(CONF))
-        self.cfg.config(os_admin_username='fake-user')
-        self.cfg.config(os_admin_password='fake-passwd')
-        self.cfg.config(os_admin_user_domain_name='fake-user-domain')
-        self.cfg.config(os_admin_project_name='fake-pj-name')
-        self.cfg.config(os_admin_project_domain_name='fake-pj-domain')
         self.host_monitor_plugin = host_plugin.PhysicalHostMonitorPlugin()
-        self.assertEqual('fake-user', self.host_monitor_plugin.username)
-        self.assertEqual("fake-passwd", self.host_monitor_plugin.password)
-        self.assertEqual("fake-user-domain",
-                         self.host_monitor_plugin.user_domain_name)
-        self.assertEqual("fake-pj-name", self.host_monitor_plugin.project_name)
-        self.assertEqual("fake-pj-domain",
-                         self.host_monitor_plugin.project_domain_name)
+        self.assertEqual(client_base.Identity.SERVICE,
+                         self.host_monitor_plugin.identity)
 
     def test_notification_callback_disabled_true(self):
         failed_host = {'hypervisor_hostname': 'hypvsr1'}

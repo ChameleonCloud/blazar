@@ -37,7 +37,6 @@ class TestTrusts(tests.TestCase):
 
         self.client = self.patch(self.keystone, 'BlazarKeystoneClient')
         self.patch(self.context, 'current')
-        self.patch(self.base, 'url_for').return_value = 'http://www.foo.fake'
 
         self.cfg = self.useFixture(conf_fixture.Config(CONF))
 
@@ -53,7 +52,8 @@ class TestTrusts(tests.TestCase):
 
         self.trusts.delete_trust(lease)
 
-        self.client.assert_called_once_with(trust_id='1')
+        self.client.assert_called_once_with(
+            identity=base.Identity.TRUST, trust_id='1')
 
     def test_create_ctx_from_trust(self):
         self.cfg.config(os_admin_project_name='admin')

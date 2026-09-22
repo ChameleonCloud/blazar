@@ -1,0 +1,15 @@
+---
+upgrade:
+  - |
+    Blazar now keeps one authenticated session per service rather than
+    building a new one for every client. Previously each client carried its
+    own auth plugin, and because keystoneauth caches a token on the plugin,
+    every client meant another ``POST /v3/auth/tokens``. Wrappers such as
+    ``NovaClientWrapper.nova`` rebuild their client on each attribute
+    access, so a single operation could authenticate many times over -- once
+    per host in a loop, and once per worker thread when hosts are added to
+    an aggregate concurrently.
+
+    Only Blazar's own service credential is shared. A trust-scoped client,
+    or one built from credentials the caller supplied, still gets a session
+    of its own so that no caller's identity is reused for another.

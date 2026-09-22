@@ -27,26 +27,25 @@ function configure_blazar {
 
     touch $BLAZAR_CONF_FILE
 
-    iniset $BLAZAR_CONF_FILE DEFAULT os_auth_version v3
-    iniset $BLAZAR_CONF_FILE DEFAULT os_auth_host $(ipv6_unquote $KEYSTONE_SERVICE_HOST)
-    iniset $BLAZAR_CONF_FILE DEFAULT os_auth_port 80
-    iniset $BLAZAR_CONF_FILE DEFAULT os_auth_prefix identity
-    iniset $BLAZAR_CONF_FILE DEFAULT os_admin_password $SERVICE_PASSWORD
-    iniset $BLAZAR_CONF_FILE DEFAULT os_admin_username blazar
-    iniset $BLAZAR_CONF_FILE DEFAULT os_admin_project_name $SERVICE_TENANT_NAME
-    iniset $BLAZAR_CONF_FILE DEFAULT identity_service $BLAZAR_IDENTITY_SERVICE_NAME
     iniset $BLAZAR_CONF_FILE DEFAULT os_region_name $REGION_NAME
-    iniset $BLAZAR_CONF_FILE DEFAULT endpoint_type public
+
+    # Blazar's own credential, for each service it calls.
+    for group in identity nova neutron placement; do
+        iniset $BLAZAR_CONF_FILE $group auth_type password
+        iniset $BLAZAR_CONF_FILE $group auth_url "$KEYSTONE_SERVICE_URI/v3"
+        iniset $BLAZAR_CONF_FILE $group username $BLAZAR_USER_NAME
+        iniset $BLAZAR_CONF_FILE $group password $SERVICE_PASSWORD
+        iniset $BLAZAR_CONF_FILE $group project_name $SERVICE_TENANT_NAME
+        iniset $BLAZAR_CONF_FILE $group user_domain_name "$SERVICE_DOMAIN_NAME"
+        iniset $BLAZAR_CONF_FILE $group project_domain_name "$SERVICE_DOMAIN_NAME"
+        iniset $BLAZAR_CONF_FILE $group valid_interfaces public
+    done
+    iniset $BLAZAR_CONF_FILE identity service_type $BLAZAR_IDENTITY_SERVICE_NAME
 
     # Keystone authtoken
     _blazar_setup_keystone $BLAZAR_CONF_FILE keystone_authtoken
 
-    iniset $BLAZAR_CONF_FILE neutron endpoint_type public
-
     iniset $BLAZAR_CONF_FILE nova aggregate_freepool_name $BLAZAR_FREEPOOL_NAME
-    iniset $BLAZAR_CONF_FILE nova endpoint_type public
-
-    iniset $BLAZAR_CONF_FILE placement endpoint_type public
 
     iniset $BLAZAR_CONF_FILE DEFAULT host $(ipv6_unquote $SERVICE_HOST)
     iniset $BLAZAR_CONF_FILE DEFAULT debug $BLAZAR_DEBUG

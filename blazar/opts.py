@@ -23,8 +23,11 @@ import blazar.manager
 import blazar.manager.service
 import blazar.notification.notifier
 import blazar.plugins.oshosts.host_plugin
+import blazar.utils.openstack.base
 import blazar.utils.openstack.keystone
+import blazar.utils.openstack.neutron
 import blazar.utils.openstack.nova
+import blazar.utils.openstack.placement
 
 
 def list_opts():
@@ -42,6 +45,8 @@ def list_opts():
              blazar.utils.openstack.keystone.opts,
              blazar.utils.openstack.keystone.keystone_opts)),
         ('api', blazar.api.v2.controllers.api_opts),
+        (blazar.utils.openstack.base.OPT_GROUPS['identity'],
+         blazar.utils.openstack.base.keystoneauth_conf_options('identity')),
         ('manager', itertools.chain(blazar.manager.opts,
                                     blazar.manager.service.manager_opts)),
         ('enforcement', itertools.chain(
@@ -50,7 +55,13 @@ def list_opts():
             blazar.enforcement.filters.max_lease_duration_filter.MaxLeaseDurationFilter.enforcement_opts, # noqa
             blazar.enforcement.enforcement.enforcement_opts)),
         ('notifications', blazar.notification.notifier.notification_opts),
-        ('nova', blazar.utils.openstack.nova.nova_opts),
+        (blazar.utils.openstack.base.OPT_GROUPS['neutron'],
+         blazar.utils.openstack.base.keystoneauth_conf_options('neutron')),
+        (blazar.utils.openstack.base.OPT_GROUPS['nova'], itertools.chain(
+            blazar.utils.openstack.nova.nova_opts,
+            blazar.utils.openstack.base.keystoneauth_conf_options('nova'))),
+        (blazar.utils.openstack.base.OPT_GROUPS['placement'],
+         blazar.utils.openstack.base.keystoneauth_conf_options('placement')),
         (blazar.plugins.oshosts.RESOURCE_TYPE,
          blazar.plugins.oshosts.host_plugin.plugin_opts),
     ]

@@ -18,6 +18,7 @@ import functools
 from oslo_config import cfg
 
 from blazar import context
+from blazar.utils.openstack import base
 from blazar.utils.openstack import keystone
 
 CONF = cfg.CONF
@@ -28,7 +29,7 @@ def create_trust():
     trustee_id = keystone.BlazarKeystoneClient().session.get_user_id()
 
     ctx = context.current()
-    user_client = keystone.BlazarKeystoneClient(as_user=True)
+    user_client = keystone.BlazarKeystoneClient(identity=base.Identity.USER)
     trust = user_client.trusts.create(trustor_user=ctx.user_id,
                                       trustee_user=trustee_id,
                                       impersonation=True,
@@ -40,14 +41,16 @@ def create_trust():
 def delete_trust(lease):
     """Deletes trust for the specified lease."""
     if lease.trust_id:
-        client = keystone.BlazarKeystoneClient(trust_id=lease.trust_id)
+        client = keystone.BlazarKeystoneClient(
+            identity=base.Identity.TRUST, trust_id=lease.trust_id)
         client.trusts.delete(lease.trust_id)
 
 
 def create_ctx_from_trust(trust_id):
     """Return context built from given trust."""
     ctx = context.current()
-    client = keystone.BlazarKeystoneClient(trust_id=trust_id)
+    client = keystone.BlazarKeystoneClient(
+        identity=base.Identity.TRUST, trust_id=trust_id)
     session = client.session
 
     # use 'with ctx' statement in the place you need context from trust

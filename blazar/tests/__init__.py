@@ -17,6 +17,7 @@ import fixtures
 import tempfile
 import testscenarios
 
+from keystoneauth1 import loading as ks_loading
 from oslo_log import log as logging
 from oslotest import base
 
@@ -24,6 +25,7 @@ from blazar import config as cfg
 from blazar import context
 from blazar.db.sqlalchemy import api as db_api
 from blazar.db.sqlalchemy import facade_wrapper
+from blazar.utils.openstack import base as client_base
 
 cfg.CONF.set_override('use_stderr', False)
 
@@ -59,6 +61,33 @@ class TestCase(testscenarios.WithScenarios, base.BaseTestCase):
         super(TestCase, self).setUp()
         self.context_mock = None
         cfg.CONF(args=[], project='blazar')
+        # base caches one session per service group in a module global, so
+        # it has to be dropped between tests that reconfigure credentials.
+        client_base.reset()
+        self.addCleanup(client_base.reset)
+
+    def register_auth_opts(self, group, plugin='password'):
+        """Register auth_type and a plugin's own options.
+
+        keystoneauth registers a plugin's options lazily, when
+        load_auth_from_conf_options() first reads auth_type, so a test has
+        to register them up front before it can override them.
+
+        They are unregistered again afterwards: auth_url is a required
+        option, so leaving it registered makes the CONF(args=[]) call in
+        every later test in this worker raise RequiredOptError.
+        """
+        ks_loading.register_auth_conf_options(cfg.CONF, group)
+        options = [opt._to_oslo_opt() for opt
+                   in ks_loading.get_plugin_loader(plugin).get_options()]
+        cfg.CONF.register_opts(options, group=group)
+
+        def _unregister():
+            # unregister_opts() refuses to run while args are parsed.
+            cfg.CONF.clear()
+            cfg.CONF.unregister_opts(options, group=group)
+
+        self.addCleanup(_unregister)
 
     def patch(self, obj, attr):
         """Returns a Mocked object on the patched attribute."""

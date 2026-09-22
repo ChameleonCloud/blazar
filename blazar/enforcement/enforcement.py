@@ -49,11 +49,8 @@ class UsageEnforcement:
         self.enabled_filters = list(self.enabled_filters)
 
     def format_context(self, context, lease_values):
-        ctx = context.to_dict()
         region_name = CONF.os_region_name
-        auth_url = base.url_for(
-            ctx['service_catalog'], CONF.identity_service,
-            os_region_name=region_name)
+        auth_url = base.identity_auth_url()
 
         return dict(user_id=lease_values['user_id'],
                     project_id=lease_values['project_id'],
