@@ -237,7 +237,7 @@ class ReservationPoolTestCase(tests.TestCase):
         self._patch_get_aggregate_from_name_or_id()
         terminate_preemptibles = self.patch(
             self.pool, 'terminate_preemptibles')
-        self.patch(self.nova, "servers")
+        # self.patch(self.nova, "servers")
         self.pool.add_computehost('pool', 'host3')
 
         check0 = self.nova.aggregates.add_host

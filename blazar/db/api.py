@@ -323,6 +323,10 @@ def instance_reservation_get(instance_reservation_id):
     return IMPL.instance_reservation_get(instance_reservation_id)
 
 
+def instance_reservation_get_by_reservation_id(reservation_id, session=None):
+    return IMPL.instance_reservation_get_by_reservation_id(reservation_id, session=session)
+
+
 def instance_reservation_update(instance_reservation_id,
                                 instance_reservation_values):
     """Update instance reservation."""
@@ -452,6 +456,25 @@ def host_extra_capability_get_all_per_name(host_id,
 def host_get_all_by_queries_including_extracapabilities(queries):
     """Returns hosts filtered by an array of queries."""
     return IMPL.host_get_all_by_queries_including_extracapabilities(queries)
+
+
+# ComputeHostResourceInventory
+
+def host_resource_inventory_create(values):
+    """Create a host resource inventory from the values."""
+    return IMPL.host_resource_inventory_create(values)
+
+
+def host_resource_inventory_get_all_per_host(host_id):
+    """Return all resource inventories belonging to a specific Compute host."""
+    return IMPL.host_resource_inventory_get_all_per_host(host_id)
+
+
+# ComputeHostTrait
+
+def host_trait_create(values):
+    """Create a host trait from the values."""
+    return IMPL.host_trait_create(values)
 
 
 # FloatingIP reservation

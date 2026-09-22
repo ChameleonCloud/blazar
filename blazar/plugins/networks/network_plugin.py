@@ -91,7 +91,7 @@ def _get_plugins():
                        "Please set one plugin per usage type.")
                 raise manager_ex.PluginConfigurationError(error=msg)
 
-        plugins[plugin_obj.usage_type] = plugin_obj
+            plugins[plugin_obj.usage_type] = plugin_obj
     return plugins
 
 
