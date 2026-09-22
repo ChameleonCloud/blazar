@@ -262,15 +262,14 @@ class NetworkPlugin(base.BasePlugin):
         neutron_client.remove_gateway_router(router_id)
         neutron_client.delete_router(router_id)
 
-    def delete_neutron_network(self, network_id, reservation_id,
-                               trust_id=None):
+    def delete_neutron_network(self, network_id, reservation_id):
         if network_id is None:
             LOG.info("Not deleting network for reservation %s as no network "
                      "ID was recorded",
                      reservation_id)
             return
 
-        neutron_client = neutron.BlazarNeutronClient(trust_id=trust_id)
+        neutron_client = neutron.BlazarNeutronClient()
         ironic_client = None
         try:
             ironic_client = ironic.BlazarIronicClient()
