@@ -1,0 +1,11 @@
+---
+fixes:
+  - |
+    The identity URL assembled from the ``[DEFAULT]`` ``os_auth_*`` options no
+    longer contains a doubled separator when ``os_auth_prefix`` is unset. The
+    URL was built by interpolating the prefix and version unconditionally, so
+    the default empty ``os_auth_prefix`` produced
+    ``http://<host>:<port>//<version>``. Two other call sites already appended
+    those components conditionally, so a single deployment could use two
+    different spellings of the same identity URL. All call sites now share one
+    helper and omit empty components.

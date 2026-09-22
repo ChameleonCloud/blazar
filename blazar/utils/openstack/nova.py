@@ -14,8 +14,6 @@
 # limitations under the License.
 import uuid as uuidgen
 
-from keystoneauth1 import session
-from keystoneauth1 import token_endpoint
 from novaclient import client as nova_client
 from novaclient import exceptions as nova_exception
 from novaclient.v2 import servers
@@ -29,20 +27,10 @@ from blazar.utils.openstack import base
 
 
 nova_opts = [
-    cfg.StrOpt('endpoint_type',
-               default='internal',
-               choices=['public', 'admin', 'internal'],
-               help='Type of the nova endpoint to use. This endpoint will be '
-                    'looked up in the keystone catalog and should be one of '
-                    'public, internal or admin.'),
     cfg.StrOpt('nova_client_version',
                default='2',
                deprecated_group='DEFAULT',
                help='Novaclient version'),
-    cfg.StrOpt('compute_service',
-               default='compute',
-               deprecated_group='DEFAULT',
-               help='Nova name in keystone'),
     cfg.StrOpt('image_prefix',
                default='reserved_',
                deprecated_group='DEFAULT',
@@ -68,15 +56,15 @@ nova_opts = [
 
 CONF = cfg.CONF
 CONF.register_opts(nova_opts, group='nova')
-CONF.import_opt('identity_service', 'blazar.utils.openstack.keystone')
 LOG = logging.getLogger(__name__)
 
 
 class BlazarNovaClient(object):
-    def __init__(self, **kwargs):
-        """Description
+    def __init__(self, identity=base.Identity.USER, **kwargs):
+        """A nova client, acting as the requesting user by default.
 
-        BlazarNovaClient can be used in two ways: from context or kwargs.
+        :param identity: whose credential to authenticate with
+        :type identity: base.Identity
 
         :param version: service client version which we will use
         :type version: str
@@ -84,94 +72,15 @@ class BlazarNovaClient(object):
         :param ctx: request context
         :type ctx: context object
 
-        :param auth_token: keystone auth token
-        :type auth_token: str
-
-        :param endpoint_override: endpoint url which we will use
-        :type endpoint_override: str
-
-        :param username: username to use with nova client
-        :type username: str
-
-        :param password: password to use with nova client
-        :type password: str
-
-        :param user_domain_name: domain name of the user
-        :type user_domain_name: str
-
-        :param project_name: project name to use with nova client
-        :type project_name: str
-
-        :param project_domain_name: domain name of the project
-        :type project_domain_name: str
-
-        :param auth_url: keystone url to authenticate against
-        :type auth_url: str
+        :param trust_id: trust to scope to, with identity=Identity.TRUST
+        :type trust_id: str
         """
-
-        ctx = kwargs.pop('ctx', None)
-        auth_token = kwargs.pop('auth_token', None)
-        endpoint_override = kwargs.pop('endpoint_override', None)
         version = kwargs.pop('version', CONF.nova.nova_client_version)
-        username = kwargs.pop('username', None)
-        password = kwargs.pop('password', None)
-        user_domain_name = kwargs.pop('user_domain_name', None)
-        project_name = kwargs.pop('project_name', None)
-        project_domain_name = kwargs.pop('project_domain_name', None)
-        auth_url = kwargs.pop('auth_url', None)
+        client_kwargs = base.client_kwargs('nova', identity, **kwargs)
+        for name, value in base.endpoint_kwargs('nova').items():
+            client_kwargs.setdefault(name, value)
 
-        if ctx is None:
-            try:
-                ctx = context.current()
-            except RuntimeError:
-                pass
-        if ctx is not None:
-            auth_token = auth_token or ctx.auth_token
-            endpoint_override = endpoint_override or \
-                base.url_for(ctx.service_catalog,
-                             CONF.nova.compute_service,
-                             endpoint_interface=CONF.nova.endpoint_type,
-                             os_region_name=CONF.os_region_name)
-            auth_url = base.url_for(ctx.service_catalog, CONF.identity_service,
-                                    CONF.endpoint_type,
-                                    os_region_name=CONF.os_region_name)
-            kwargs.setdefault('global_request_id', ctx.global_request_id)
-
-        if auth_url is None:
-            auth_url = "%s://%s:%s" % (CONF.os_auth_protocol,
-                                       base.get_os_auth_host(CONF),
-                                       CONF.os_auth_port)
-            if CONF.os_auth_prefix:
-                auth_url += "/%s" % CONF.os_auth_prefix
-
-        if username:
-            kwargs.setdefault('username', username)
-            kwargs.setdefault('password', password)
-            kwargs.setdefault('project_name', project_name)
-            kwargs.setdefault('auth_url', auth_url)
-
-            if "v2.0" not in auth_url:
-                kwargs.setdefault('project_domain_name', project_domain_name)
-                kwargs.setdefault('user_domain_name', user_domain_name)
-
-            if CONF.cafile:
-                kwargs.setdefault('cacert', CONF.cafile)
-        else:
-            auth = token_endpoint.Token(endpoint_override,
-                                        auth_token)
-            sess_kwargs = dict(
-                auth=auth
-            )
-            if CONF.cafile:
-                sess_kwargs.update(verify=CONF.cafile)
-            sess = session.Session(**sess_kwargs)
-            kwargs.setdefault('session', sess)
-
-        kwargs.setdefault('endpoint_type', CONF.nova.endpoint_type + 'URL')
-        kwargs.setdefault('endpoint_override', endpoint_override)
-        kwargs.setdefault('version', version)
-        self.nova = nova_client.Client(**kwargs)
-
+        self.nova = nova_client.Client(version, **client_kwargs)
         self.nova.servers = ServerManager(self.nova)
 
         self.exceptions = nova_exception
@@ -192,32 +101,19 @@ class ServerManager(servers.ServerManager):
 
 
 class NovaClientWrapper(object):
-    def __init__(self, username=None, password=None, user_domain_name=None,
-                 project_name=None, project_domain_name=None):
-        self.username = username
-        self.password = password
-        self.user_domain_name = user_domain_name
-        self.project_name = project_name
-        self.project_domain_name = project_domain_name
+    def __init__(self, identity=base.Identity.USER):
+        self.identity = identity
 
     @property
     def nova(self):
-        nova = BlazarNovaClient(username=self.username,
-                                password=self.password,
-                                user_domain_name=self.user_domain_name,
-                                project_name=self.project_name,
-                                project_domain_name=self.project_domain_name)
-        return nova
+        return BlazarNovaClient(identity=self.identity)
 
 
 class ReservationPool(NovaClientWrapper):
     def __init__(self):
+        # Aggregate management needs admin, not the caller's credential.
         super(ReservationPool, self).__init__(
-            username=CONF.os_admin_username,
-            password=CONF.os_admin_password,
-            user_domain_name=CONF.os_admin_user_domain_name,
-            project_name=CONF.os_admin_project_name,
-            project_domain_name=CONF.os_admin_project_domain_name)
+            identity=base.Identity.SERVICE)
 
         self.config = CONF.nova
         self.freepool_name = self.config.aggregate_freepool_name

@@ -39,13 +39,37 @@ class TestPlacementClient(tests.TestCase):
         self.client = placement.BlazarPlacementClient()
 
     def test_client_auth_url(self):
+        # The deprecated [DEFAULT] os_auth_* options, still honoured.
         client = self.client._create_client()
         self.assertEqual("http://foofoo:8080/identity/v3",
                          client.session.auth.auth_url)
 
+    def test_client_auth_url_from_the_placement_section(self):
+        self.register_auth_opts('placement')
+        self.cfg.config(group='placement',
+                        auth_type='password',
+                        auth_url='https://keystone.example.org:5000/v3',
+                        username='blazar',
+                        password='secret',
+                        project_name='services')
+
+        client = self.client._create_client()
+
+        self.assertEqual('https://keystone.example.org:5000/v3',
+                         client.session.auth.auth_url)
+
+    def test_client_region_can_be_set_per_service(self):
+        self.cfg.config(group='placement', region_name='region_bar')
+
+        client = self.client._create_client()
+
+        self.assertEqual('region_bar', client.region_name)
+
     def _add_default_kwargs(self, kwargs):
+        # valid_interfaces is an ordered list of acceptable interfaces,
+        # where the superseded endpoint_type was a single one.
         kwargs['endpoint_filter'] = {'service_type': 'placement',
-                                     'interface': 'internal',
+                                     'interface': ['internal'],
                                      'region_name': 'region_foo'}
         kwargs['headers'] = {'accept': 'application/json'}
         kwargs['microversion'] = PLACEMENT_MICROVERSION

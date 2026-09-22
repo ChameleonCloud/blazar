@@ -200,6 +200,11 @@ class TestFlavorPlugin(tests.DBTestCase):
 
     @mock.patch.object(flavors.FlavorManager, 'get')
     def test__get_flavor_details(self, mock_get):
+        # _get_flavor_details deliberately acts as the requesting user, so
+        # that it only sees the flavors that user can see.
+        self.set_context(context.BlazarContext(
+            user_id='fake-user', project_id='fake-project',
+            auth_token='fake-token'))
         plugin = flavor_plugin.FlavorPlugin()
         mock_flavor = mock.Mock()
         mock_get.return_value = mock_flavor

@@ -49,18 +49,24 @@ Then edit */etc/blazar/blazar.conf* using the following example:
     [DEFAULT]
     host=<blazar_host>
     port=<blazar_port>
-    os_auth_host=<auth_host>
-    os_auth_port=<auth_port>
-    os_auth_protocol=<http, for example>
-    os_auth_version=v3
-    os_admin_username=<username>
-    os_admin_password=<password>
-    os_admin_project_name=<project_name>
     identity_service=<identity_service_name>
     os_region_name=<region_name>
 
     [manager]
     plugins=physical.host.plugin,virtual.instance.plugin
+
+    # Blazar's own credential, for each service it calls. Repeat this
+    # block for [nova], [neutron] and [placement]. Any keystoneauth
+    # plugin may be used, not only a password grant.
+    [identity]
+    auth_type=password
+    auth_url=<identity_service_url>
+    username=<username>
+    password=<password>
+    project_name=<project_name>
+    user_domain_name=<user_domain_name>
+    project_domain_name=<project_domain_name>
+    valid_interfaces=internal,public
 
     [keystone_authtoken]
     auth_type=<password, for example>

@@ -20,7 +20,6 @@ import uuid
 import ddt
 from novaclient import exceptions as nova_exceptions
 from oslo_config import cfg
-from oslo_config import fixture as conf_fixture
 from oslo_utils import timeutils
 
 from blazar import context
@@ -31,6 +30,7 @@ from blazar.plugins import instances
 from blazar.plugins.instances import instance_plugin
 from blazar.plugins import oshosts
 from blazar import tests
+from blazar.utils.openstack import base as client_base
 from blazar.utils.openstack import nova
 
 CONF = cfg.CONF
@@ -43,18 +43,8 @@ class TestVirtualInstancePlugin(tests.TestCase):
         super(TestVirtualInstancePlugin, self).setUp()
 
     def test_configuration(self):
-        self.cfg = self.useFixture(conf_fixture.Config(CONF))
-        self.cfg.config(os_admin_username='fake-user')
-        self.cfg.config(os_admin_password='fake-passwd')
-        self.cfg.config(os_admin_user_domain_name='fake-user-domain')
-        self.cfg.config(os_admin_project_name='fake-pj-name')
-        self.cfg.config(os_admin_project_domain_name='fake-pj-domain')
         plugin = instance_plugin.VirtualInstancePlugin()
-        self.assertEqual("fake-user", plugin.username)
-        self.assertEqual("fake-passwd", plugin.password)
-        self.assertEqual("fake-user-domain", plugin.user_domain_name)
-        self.assertEqual("fake-pj-name", plugin.project_name)
-        self.assertEqual("fake-pj-domain", plugin.project_domain_name)
+        self.assertEqual(client_base.Identity.SERVICE, plugin.identity)
 
     def get_input_values(self, vcpus, memory, disk, amount, affinity,
                          start, end, lease_id, resource_properties):

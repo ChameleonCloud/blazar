@@ -114,6 +114,17 @@ class EnforcementTestCase(tests.TestCase):
         cfg.CONF.set_override('os_region_name', self.region)
 
         self.enforcement.load_filters()
+
+        # The auth_url handed to an external service is the configured
+        # identity endpoint, not one resolved from the request catalog.
+        self.register_auth_opts('identity')
+        cfg.CONF.set_override('auth_type', 'password', group='identity')
+        cfg.CONF.set_override('auth_url', 'https://fakeauth.com',
+                              group='identity')
+        cfg.CONF.set_override('username', 'blazar', group='identity')
+        cfg.CONF.set_override('password', 'secret', group='identity')
+        cfg.CONF.set_override('project_name', 'services', group='identity')
+
         self.fake_service_catalog = tests.FakeServiceCatalog([
             dict(
                 type='identity', endpoints=[

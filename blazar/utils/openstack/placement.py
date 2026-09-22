@@ -14,27 +14,14 @@
 import retrying
 
 from keystoneauth1 import adapter
-from keystoneauth1.identity import v3
-from keystoneauth1 import session
 
 from oslo_config import cfg
 from oslo_log import log as logging
 
-from blazar import context
 from blazar.utils.openstack import base
 from blazar.utils.openstack import exceptions
 
-placement_opts = [
-    cfg.StrOpt('endpoint_type',
-               default='internal',
-               choices=['public', 'admin', 'internal'],
-               help='Type of the placement endpoint to use. This endpoint '
-                    'will be looked up in the keystone catalog and should be '
-                    'one of public, internal or admin.'),
-]
-
 CONF = cfg.CONF
-CONF.register_opts(placement_opts, group='placement')
 LOG = logging.getLogger(__name__)
 
 PLACEMENT_MICROVERSION = 1.29
@@ -45,59 +32,16 @@ class BlazarPlacementClient(object):
 
     def _create_client(self, **kwargs):
         """Create the HTTP session accessing the placement service."""
-        ctx = kwargs.pop('ctx', None)
-        username = kwargs.pop('username',
-                              CONF.os_admin_username)
-        user_domain_name = kwargs.pop('user_domain_name',
-                                      CONF.os_admin_user_domain_name)
-        project_name = kwargs.pop('project_name',
-                                  CONF.os_admin_project_name)
-        password = kwargs.pop('password',
-                              CONF.os_admin_password)
-
-        project_domain_name = kwargs.pop('project_domain_name',
-                                         CONF.os_admin_project_domain_name)
-        auth_url = kwargs.pop('auth_url', None)
-        region_name = kwargs.pop('region_name', CONF.os_region_name)
-
-        if ctx is None:
-            try:
-                ctx = context.current()
-            except RuntimeError:
-                pass
-        if ctx is not None:
-            kwargs.setdefault('global_request_id', ctx.global_request_id)
-
-        if auth_url is None:
-            auth_url = "%s://%s:%s" % (CONF.os_auth_protocol,
-                                       base.get_os_auth_host(CONF),
-                                       CONF.os_auth_port)
-            if CONF.os_auth_prefix:
-                auth_url += "/%s" % CONF.os_auth_prefix
-            if CONF.os_auth_version:
-                auth_url += "/%s" % CONF.os_auth_version
-
-        auth = v3.Password(auth_url=auth_url,
-                           username=username,
-                           password=password,
-                           project_name=project_name,
-                           user_domain_name=user_domain_name,
-                           project_domain_name=project_domain_name)
-        sess_kwargs = dict(
-            auth=auth
-        )
-        if CONF.cafile:
-            sess_kwargs.update(verify=CONF.cafile)
-        sess = session.Session(**sess_kwargs)
+        client_kwargs = base.client_kwargs(
+            'placement', base.Identity.SERVICE, **kwargs)
+        session = client_kwargs.pop('session')
+        for name, value in base.adapter_kwargs('placement').items():
+            client_kwargs.setdefault(name, value)
         # Set accept header on every request to ensure we notify placement
         # service of our response body media type preferences.
-        headers = {'accept': 'application/json'}
-        kwargs.setdefault('service_type', 'placement')
-        kwargs.setdefault('interface', CONF.placement.endpoint_type)
-        kwargs.setdefault('additional_headers', headers)
-        kwargs.setdefault('region_name', region_name)
-        client = adapter.Adapter(sess, **kwargs)
-        return client
+        client_kwargs.setdefault('additional_headers',
+                                 {'accept': 'application/json'})
+        return adapter.Adapter(session, **client_kwargs)
 
     def get(self, url, microversion=PLACEMENT_MICROVERSION):
         client = self._create_client()

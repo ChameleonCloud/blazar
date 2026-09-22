@@ -70,3 +70,24 @@ class FloatingIPSubnetNotFound(exceptions.NotFound):
 class NeutronUsesFloatingIP(exceptions.InvalidInput):
     msg_fmt = _("The floating IP %(floatingip)s is used in allocation_pools "
                 "or gateway_ip in subnet %(subnet)s .")
+
+
+class ServiceAuthNotConfigured(exceptions.BlazarException):
+    msg_fmt = _("No credentials are configured for the [%(group)s] "
+                "group. Set auth_type there.")
+
+
+class TrustScopeUnsupported(exceptions.BlazarException):
+    msg_fmt = _("The '%(auth_type)s' auth plugin configured for the "
+                "[%(group)s] group cannot be scoped to a trust.")
+
+
+class IdentityConflict(exceptions.BlazarException):
+    msg_fmt = _("Cannot authenticate as '%(requested)s': %(reason)s.")
+
+
+class NoUserToken(exceptions.BlazarException):
+    msg_fmt = _("A client was asked to act as the requesting user, but the "
+                "current context carries no auth token. Pass "
+                "identity=Identity.SERVICE to use Blazar's own credential, "
+                "or run inside trusts.create_ctx_from_trust().")

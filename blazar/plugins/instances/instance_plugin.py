@@ -31,6 +31,7 @@ from blazar.plugins import base
 from blazar.plugins import instances as plugin
 from blazar.plugins import oshosts
 from blazar import status
+from blazar.utils.openstack import base as client_base
 from blazar.utils.openstack import exceptions as openstack_ex
 from blazar.utils.openstack import nova
 from blazar.utils.openstack import placement
@@ -58,11 +59,7 @@ class VirtualInstancePlugin(base.BasePlugin, nova.NovaClientWrapper):
 
     def __init__(self):
         super(VirtualInstancePlugin, self).__init__(
-            username=CONF.os_admin_username,
-            password=CONF.os_admin_password,
-            user_domain_name=CONF.os_admin_user_domain_name,
-            project_name=CONF.os_admin_project_name,
-            project_domain_name=CONF.os_admin_project_domain_name)
+            identity=client_base.Identity.SERVICE)
 
         self.freepool_name = CONF.nova.aggregate_freepool_name
         self.monitor = oshosts.host_plugin.PhysicalHostMonitorPlugin()

@@ -15,8 +15,6 @@
 from unittest import mock
 import uuid as uuidgen
 
-from keystoneauth1 import session
-from keystoneauth1 import token_endpoint
 from novaclient import client as nova_client
 from novaclient import exceptions as nova_exceptions
 from novaclient.v2 import availability_zones
@@ -29,6 +27,7 @@ from blazar.manager import exceptions as manager_exceptions
 from blazar.plugins import oshosts as host_plugin
 from blazar import tests
 from blazar.utils.openstack import base
+from blazar.utils.openstack import exceptions as os_exceptions
 from blazar.utils.openstack import nova
 
 CONF = cfg.CONF
@@ -39,67 +38,72 @@ class TestCNClient(tests.TestCase):
         super(TestCNClient, self).setUp()
 
         self.nova = nova
-        self.context = context
-        self.n_client = nova_client
-        self.base = base
+        self.n_client = self.patch(nova_client, 'Client')
 
-        self.ctx = self.patch(self.context, 'current')
-        self.client = self.patch(self.n_client, 'Client')
-        self.auth = self.patch(token_endpoint, 'Token')
-        self.session = self.patch(session, 'Session')
-        self.url = 'http://fake.com/'
-        self.patch(self.base, 'url_for').return_value = self.url
+    def _session_of_client(self):
+        return self.n_client.call_args.kwargs['session']
 
-        self.version = '2'
-        self.endpoint_type = 'internalURL'
+    def test_service_identity_is_authenticated(self):
+        # Nothing else asserts that the nova client authenticates at all,
+        # which is how an unauthenticated client can slip through review.
+        self.cfg = self.useFixture(fixture.Config(CONF))
+        self.cfg.config(os_admin_username='blazar-service')
 
-    def test_client_from_kwargs(self):
-        self.ctx.side_effect = RuntimeError
-        endpoint = 'fake_endpoint'
-        username = 'blazar_admin'
-        password = 'blazar_password'
-        user_domain = 'User_Domain'
-        project_name = 'admin'
-        project_domain = 'Project_Domain'
-        auth_url = "%s://%s:%s" % (CONF.os_auth_protocol,
-                                   CONF.os_auth_host,
-                                   CONF.os_auth_port)
-        if CONF.os_auth_prefix:
-            auth_url += "/%s" % CONF.os_auth_prefix
+        self.nova.BlazarNovaClient(identity=base.Identity.SERVICE)
 
-        kwargs = {'version': self.version,
-                  'endpoint_override': endpoint,
-                  'username': username,
-                  'password': password,
-                  'user_domain_name': user_domain,
-                  'project_name': project_name,
-                  'project_domain_name': project_domain}
+        auth = self._session_of_client().auth
+        self.assertIsNotNone(auth)
+        self.assertEqual('blazar-service', auth.auth_methods[0].username)
 
-        self.nova.BlazarNovaClient(**kwargs)
+    def test_user_identity_reuses_the_callers_token(self):
+        self.set_context(context.BlazarContext(
+            user_id='u', project_id='p', auth_token='caller-token'))
 
-        self.client.assert_called_once_with(version=self.version,
-                                            username=username,
-                                            password=password,
-                                            user_domain_name=user_domain,
-                                            project_name=project_name,
-                                            project_domain_name=project_domain,
-                                            auth_url=auth_url,
-                                            endpoint_override=endpoint,
-                                            endpoint_type=self.endpoint_type)
+        self.nova.BlazarNovaClient(identity=base.Identity.USER)
 
-    def test_client_from_ctx(self):
-        kwargs = {'version': self.version}
+        session = self._session_of_client()
+        self.assertEqual('caller-token', session.get_token())
 
-        self.nova.BlazarNovaClient(**kwargs)
+    def test_user_identity_without_a_token_is_rejected(self):
+        # Previously this produced a client holding a null token, which
+        # only failed later, against nova.
+        self.set_context(context.BlazarContext(user_id='u', project_id='p'))
 
-        self.auth.assert_called_once_with(self.url,
-                                          self.ctx().auth_token)
-        self.session.assert_called_once_with(auth=self.auth.return_value)
-        self.client.assert_called_once_with(version=self.version,
-                                            endpoint_override=self.url,
-                                            endpoint_type=self.endpoint_type,
-                                            session=self.session.return_value,
-                                            global_request_id=mock.ANY)
+        self.assertRaises(os_exceptions.NoUserToken,
+                          self.nova.BlazarNovaClient,
+                          identity=base.Identity.USER)
+
+    def test_interface_is_passed_to_the_client(self):
+        self.cfg = self.useFixture(fixture.Config(CONF))
+        self.cfg.config(group='nova', valid_interfaces=['public'])
+
+        self.nova.BlazarNovaClient(identity=base.Identity.SERVICE)
+
+        self.assertEqual('publicURL',
+                         self.n_client.call_args.kwargs['endpoint_type'])
+
+    def test_deprecated_endpoint_type_is_still_honoured(self):
+        # load_raw_values goes through the config parser, which is what
+        # resolves a deprecated option name.
+        self.cfg = self.useFixture(fixture.Config(CONF))
+        self.cfg.load_raw_values(group='nova', endpoint_type='public')
+
+        self.nova.BlazarNovaClient(identity=base.Identity.SERVICE)
+
+        self.assertEqual('publicURL',
+                         self.n_client.call_args.kwargs['endpoint_type'])
+
+    def test_interface_defaults_to_internal(self):
+        self.nova.BlazarNovaClient(identity=base.Identity.SERVICE)
+
+        self.assertEqual('internalURL',
+                         self.n_client.call_args.kwargs['endpoint_type'])
+
+    def test_version_defaults_to_the_configured_one(self):
+        self.nova.BlazarNovaClient(identity=base.Identity.SERVICE)
+
+        self.assertEqual((CONF.nova.nova_client_version,),
+                         self.n_client.call_args.args)
 
     def test_getattr(self):
         # TODO(n.s.): Will be done as soon as pypi package will be updated
@@ -149,18 +153,15 @@ class ReservationPoolTestCase(tests.TestCase):
         self.patch(self.nova.aggregates, 'set_metadata')
         self.patch(self.nova.aggregates, 'remove_host')
 
-        self.patch(base, 'url_for').return_value = 'http://foo.bar'
         self.pool = nova.ReservationPool()
 
         self.p_name = self.patch(self.pool, '_generate_aggregate_name')
         self.p_name.return_value = self.pool_name
 
     def test_configuration(self):
-        self.assertEqual("fake-user", self.pool.username)
-        self.assertEqual("fake-passwd", self.pool.password)
-        self.assertEqual("fake-user-domain", self.pool.user_domain_name)
-        self.assertEqual("fake-pj-name", self.pool.project_name)
-        self.assertEqual("fake-pj-domain", self.pool.project_domain_name)
+        # Aggregate management is administrative, so the pool authenticates
+        # with Blazar's own credential rather than the caller's.
+        self.assertEqual(base.Identity.SERVICE, self.pool.identity)
 
     def _patch_get_aggregate_from_name_or_id(self):
         def get_fake_aggregate(*args):
@@ -534,7 +535,6 @@ class NovaInventoryTestCase(tests.TestCase):
         self.context = context
         self.patch(self.context, 'BlazarContext')
         self.nova = nova
-        self.patch(base, 'url_for').return_value = 'http://foo.bar'
         self.inventory = self.nova.NovaInventory()
 
         self.hypervisors_get = self.patch(hypervisors.HypervisorManager, 'get')

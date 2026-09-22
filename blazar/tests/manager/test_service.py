@@ -216,8 +216,6 @@ class ServiceTestCase(tests.DBTestCase):
             {'virtual:instance':
              {'on_start': self.fake_plugin.on_start,
               'on_end': self.fake_plugin.on_end}})
-        self.patch(
-            self.base_utils, 'url_for').return_value = 'http://www.foo.fake'
 
         self.addCleanup(self.cfg.CONF.clear_override,
                         'minutes_before_end_lease',

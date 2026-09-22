@@ -21,9 +21,6 @@ from blazar.utils.openstack import base
 
 
 opts = [
-    cfg.StrOpt('identity_service',
-               default='identity',
-               help='Identity service to use.'),
     cfg.StrOpt('os_region_name',
                default=None,
                help="""
@@ -37,12 +34,6 @@ Possible values:
 ]
 
 keystone_opts = [
-    cfg.StrOpt('endpoint_type',
-               default='internal',
-               choices=['public', 'admin', 'internal'],
-               help='Type of the keystone endpoint to use. This endpoint will '
-                    'be looked up in the keystone catalog and should be one '
-                    'of public, internal or admin.'),
     cfg.StrOpt('keystone_client_version',
                default='3',
                help='Keystoneclient version'),
@@ -54,13 +45,9 @@ CONF.register_opts(keystone_opts)
 
 
 class BlazarKeystoneClient(object):
-    def __init__(self, as_user=False, **kwargs):
-        """Return Keystone client for defined in 'identity_service' conf."""
-        if as_user:
-            client_kwargs = base.client_user_kwargs(**kwargs)
-        else:
-            client_kwargs = base.client_kwargs(**kwargs)
-
+    def __init__(self, identity=base.Identity.SERVICE, **kwargs):
+        """A keystone client for the [identity] service."""
+        client_kwargs = base.client_kwargs('identity', identity, **kwargs)
         client_kwargs.setdefault('version', cfg.CONF.keystone_client_version)
         self.keystone = keystone_client.Client(**client_kwargs)
         self.exceptions = keystone_exception
