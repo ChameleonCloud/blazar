@@ -670,8 +670,10 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             host_update_values['reservable'] = False
         db_api.host_update(resource["id"], host_update_values)
         LOG.warning(
-            f"{resource['hypervisor_hostname']}",
-            f"is set disabled {is_disabled} with reason: {disabled_reason}"
+            "%s is set disabled %s with reason: %s",
+            resource["hypervisor_hostname"],
+            is_disabled,
+            disabled_reason,
         )
 
     def list_allocations(self, query, detail=False):
