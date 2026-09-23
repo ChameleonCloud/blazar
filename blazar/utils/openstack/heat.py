@@ -53,7 +53,12 @@ class BlazarHeatClient(object):
             os_region_name=CONF.os_region_name)
 
         auth = token_endpoint.Token(endpoint_override, ctx.auth_token)
-        sess = session.Session(auth=auth)
+        sess_kwargs = dict(
+            auth=auth
+        )
+        if CONF.cafile:
+            sess_kwargs.update(verify=CONF.cafile)
+        sess = session.Session(**sess_kwargs)
 
         self.heat = heat_client.Client(
             CONF.heat.heat_api_version, session=sess)
