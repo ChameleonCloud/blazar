@@ -1086,6 +1086,71 @@ class PhysicalHostPluginTestCase(tests.TestCase):
 
         self.assertDictEqual(expected, ret)
 
+    def test_get_allocations_without_detail(self):
+        self.db_get_reserv_allocs = self.patch(
+            self.db_utils, 'get_reservation_allocations_by_host_ids')
+        self.db_get_reserv_allocs.return_value = [
+            {
+                'id': '1001',
+                'lease_id': '2001',
+                'start_date': datetime.datetime(2021, 8, 20, 20, 18),
+                'end_date': datetime.datetime(2021, 8, 30, 20, 0),
+                'status': 'active',
+                'lease_name': 'lease-2001',
+                'project_id': 'project-1',
+                'host_ids': ['3002']
+            },
+        ]
+
+        expected = {
+            'resource_id': '3002',
+            'reservations': [
+                {
+                    'id': '1001',
+                    'lease_id': '2001',
+                    'start_date': datetime.datetime(2021, 8, 20, 20, 18),
+                    'end_date': datetime.datetime(2021, 8, 30, 20, 0),
+                }
+            ]
+        }
+        ret = self.fake_phys_plugin.get_allocations('3002', {})
+
+        self.assertDictEqual(expected, ret)
+
+    def test_get_allocations_with_detail(self):
+        self.db_get_reserv_allocs = self.patch(
+            self.db_utils, 'get_reservation_allocations_by_host_ids')
+        self.db_get_reserv_allocs.return_value = [
+            {
+                'id': '1001',
+                'lease_id': '2001',
+                'start_date': datetime.datetime(2021, 8, 20, 20, 18),
+                'end_date': datetime.datetime(2021, 8, 30, 20, 0),
+                'status': 'active',
+                'lease_name': 'lease-2001',
+                'project_id': 'project-1',
+                'host_ids': ['3002']
+            },
+        ]
+
+        expected = {
+            'resource_id': '3002',
+            'reservations': [
+                {
+                    'id': '1001',
+                    'lease_id': '2001',
+                    'start_date': datetime.datetime(2021, 8, 20, 20, 18),
+                    'end_date': datetime.datetime(2021, 8, 30, 20, 0),
+                    'status': 'active',
+                    'lease_name': 'lease-2001',
+                    'project_id': 'project-1',
+                }
+            ]
+        }
+        ret = self.fake_phys_plugin.get_allocations('3002', {}, detail=True)
+
+        self.assertDictEqual(expected, ret)
+
     def test_create_reservation_no_hosts_available(self):
         now = datetime.datetime.utcnow()
         values = {
