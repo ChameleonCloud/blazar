@@ -181,14 +181,6 @@ class PhysicalHostPluginTestCase(tests.TestCase):
 
         self.ServerManager = nova.ServerManager
 
-    def reservation_allocation_dict(self, r_id, l_id, p_id, h_ids):
-        return {
-            'id': r_id, 'status': 'active', 'lease_id': l_id,
-            'start_date': datetime.datetime(2015, 1, 1, 0, 0),
-            'end_date': datetime.datetime(2015, 1, 2, 0, 0),
-            'lease_name': l_id, 'project_id': p_id,
-            'host_ids': h_ids}
-
     def test_get_host(self):
         host = self.fake_phys_plugin.get_computehost(self.fake_host_id)
         self.db_host_get.assert_called_once_with('1')
@@ -689,13 +681,37 @@ class PhysicalHostPluginTestCase(tests.TestCase):
 
         # Expecting a list of (Reservation, Allocation)
         self.db_get_reserv_allocs.return_value = [
-            self.reservation_allocation_dict(*r) for r
-            in [
-                ('reservation-1', 'lease-1',
-                 'project-1', ['host-1', 'host-2']),
-                ('reservation-2', 'lease-1',
-                 'project-1', ['host-2', 'host-3']),
-                ('reservation-3', 'lease-2', 'project-2', ['host-1'])]]
+            {
+                'id': 'reservation-1',
+                'lease_id': 'lease-1',
+                'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                'end_date': datetime.datetime(2015, 1, 2, 0, 0),
+                'status': 'active',
+                'lease_name': 'lease-1',
+                'project_id': 'project-1',
+                'host_ids': ['host-1', 'host-2']
+            },
+            {
+                'id': 'reservation-2',
+                'lease_id': 'lease-1',
+                'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                'end_date': datetime.datetime(2015, 1, 2, 0, 0),
+                'status': 'active',
+                'lease_name': 'lease-1',
+                'project_id': 'project-1',
+                'host_ids': ['host-2', 'host-3']
+            },
+            {
+                'id': 'reservation-3',
+                'lease_id': 'lease-2',
+                'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                'end_date': datetime.datetime(2015, 1, 2, 0, 0),
+                'status': 'active',
+                'lease_name': 'lease-2',
+                'project_id': 'project-2',
+                'host_ids': ['host-1']
+            }
+        ]
 
         self.db_host_list = self.patch(self.db_api, 'host_list')
         self.db_host_list.return_value = [
@@ -750,12 +766,27 @@ class PhysicalHostPluginTestCase(tests.TestCase):
 
         # Expecting a list of (Reservation, Allocation)
         self.db_get_reserv_allocs.return_value = [
-            self.reservation_allocation_dict(*r) for r
-            in [
-                ('reservation-1', 'lease-1',
-                 'project-1', ['host-1', 'host-2']),
-                ('reservation-2', 'lease-1',
-                 'project-1', ['host-2', 'host-3'])]]
+            {
+                'id': 'reservation-1',
+                'lease_id': 'lease-1',
+                'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                'end_date': datetime.datetime(2015, 1, 2, 0, 0),
+                'status': 'active',
+                'lease_name': 'lease-1',
+                'project_id': 'project-1',
+                'host_ids': ['host-1', 'host-2']
+            },
+            {
+                'id': 'reservation-2',
+                'lease_id': 'lease-1',
+                'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                'end_date': datetime.datetime(2015, 1, 2, 0, 0),
+                'status': 'active',
+                'lease_name': 'lease-1',
+                'project_id': 'project-1',
+                'host_ids': ['host-2', 'host-3']
+            }
+        ]
 
         self.db_host_list = self.patch(self.db_api, 'host_list')
         self.db_host_list.return_value = [
@@ -807,10 +838,17 @@ class PhysicalHostPluginTestCase(tests.TestCase):
 
         # Expecting a list of (Reservation, Allocation)
         self.db_get_reserv_allocs.return_value = [
-            self.reservation_allocation_dict(*r) for r
-            in [
-                ('reservation-1', 'lease-1',
-                 'project-1', ['host-1', 'host-2'])]]
+            {
+                'id': 'reservation-1',
+                'lease_id': 'lease-1',
+                'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                'end_date': datetime.datetime(2015, 1, 2, 0, 0),
+                'status': 'active',
+                'lease_name': 'lease-1',
+                'project_id': 'project-1',
+                'host_ids': ['host-1', 'host-2']
+            },
+        ]
 
         self.db_host_list = self.patch(self.db_api, 'host_list')
         self.db_host_list.return_value = [{'id': 'host-1'}, {'id': 'host-2'}]
@@ -851,13 +889,37 @@ class PhysicalHostPluginTestCase(tests.TestCase):
 
         # Expecting a list of (Reservation, Allocation)
         self.db_get_reserv_allocs.return_value = [
-            self.reservation_allocation_dict(*r) for r
-            in [
-                ('reservation-1', 'lease-1',
-                 'project-1', ['host-1', 'host-2']),
-                ('reservation-2', 'lease-1',
-                 'project-1', ['host-2', 'host-3']),
-                ('reservation-3', 'lease-2', 'project-2', ['host-1'])]]
+            {
+                'id': 'reservation-1',
+                'lease_id': 'lease-1',
+                'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                'end_date': datetime.datetime(2015, 1, 2, 0, 0),
+                'status': 'active',
+                'lease_name': 'lease-1',
+                'project_id': 'project-1',
+                'host_ids': ['host-1', 'host-2']
+            },
+            {
+                'id': 'reservation-2',
+                'lease_id': 'lease-1',
+                'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                'end_date': datetime.datetime(2015, 1, 2, 0, 0),
+                'status': 'active',
+                'lease_name': 'lease-1',
+                'project_id': 'project-1',
+                'host_ids': ['host-2', 'host-3']
+            },
+            {
+                'id': 'reservation-3',
+                'lease_id': 'lease-2',
+                'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                'end_date': datetime.datetime(2015, 1, 2, 0, 0),
+                'status': 'active',
+                'lease_name': 'lease-2',
+                'project_id': 'project-2',
+                'host_ids': ['host-1']
+            }
+        ]
 
         self.db_host_list = self.patch(self.db_api, 'host_list')
         self.db_host_list.return_value = [
@@ -885,8 +947,16 @@ class PhysicalHostPluginTestCase(tests.TestCase):
 
         # Expecting a list of (Reservation, Allocation)
         self.db_get_reserv_allocs.return_value = [
-            self.reservation_allocation_dict(
-                'reservation-1', 'lease-1', 'project-1', ['host-1']),
+            {
+                'id': 'reservation-1',
+                'lease_id': 'lease-1',
+                'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                'end_date': datetime.datetime(2015, 1, 2, 0, 0),
+                'status': 'active',
+                'lease_name': 'lease-1',
+                'project_id': 'project-1',
+                'host_ids': ['host-1']
+            },
         ]
 
         self.db_host_list = self.patch(self.db_api, 'host_list')
@@ -912,8 +982,17 @@ class PhysicalHostPluginTestCase(tests.TestCase):
 
         # Expecting a list of (Reservation, Allocation)
         self.db_get_reserv_allocs.return_value = [
-            self.reservation_allocation_dict(
-                'reservation-1', 'lease-1', 'project-1', ['host-1'])]
+            {
+                'id': 'reservation-1',
+                'lease_id': 'lease-1',
+                'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                'end_date': datetime.datetime(2015, 1, 2, 0, 0),
+                'status': 'active',
+                'lease_name': 'lease-1',
+                'project_id': 'project-1',
+                'host_ids': ['host-1']
+            },
+        ]
 
         self.db_host_list = self.patch(self.db_api, 'host_list')
         self.db_host_list.return_value = [{'id': 'host-1'}]
@@ -938,13 +1017,37 @@ class PhysicalHostPluginTestCase(tests.TestCase):
 
         # Expecting a list of (Reservation, Allocation)
         self.db_get_reserv_allocs.return_value = [
-            self.reservation_allocation_dict(*r) for r
-            in [
-                ('reservation-1', 'lease-1',
-                 'project-1', ['host-1', 'host-2']),
-                ('reservation-2', 'lease-1',
-                 'project-1', ['host-2', 'host-3']),
-                ('reservation-3', 'lease-2', 'project-2', ['host-1'])]]
+            {
+                'id': 'reservation-1',
+                'lease_id': 'lease-1',
+                'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                'end_date': datetime.datetime(2015, 1, 2, 0, 0),
+                'status': 'active',
+                'lease_name': 'lease-1',
+                'project_id': 'project-1',
+                'host_ids': ['host-1', 'host-2']
+            },
+            {
+                'id': 'reservation-2',
+                'lease_id': 'lease-1',
+                'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                'end_date': datetime.datetime(2015, 1, 2, 0, 0),
+                'status': 'active',
+                'lease_name': 'lease-1',
+                'project_id': 'project-1',
+                'host_ids': ['host-2', 'host-3']
+            },
+            {
+                'id': 'reservation-3',
+                'lease_id': 'lease-2',
+                'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                'end_date': datetime.datetime(2015, 1, 2, 0, 0),
+                'status': 'active',
+                'lease_name': 'lease-2',
+                'project_id': 'project-2',
+                'host_ids': ['host-1']
+            }
+        ]
 
         self.db_host_list = self.patch(self.db_api, 'host_list')
         self.db_host_list.return_value = [
