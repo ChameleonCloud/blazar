@@ -52,6 +52,10 @@ class BlazarException(Exception):
         super(BlazarException, self).__init__(message)
 
 
+class BadRequest(BlazarException):
+    code = 400
+
+
 class NotFound(BlazarException):
     """Object not found exception."""
     msg_fmt = _("Object with %(object)s not found")
@@ -96,7 +100,7 @@ class InvalidInput(BlazarException):
     msg_fmt = _("Expected a %(cls)s type but received %(value)s.")
 
 
-class UnsupportedAPIVersion(BlazarException):
+class UnsupportedAPIVersion(BadRequest):
     msg_fmt = _('API version %(version)s is not supported. Blazar only '
                 'supports Keystone v3 API.')
 
@@ -105,6 +109,7 @@ class InvalidStatus(BlazarException):
     msg_fmt = _("Invalid lease status.")
 
 
-class InvalidAPIVersionString(BlazarException):
+class InvalidAPIVersionString(BadRequest):
     message = _("API Version String %(version)s is of invalid format. Must "
                 "be of format MajorNum.MinorNum.")
+
