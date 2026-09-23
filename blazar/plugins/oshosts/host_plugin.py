@@ -339,15 +339,15 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         elif force:
             # If we are forcing reallocation from this host,
             # destroy the old allocation and update pool.
-            LOG.warn('Forcing reservation %s off host %s'
+            LOG.warning('Forcing reservation %s off host %s'
                 '(lease: %s).', reservation['id'], old_host['hypervisor_hostname'], lease['name'])
             db_api.host_allocation_destroy(allocation['id'])
             pool.remove_computehost(h_reservation['aggregate_id'],
                                     old_host['hypervisor_hostname'])
             return False
         else:
-            LOG.warn('Could not find alternative host for reservation %s '
-                     '(lease: %s).', reservation['id'], lease['name'])
+            LOG.warning('Could not find alternative host for reservation %s '
+                        '(lease: %s).', reservation['id'], lease['name'])
             return False
 
     def _get_extra_capabilities(self, host_id):
@@ -669,7 +669,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         if is_disabled:
             host_update_values['reservable'] = False
         db_api.host_update(resource["id"], host_update_values)
-        LOG.warn(
+        LOG.warning(
             f"{resource['hypervisor_hostname']}",
             f"is set disabled {is_disabled} with reason: {disabled_reason}"
         )
@@ -1113,8 +1113,8 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
             LOG.debug(f"{resource['hypervisor_hostname']} is disabled - cannot set reservable")
             return
         db_api.host_update(resource["id"], {"reservable": is_reservable})
-        LOG.warn('%s %s.', resource["hypervisor_hostname"],
-                 "recovered" if is_reservable else "failed")
+        LOG.warning('%s %s.', resource["hypervisor_hostname"],
+                    "recovered" if is_reservable else "failed")
 
     def poll_resource_failures(self):
         """Check health of hosts by calling Nova Hypervisors API.
