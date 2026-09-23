@@ -326,8 +326,8 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             new_hostid = new_hostids.pop()
             db_api.host_allocation_update(allocation['id'],
                                           {'compute_host_id': new_hostid})
-            LOG.warn('Resource changed for reservation %s (lease: %s).',
-                     reservation['id'], lease['name'])
+            LOG.warning('Resource changed for reservation %s (lease: %s).',
+                        reservation['id'], lease['name'])
             if reservation['status'] == status.reservation.ACTIVE:
                 # Add the alternative host into the aggregate.
                 new_host = db_api.host_get(new_hostid)
@@ -1093,8 +1093,8 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                 failed_hosts = db_api.reservable_host_get_all_by_queries(
                     ['hypervisor_hostname == ' + data['host']])
                 if failed_hosts:
-                    LOG.warn('%s failed.',
-                             failed_hosts[0]['hypervisor_hostname'])
+                    LOG.warning('%s failed.',
+                                failed_hosts[0]['hypervisor_hostname'])
                     for host in failed_hosts:
                         self.set_reservable(host, False)
             else:
@@ -1103,8 +1103,8 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                      'hypervisor_hostname == ' + data['host']])
                 if recovered_hosts:
                     self.set_reservable(recovered_hosts[0], True)
-                    LOG.warn('%s recovered.',
-                             recovered_hosts[0]['hypervisor_hostname'])
+                    LOG.warning('%s recovered.',
+                                recovered_hosts[0]['hypervisor_hostname'])
 
         return reservation_flags
 
