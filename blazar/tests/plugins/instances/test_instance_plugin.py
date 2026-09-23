@@ -1091,6 +1091,61 @@ class TestVirtualInstancePlugin(tests.TestCase):
                           plugin.update_reservation,
                           'reservation-id1', new_values)
 
+    def test_update_active_reservation_increase_amount(self):
+        plugin = instance_plugin.VirtualInstancePlugin()
+
+        old_reservation = {
+            'id': 'reservation-id1',
+            'status': 'active',
+            'lease_id': 'lease-id1',
+            'resource_id': 'instance-reservation-id1',
+            'vcpus': 2, 'memory_mb': 1024, 'disk_gb': 100,
+            'amount': 2, 'affinity': False,
+            'resource_properties': ''}
+        mock_reservation_get = self.patch(db_api, 'reservation_get')
+        mock_reservation_get.return_value = old_reservation
+
+        mock_lease_get = self.patch(db_api, 'lease_get')
+        mock_lease_get.return_value = {'start_date': '2020-07-07 18:00',
+                                       'end_date': '2020-07-07 19:00'}
+
+        mock_pickup_hosts = self.patch(plugin, 'pickup_hosts')
+        mock_pickup_hosts.return_value = {
+            'added': set(['host-id3']), 'removed': set()}
+        self.patch(plugin, 'update_host_allocations')
+        self.patch(plugin, 'update_resources')
+        mock_inst_update = self.patch(db_api, 'instance_reservation_update')
+
+        plugin.update_reservation('reservation-id1', {'amount': 3})
+
+        mock_inst_update.assert_called_once_with(
+            'instance-reservation-id1',
+            {'vcpus': 2, 'memory_mb': 1024, 'disk_gb': 100,
+             'amount': 3, 'affinity': False, 'resource_properties': ''})
+
+    def test_update_active_reservation_resource_properties_fail(self):
+        plugin = instance_plugin.VirtualInstancePlugin()
+
+        old_reservation = {
+            'id': 'reservation-id1',
+            'status': 'active',
+            'lease_id': 'lease-id1',
+            'resource_id': 'instance-reservation-id1',
+            'vcpus': 2, 'memory_mb': 1024, 'disk_gb': 100,
+            'amount': 2, 'affinity': False,
+            'resource_properties': ''}
+        mock_reservation_get = self.patch(db_api, 'reservation_get')
+        mock_reservation_get.return_value = old_reservation
+
+        mock_lease_get = self.patch(db_api, 'lease_get')
+        mock_lease_get.return_value = {'start_date': '2020-07-07 18:00',
+                                       'end_date': '2020-07-07 19:00'}
+
+        new_values = {'resource_properties': '["==", "key1", "value1"]'}
+        self.assertRaises(mgr_exceptions.InvalidStateUpdate,
+                          plugin.update_reservation,
+                          'reservation-id1', new_values)
+
     def test_update_host_allocations(self):
         mock_alloc_get = self.patch(db_api,
                                     'host_allocation_get_all_by_values')
