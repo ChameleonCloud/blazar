@@ -679,6 +679,12 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         self.db_get_reserv_allocs = self.patch(
             self.db_utils, 'get_reservation_allocations_by_host_ids')
 
+        self.db_host_list.return_value = [
+            {'id': 'host-1'},
+            {'id': 'host-2'},
+            {'id': 'host-3'},
+        ]
+
         # Expecting a list of (Reservation, Allocation)
         self.db_get_reserv_allocs.return_value = [
             {
@@ -713,41 +719,59 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             }
         ]
 
-        self.db_host_list = self.patch(self.db_api, 'host_list')
-        self.db_host_list.return_value = [
-            {'id': 'host-1'}, {'id': 'host-2'}, {'id': 'host-3'}]
-
-        self.patch(self.db_api, 'instance_reservation_get_by_reservation_id').return_value = None
+        inst_res_get = self.patch(
+            self.db_api, 'instance_reservation_get_by_reservation_id')
+        inst_res_get.return_value = None
 
         expected = [
             {
                 'resource_id': 'host-1',
                 'reservations': [
-                    {'id': 'reservation-1',
-                        'lease_id': 'lease-1', 'extras': {},
-                        'start_date': datetime.datetime(2015, 1, 1), 'end_date': datetime.datetime(2015, 1, 2)},
-                    {'id': 'reservation-3',
-                        'lease_id': 'lease-2', 'extras': {},
-                        'start_date': datetime.datetime(2015, 1, 1), 'end_date': datetime.datetime(2015, 1, 2)},
+                    {
+                        'id': 'reservation-1',
+                        'lease_id': 'lease-1',
+                        'extras': {},
+                        'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                        'end_date': datetime.datetime(2015, 1, 2, 0, 0)
+                    },
+                    {
+                        'id': 'reservation-3',
+                        'lease_id': 'lease-2',
+                        'extras': {},
+                        'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                        'end_date': datetime.datetime(2015, 1, 2, 0, 0)
+                    }
                 ]
             },
             {
                 'resource_id': 'host-2',
                 'reservations': [
-                    {'id': 'reservation-1',
-                        'lease_id': 'lease-1', 'extras': {},
-                        'start_date': datetime.datetime(2015, 1, 1), 'end_date': datetime.datetime(2015, 1, 2)},
-                    {'id': 'reservation-2',
-                        'lease_id': 'lease-1', 'extras': {},
-                        'start_date': datetime.datetime(2015, 1, 1), 'end_date': datetime.datetime(2015, 1, 2)},
+                    {
+                        'id': 'reservation-1',
+                        'lease_id': 'lease-1',
+                        'extras': {},
+                        'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                        'end_date': datetime.datetime(2015, 1, 2, 0, 0)
+                    },
+                    {
+                        'id': 'reservation-2',
+                        'lease_id': 'lease-1',
+                        'extras': {},
+                        'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                        'end_date': datetime.datetime(2015, 1, 2, 0, 0)
+                    }
                 ]
             },
             {
                 'resource_id': 'host-3',
                 'reservations': [
-                    {'id': 'reservation-2',
-                        'lease_id': 'lease-1', 'extras': {},
-                        'start_date': datetime.datetime(2015, 1, 1), 'end_date': datetime.datetime(2015, 1, 2)},
+                    {
+                        'id': 'reservation-2',
+                        'lease_id': 'lease-1',
+                        'extras': {},
+                        'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                        'end_date': datetime.datetime(2015, 1, 2, 0, 0)
+                    }
                 ]
             }
         ]
@@ -764,6 +788,11 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         self.db_get_reserv_allocs = self.patch(
             self.db_utils, 'get_reservation_allocations_by_host_ids')
 
+        self.db_host_list.return_value = [
+            {'id': 'host-1'},
+            {'id': 'host-2'},
+            {'id': 'host-3'},
+        ]
         # Expecting a list of (Reservation, Allocation)
         self.db_get_reserv_allocs.return_value = [
             {
@@ -788,43 +817,56 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             }
         ]
 
-        self.db_host_list = self.patch(self.db_api, 'host_list')
-        self.db_host_list.return_value = [
-            {'id': 'host-1'}, {'id': 'host-2'}, {'id': 'host-3'}]
-
-        self.patch(self.db_api, 'instance_reservation_get_by_reservation_id').return_value = None
+        inst_res_get = self.patch(
+            self.db_api, 'instance_reservation_get_by_reservation_id')
+        inst_res_get.return_value = None
 
         expected = [
             {
                 'resource_id': 'host-1',
                 'reservations': [
-                    {'id': 'reservation-1',
-                        'lease_id': 'lease-1', 'extras': {},
-                        'start_date': datetime.datetime(2015, 1, 1), 'end_date': datetime.datetime(2015, 1, 2)},
+                    {
+                        'id': 'reservation-1',
+                        'lease_id': 'lease-1',
+                        'extras': {},
+                        'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                        'end_date': datetime.datetime(2015, 1, 2, 0, 0)
+                    }
                 ]
             },
             {
                 'resource_id': 'host-2',
                 'reservations': [
-                    {'id': 'reservation-1',
-                        'lease_id': 'lease-1', 'extras': {},
-                        'start_date': datetime.datetime(2015, 1, 1), 'end_date': datetime.datetime(2015, 1, 2)},
-                    {'id': 'reservation-2',
-                        'lease_id': 'lease-1', 'extras': {},
-                        'start_date': datetime.datetime(2015, 1, 1), 'end_date': datetime.datetime(2015, 1, 2)},
+                    {
+                        'id': 'reservation-1',
+                        'lease_id': 'lease-1',
+                        'extras': {},
+                        'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                        'end_date': datetime.datetime(2015, 1, 2, 0, 0)
+                    },
+                    {
+                        'id': 'reservation-2',
+                        'lease_id': 'lease-1',
+                        'extras': {},
+                        'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                        'end_date': datetime.datetime(2015, 1, 2, 0, 0)
+                    }
                 ]
             },
             {
                 'resource_id': 'host-3',
                 'reservations': [
-                    {'id': 'reservation-2',
-                        'lease_id': 'lease-1', 'extras': {},
-                        'start_date': datetime.datetime(2015, 1, 1), 'end_date': datetime.datetime(2015, 1, 2)},
+                    {
+                        'id': 'reservation-2',
+                        'lease_id': 'lease-1',
+                        'extras': {},
+                        'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                        'end_date': datetime.datetime(2015, 1, 2, 0, 0)
+                    }
                 ]
             }
         ]
         ret = self.fake_phys_plugin.list_allocations({'lease_id': 'lease-1'})
-
         # Sort returned value to use assertListEqual
         for r in ret:
             r['reservations'].sort(key=lambda x: x['id'])
@@ -836,6 +878,10 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         self.db_get_reserv_allocs = self.patch(
             self.db_utils, 'get_reservation_allocations_by_host_ids')
 
+        self.db_host_list.return_value = [
+            {'id': 'host-1'},
+            {'id': 'host-2'},
+        ]
         # Expecting a list of (Reservation, Allocation)
         self.db_get_reserv_allocs.return_value = [
             {
@@ -850,29 +896,37 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             },
         ]
 
-        self.db_host_list = self.patch(self.db_api, 'host_list')
-        self.db_host_list.return_value = [{'id': 'host-1'}, {'id': 'host-2'}]
-
-        self.patch(self.db_api, 'instance_reservation_get_by_reservation_id').return_value = None
+        inst_res_get = self.patch(
+            self.db_api, 'instance_reservation_get_by_reservation_id')
+        inst_res_get.return_value = None
 
         expected = [
             {
                 'resource_id': 'host-1',
                 'reservations': [
-                    {'id': 'reservation-1',
-                        'lease_id': 'lease-1', 'extras': {},
-                        'start_date': datetime.datetime(2015, 1, 1), 'end_date': datetime.datetime(2015, 1, 2)},
+                    {
+                        'id': 'reservation-1',
+                        'lease_id': 'lease-1',
+                        'extras': {},
+                        'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                        'end_date': datetime.datetime(2015, 1, 2, 0, 0)
+                    }
                 ]
             },
             {
                 'resource_id': 'host-2',
                 'reservations': [
-                    {'id': 'reservation-1',
-                        'lease_id': 'lease-1', 'extras': {},
-                        'start_date': datetime.datetime(2015, 1, 1), 'end_date': datetime.datetime(2015, 1, 2)},
+                    {
+                        'id': 'reservation-1',
+                        'lease_id': 'lease-1',
+                        'extras': {},
+                        'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                        'end_date': datetime.datetime(2015, 1, 2, 0, 0)
+                    }
                 ]
             },
         ]
+
         ret = self.fake_phys_plugin.list_allocations(
             {'reservation_id': 'reservation-1'})
 
@@ -921,17 +975,21 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             }
         ]
 
-        self.db_host_list = self.patch(self.db_api, 'host_list')
-        self.db_host_list.return_value = [
-            {'id': 'host-1'}, {'id': 'host-2'}, {'id': 'host-3'}]
-
         expected = {
             'resource_id': 'host-1',
             'reservations': [
-                {'id': 'reservation-1', 'lease_id': 'lease-1',
-                    'start_date': datetime.datetime(2015, 1, 1), 'end_date': datetime.datetime(2015, 1, 2)},
-                {'id': 'reservation-3', 'lease_id': 'lease-2',
-                    'start_date': datetime.datetime(2015, 1, 1), 'end_date': datetime.datetime(2015, 1, 2)},
+                {
+                    'id': 'reservation-1',
+                    'lease_id': 'lease-1',
+                    'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                    'end_date': datetime.datetime(2015, 1, 2, 0, 0)
+                },
+                {
+                    'id': 'reservation-3',
+                    'lease_id': 'lease-2',
+                    'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                    'end_date': datetime.datetime(2015, 1, 2, 0, 0)
+                }
             ]
         }
         ret = self.fake_phys_plugin.get_allocations('host-1', {})
@@ -959,14 +1017,17 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             },
         ]
 
-        self.db_host_list = self.patch(self.db_api, 'host_list')
-        self.db_host_list.return_value = [{'id': 'host-1'}]
-
         expected = {
             'resource_id': 'host-1',
             'reservations': [
-                {'id': 'reservation-1', 'lease_id': 'lease-1',
-                    'start_date': datetime.datetime(2015, 1, 1, 0, 0), 'end_date': datetime.datetime(2015, 1, 2, 0, 0)}]}
+                {
+                    'id': 'reservation-1',
+                    'lease_id': 'lease-1',
+                    'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                    'end_date': datetime.datetime(2015, 1, 2, 0, 0)
+                }
+            ]
+        }
 
         ret = self.fake_phys_plugin.get_allocations('host-1',
                                                     {'lease_id': 'lease-1'})
@@ -994,15 +1055,17 @@ class PhysicalHostPluginTestCase(tests.TestCase):
             },
         ]
 
-        self.db_host_list = self.patch(self.db_api, 'host_list')
-        self.db_host_list.return_value = [{'id': 'host-1'}]
-
         expected = {
             'resource_id': 'host-1',
             'reservations': [
-                {'id': 'reservation-1', 'lease_id': 'lease-1',
-                    'start_date': datetime.datetime(2015, 1, 1, 0, 0), 'end_date': datetime.datetime(2015, 1, 2, 0, 0)}]}
-
+                {
+                    'id': 'reservation-1',
+                    'lease_id': 'lease-1',
+                    'start_date': datetime.datetime(2015, 1, 1, 0, 0),
+                    'end_date': datetime.datetime(2015, 1, 2, 0, 0)
+                }
+            ]
+        }
         ret = self.fake_phys_plugin.get_allocations(
             'host-1', {'reservation_id': 'reservation-1'})
 
@@ -1048,11 +1111,6 @@ class PhysicalHostPluginTestCase(tests.TestCase):
                 'host_ids': ['host-1']
             }
         ]
-
-        self.db_host_list = self.patch(self.db_api, 'host_list')
-        self.db_host_list.return_value = [
-            {'id': 'host-1'}, {'id': 'host-2'}, {'id': 'host-3'}]
-
         expected = {'resource_id': 'no-reserved-host', 'reservations': []}
         ret = self.fake_phys_plugin.get_allocations('no-reserved-host', {})
 
