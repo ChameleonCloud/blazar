@@ -17,6 +17,16 @@ from blazar import exceptions
 from blazar.i18n import _
 
 
+class NotImplemented(exceptions.BlazarException):
+    code = 409
+    msg_fmt = '%(error)s'
+
+
+class ReservationTypeConflict(exceptions.NotFound):
+    code = 409
+    msg_fmt = _("Conflicting reservation types found")
+
+
 class NoFreePool(exceptions.NotFound):
     msg_fmt = _("No Freepool found")
 
@@ -122,6 +132,9 @@ class ExtraCapabilityNotFound(exceptions.BlazarException):
     code = 404
     msg_fmt = _("Capability %(keys)s not found on resource %(resource)s")
 
+class ResourceProviderNotFound(exceptions.NotFound):
+    code = 404
+    msg_fmt = _("No resource provider found for host %(host)s")
 
 class EndpointsNotFound(exceptions.NotFound):
     code = 404

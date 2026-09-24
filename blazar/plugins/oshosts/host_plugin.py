@@ -30,6 +30,7 @@ from blazar.manager import exceptions as manager_ex
 from blazar.plugins import base
 from blazar.plugins import monitor
 from blazar.plugins import oshosts as plugin
+from blazar.plugins import flavor as flavor_plugin
 from blazar import status
 from blazar.utils.openstack import heat
 from blazar.utils.openstack import ironic
@@ -77,6 +78,17 @@ plugin_opts = [
     cfg.BoolOpt('randomize_host_selection',
                 default=False,
                 help='Allocate hosts for reservations randomly.'),
+    cfg.BoolOpt('allow_reservation',
+        default=True,
+        help='Allow users to create host reservations. This plugin must be enabled '
+             'for flavor reservations, but it may not be desirable to allow an '
+             'entire host to be reserved.'),
+    cfg.BoolOpt('permit_admin_reservation',
+        default=True,
+        help='Allow admin users to create host reservations, even if allow_reservation is False.'),
+    cfg.BoolOpt('filter_vm_hosts',
+            default=False,
+            help='Only permit ironic (baremetal) hosts to be reserved.'),
 ]
 
 plugin_opts.extend(monitor.monitor_opts)
@@ -112,8 +124,32 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         self.monitor.register_reallocater(self._reallocate)
         self.placement_client = placement.BlazarPlacementClient()
 
+    def _is_admin_reservation(self, project_id) -> bool:
+        """Check if admin bypass should be applied.
+
+        Returns true IFF
+        1. plugin for current resource type has admin bypass enabled
+        2. the user in current request context has the admin role
+        3. the project being acted upon is owned by the admin user.
+
+        As this check is used to gate various filter mechanisms, check #3 is
+        required to prevent an admin reallocating a non-admin user's reservation
+        onto a project-restricted host.
+        """
+
+        return (
+            CONF[self.resource_type].permit_admin_reservation
+            and self._is_admin()
+            and context.current().project_id == project_id
+        )
+
     def reserve_resource(self, reservation_id, values):
         """Create reservation."""
+
+        # Reject reservation if it is not allowed, and the user is not an admin
+        if not CONF[self.resource_type].allow_reservation and not self._is_admin_reservation(values['project_id']):
+            raise manager_ex.UnsupportedResourceType(resource_type=self.resource_type)
+
         ctx = context.current()
         host_ids = self.allocation_candidates(values)
 
@@ -484,6 +520,70 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             raise manager_ex.CantAddExtraCapability(
                 keys=cantaddextracapability,
                 host=host['id'])
+
+        # Check for placement details
+        hostname = host_details['hypervisor_hostname']
+        rp = self.placement_client.get_resource_provider(hostname)
+        if rp is None:
+            raise manager_ex.ResourceProviderNotFound(host=hostname)
+
+        # Sum inventory across the resource-provider and all child RPs. Nested
+        # RPs such as GPUs carry their own inventory in placement.
+        tree_rps = self.placement_client.list_resource_providers(
+            query="in_tree=%s" % rp['uuid'])
+        # This shouldn't happen, since a resource provider is always in its own
+        # tree. Make sure we bail out instead of creating an empty host.
+        if not tree_rps:
+            raise manager_ex.ResourceProviderNotFound(host=hostname)
+
+        aggregated_inventories = {}
+        for tree_rp in tree_rps:
+            inventories = self.placement_client.get_inventory(
+                tree_rp['uuid'])['inventories']
+            for resource_class, inventory in inventories.items():
+                if resource_class not in aggregated_inventories:
+                    # 'total' and 'reserved' sum across all RPs in the tree.
+                    # Per-unit fields come from the first RP for this resource.
+                    aggregated_inventories[resource_class] = {
+                        'total': 0,
+                        'reserved': 0,
+                        'min_unit': inventory['min_unit'],
+                        'max_unit': inventory['max_unit'],
+                        'step_size': inventory['step_size'],
+                        'allocation_ratio': inventory['allocation_ratio'],
+                    }
+
+                agg = aggregated_inventories[resource_class]
+                if agg['max_unit'] != inventory['max_unit']:
+                    new_max = max(agg['max_unit'], inventory['max_unit'])
+                    LOG.warning(
+                        "Different max_units for resource %s on host %s, "
+                        "using max value %s",
+                        resource_class, hostname, new_max)
+                    agg['max_unit'] = new_max
+                agg['total'] += inventory['total']
+                agg['reserved'] += inventory['reserved']
+
+        for rc, inventory in aggregated_inventories.items():
+            resource_inventory = {
+                'computehost_id': host['id'],
+                'resource_class': rc,
+                'total': inventory['total'],
+                'reserved': inventory['reserved'],
+                'min_unit': inventory['min_unit'],
+                'max_unit': inventory['max_unit'],
+                'step_size': inventory['step_size'],
+                'allocation_ratio': inventory['allocation_ratio'],
+            }
+            db_api.host_resource_inventory_create(resource_inventory)
+
+        traits = self.placement_client.get_traits(rp['uuid'])
+        for trait in traits:
+            db_api.host_trait_create({
+                'computehost_id': host['id'],
+                'trait': trait,
+            })
+
         return self.get_computehost(host['id'])
 
     def is_updatable_extra_capability(self, capability, property_name):
@@ -492,6 +592,8 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             datetime.date.max)
 
         for r in reservations:
+            if r['resource_type'] == flavor_plugin.RESOURCE_TYPE:
+                continue
             plugin_reservation = db_utils.get_plugin_reservation(
                 r['resource_type'], r['resource_id'])
 
@@ -646,6 +748,20 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                                                         **options)
         self.add_extra_allocation_info(hosts_allocations)
         self.add_allocation_cleaning_time(hosts_allocations, CONF.cleaning_time)
+        inst_res_map = {}
+        for allocation_list in hosts_allocations.values():
+            for allocation in allocation_list:
+                # This is allocation id :()
+                if not inst_res_map.get(allocation["id"]):
+                    inst_res_map[allocation["id"]] = db_api.instance_reservation_get_by_reservation_id(allocation["id"])
+                inst_res = inst_res_map[allocation["id"]]
+                # inst_res will be None if the allocation is not from a flavor/instance reservation
+                if inst_res:
+                    data = {}
+                    data["vcpus"] = inst_res.vcpus
+                    data["memory_mb"] = inst_res.memory_mb
+                    data["disk_gb"] = inst_res.disk_gb
+                    allocation["usage"] = data
         return [{"resource_id": host, "reservations": allocs}
                 for host, allocs in hosts_allocations.items()]
 
@@ -804,9 +920,15 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
             hosts = db_api.host_get_all_by_queries(filter_array)
         else:
             hosts = db_api.reservable_host_get_all_by_queries(filter_array)
+        is_admin_reservation = self._is_admin_reservation(project_id)
         for host in hosts:
-            if not self.is_project_allowed(project_id, self.get_computehost(host["id"])):
-                continue
+            full_host = self.get_computehost(host["id"])
+            # Only apply extra filters if not an admin res
+            if not is_admin_reservation:
+                if CONF[self.resource_type].filter_vm_hosts and full_host.get('hypervisor_type') != 'ironic':
+                    continue
+                if not self.is_project_allowed(project_id, full_host):
+                    continue
             if not db_api.host_allocation_get_all_by_values(
                     compute_host_id=host['id']):
                 not_allocated_host_ids.append(host['id'])
@@ -1124,25 +1246,24 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                                       if h['reservable'] is False]
 
                 hvs = self.nova.hypervisors.list()
-                hvs_by_id = {str(hv.id): hv for hv in hvs}
+                hvs_by_hostname = {hv.hypervisor_hostname: hv for hv in hvs}
 
-                failed_hv_ids = [str(hv.id) for hv in hvs
+                failed_hv_hostnames = [hv.hypervisor_hostname for hv in hvs
                                  if hv.state == 'down'
                                  or hv.status == 'disabled']
                 for host in reservable_hosts:
-                    host_id = str(host['id'])
-                    print(host_id)
-                    if host_id in failed_hv_ids:
-                        hv = hvs_by_id.get(host_id)
+                    if host['hypervisor_hostname'] in failed_hv_hostnames:
+                        hv = hvs_by_hostname.get(host['hypervisor_hostname'])
                         error = f"Hypervisor status is {hv.state} and {hv.status}"
                         db_api.host_update(host["id"], {"last_error": error})
                         failed_hosts.append(host)
 
-                active_hv_ids = [str(hv.id) for hv in hvs
+
+                active_hv_hostnames = [hv.hypervisor_hostname for hv in hvs
                                  if hv.state == 'up'
                                  and hv.status == 'enabled']
                 recovered_hosts.extend([host for host in unreservable_hosts
-                                        if host['id'] in active_hv_ids])
+                                        if host['hypervisor_hostname'] in active_hv_hostnames])
 
             aggregates = self.nova.aggregates.list()
             # create a map to get the current aggregate of a host in nova
@@ -1156,6 +1277,9 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
             for host in all_hosts:
                 # get the most recent reservation for the host_id and check if we need to move to freepool
                 reservation = db_utils.get_most_recent_reservation_info_by_host_id(host['id'])
+                # Ignore host if no host reservation exists for it
+                if not reservation:
+                    continue
                 # ignore the reservation which is active, as the host must already be in the right pool
                 if reservation and reservation["reservation_status"] == status.reservation.ACTIVE:
                     LOG.debug(f"{host['hypervisor_hostname']} is in an active reservation"

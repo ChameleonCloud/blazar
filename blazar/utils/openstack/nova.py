@@ -73,11 +73,11 @@ LOG = logging.getLogger(__name__)
 
 
 class BlazarNovaClient(object):
-    def __init__(self, **kwargs):
+    def __init__(self, version=None, **kwargs):
         # Chameleon only, upstream does not use shared client_kwargs.
         client_kwargs = base.client_kwargs(**kwargs)
         self.nova = nova_client.Client(
-            CONF.nova.nova_client_version, **client_kwargs)
+            version or CONF.nova.nova_client_version, **client_kwargs)
         self.nova.servers = ServerManager(self.nova)
         self.exceptions = nova_exception
 
@@ -97,9 +97,16 @@ class ServerManager(servers.ServerManager):
 
 
 class NovaClientWrapper(object):
+    _version = None
+
+    def __init__(self, version=None):
+        self._version = version
+
     @property
     def nova(self):
-        nova = BlazarNovaClient(endpoint_override=CONF.nova.endpoint_override)
+        nova = BlazarNovaClient(
+            version=self._version,
+            endpoint_override=CONF.nova.endpoint_override)
         return nova
 
 
@@ -282,20 +289,6 @@ class ReservationPool(NovaClientWrapper):
                 except nova_exception.Conflict as e:
                     raise manager_exceptions.AggregateAlreadyHasHost(
                         pool=pool, host=host, nova_exception=str(e))
-
-                # remove preemptible instances
-                for server in self.nova.servers.list(
-                        search_opts={"node": host, "all_tenants": 1}):
-                    try:
-                        LOG.info('Terminating preemptible instance %s (%s)',
-                                 server.name, server.id)
-                        self.nova.servers.delete(server=server)
-                    except nova_exception.NotFound:
-                        LOG.info('Could not find server %s, may have been '
-                                 'deleted concurrently.', server)
-                    except Exception as e:
-                        LOG.exception(
-                            'Failed to delete %s: %s.', server, str(e))
             except Exception as e:
                 LOG.exception('Error processing host %s: %s', host, str(e))
                 raise e
