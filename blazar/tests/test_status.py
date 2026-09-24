@@ -15,6 +15,7 @@ from unittest.mock import call
 
 from blazar.db import api as db_api
 from blazar import exceptions
+from blazar.manager import exceptions as manager_exceptions
 from blazar import status
 from blazar import tests
 
@@ -275,6 +276,57 @@ class LeaseStatusTestCase(tests.TestCase):
         lease_update.assert_has_calls(
             [call(self.lease_id, {'status': status.LeaseStatus.STARTING}),
              call(self.lease_id, {'status': status.LeaseStatus.PENDING})])
+
+    # chi only: behavior introduced by commit b4449e56 which matches non-fatal
+    # exceptions by subclass, not exact type
+    def test_lease_status_func_allow_non_fatal_exception_subclass(self):
+        lease = {
+            'status': status.LeaseStatus.PENDING
+        }
+        self.patch(self.db_api, 'lease_get').return_value = lease
+        lease_update = self.patch(self.db_api, 'lease_update')
+        self.patch(self.status.LeaseStatus, 'is_valid_transition'
+                   ).return_value = True
+
+        @self.status.LeaseStatus.lease_status(
+            transition=status.LeaseStatus.STARTING,
+            result_in=(status.LeaseStatus.ACTIVE,),
+            non_fatal_exceptions=[
+                manager_exceptions.NotEnoughResourcesAvailable])
+        def dummy_start_lease(*args, **kwargs):
+            raise manager_exceptions.NotEnoughHostsAvailable
+
+        self.assertRaises(manager_exceptions.NotEnoughHostsAvailable,
+                          dummy_start_lease,
+                          lease_id=self.lease_id)
+
+        lease_update.assert_called_with(
+            self.lease_id, {'status': status.LeaseStatus.PENDING})
+
+    # chi only: behavior introduced by commit 5a107ed7 which reads lease_id
+    # from positional args
+    def test_lease_status_called_with_positional_lease_id(self):
+        lease = {
+            'status': status.LeaseStatus.PENDING
+        }
+        self.patch(self.db_api, 'lease_get').return_value = lease
+        lease_update = self.patch(self.db_api, 'lease_update')
+        self.patch(self.status.LeaseStatus, 'is_valid_transition'
+                   ).return_value = True
+        self.patch(self.status.LeaseStatus, 'derive_stable_status'
+                   ).return_value = status.LeaseStatus.ACTIVE
+
+        class DummyManager(object):
+            @status.LeaseStatus.lease_status(
+                transition=status.LeaseStatus.STARTING,
+                result_in=(status.LeaseStatus.ACTIVE,))
+            def start_lease(self, lease_id):
+                pass
+
+        DummyManager().start_lease(self.lease_id)
+
+        lease_update.assert_called_with(
+            self.lease_id, {'status': status.LeaseStatus.ACTIVE})
 
     def test_lease_status_mismatch_result_in(self):
         lease = {
