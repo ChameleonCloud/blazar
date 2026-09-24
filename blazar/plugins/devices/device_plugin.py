@@ -409,15 +409,15 @@ class DevicePlugin(base.BasePlugin):
         )
         if not new_deviceids:
             db_api.device_allocation_destroy(allocation['id'])
-            LOG.warn('Could not find alternative device for reservation %s '
-                     '(lease: %s).', reservation['id'], lease['name'])
+            LOG.warning('Could not find alternative device for reservation %s '
+                        '(lease: %s).', reservation['id'], lease['name'])
             return False
         else:
             new_deviceid = new_deviceids.pop()
             db_api.device_allocation_update(allocation['id'],
                                             {'device_id': new_deviceid})
-            LOG.warn('Resource changed for reservation %s (lease: %s).',
-                     reservation['id'], lease['name'])
+            LOG.warning('Resource changed for reservation %s (lease: %s).',
+                        reservation['id'], lease['name'])
             if reservation['status'] == status.reservation.ACTIVE:
                 new_device = db_api.device_get(new_deviceid)
                 self.plugins[device["device_driver"]].add_active_device(
@@ -727,8 +727,8 @@ class DeviceMonitorPlugin(monitor.GeneralMonitorPlugin):
 
     def set_reservable(self, resource, is_reservable):
         db_api.device_update(resource["id"], {"reservable": is_reservable})
-        LOG.warn('%s %s.', resource["name"],
-                 "recovered" if is_reservable else "failed")
+        LOG.warning('%s %s.', resource["name"],
+                    "recovered" if is_reservable else "failed")
 
     def poll_resource_failures(self):
         """Check health of devices by calling driver service API.

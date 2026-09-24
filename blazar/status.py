@@ -40,8 +40,8 @@ class BaseStatus(object):
         """
 
         if next_status not in cls.NEXT_STATUSES[current_status]:
-            LOG.warn('Invalid transition from %s to %s.',
-                     current_status, next_status)
+            LOG.warning('Invalid transition from %s to %s.',
+                        current_status, next_status)
             return False
 
         return True
@@ -137,7 +137,7 @@ class LeaseStatus(BaseStatus):
             if cls.is_valid_combination(kwargs['lease_id'], next):
                 return True
             else:
-                LOG.warn('Invalid combination of statuses.')
+                LOG.warning('Invalid combination of statuses.')
 
         return False
 

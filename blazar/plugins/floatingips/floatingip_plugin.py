@@ -489,7 +489,7 @@ class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClien
 
     def set_reservable(self, resource, is_reservable):
         db_api.floatingip_update(resource["id"], {"reservable": is_reservable})
-        LOG.warn(
+        LOG.warning(
             f"{resource['floating_ip_address']} "
             f"{'recovered' if is_reservable else 'failed'} - setting reservable True"
         )
