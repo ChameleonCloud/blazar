@@ -98,11 +98,7 @@ def enforce(context, action, target, do_raise=True):
 
     init()
 
-    credentials = context.to_dict()
-    # NOTE(jasonandersonatuchicago): Keep for backwards compabitility with
-    # deployments using the old %(project_id)s policy syntax.
-    credentials['project_id'] = credentials.get('project')
-    credentials['user_id'] = credentials.get('user')
+    credentials = context.to_policy_values()
 
     # Add the exceptions arguments if asked to do a raise
     extra = {}
