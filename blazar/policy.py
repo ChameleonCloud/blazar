@@ -112,12 +112,7 @@ def enforce(context, action, target, do_raise=True):
 def check_enforcement(
         extension, action=None, api='blazar', ctx=None, target=None):
     cur_ctx = ctx or context.current()
-    tgt = target or {'project': cur_ctx.project_id,
-                     'user': cur_ctx.user_id,
-                     # NOTE(jasonandersonatuchicago): Keep for
-                     # backwards compabitility with deployments using
-                     # the old %(project_id)s policy syntax.
-                     'project_id': cur_ctx.project_id,
+    tgt = target or {'project_id': cur_ctx.project_id,
                      'user_id': cur_ctx.user_id}
     if action is None:
         act = '%s:%s' % (api, extension)
@@ -138,8 +133,6 @@ def authorize(extension, action=None, api='blazar', ctx=None,
                     obj = db_api.lease_get(kwargs.get("lease_id"))
                 if obj:
                     new_target = {
-                        'project': obj.get("project_id"),
-                        'user': obj.get("user_id"),
                         'project_id': obj.get("project_id"),
                         'user_id': obj.get("user_id"),
                     }
