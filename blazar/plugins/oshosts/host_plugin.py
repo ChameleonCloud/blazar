@@ -764,7 +764,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                          'lease_id': lease_id,
                          'id': reservation_id,
                          'start_date': lease_start_date,
-                         'end_date': lease_end_date
+                         'end_date': lease_end_date,
                        },
                      ]
         }.
@@ -772,23 +772,21 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         start = datetime.datetime.utcnow()
         end = datetime.date.max
 
+        # To reduce overhead, this method only executes one query
+        # to get the allocation information
         reservations = db_utils.get_reservation_allocations_by_host_ids(
             hosts, start, end, lease_id, reservation_id)
-        host_allocations = {h: [] for h in hosts}
-
+        host_allocs = {h: [] for h in hosts}
+        attributes_to_copy = ["id", "lease_id", "start_date", "end_date"]
+        if detail:
+            attributes_to_copy += ["project_id", "lease_name", "status"]
         for reservation in reservations:
-            if not detail:
-                del reservation['project_id']
-                del reservation['lease_name']
-                del reservation['status']
-
             for host_id in reservation['host_ids']:
-                if host_id in host_allocations.keys():
-                    host_allocations[host_id].append({
+                if host_id in host_allocs.keys():
+                    host_allocs[host_id].append({
                         k: v for k, v in reservation.items()
-                        if k != 'host_ids'})
-
-        return host_allocations
+                        if k in attributes_to_copy})
+        return host_allocs
 
     def update_default_parameters(self, values):
         self.add_default_resource_properties(values)

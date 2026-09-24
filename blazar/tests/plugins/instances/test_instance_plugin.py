@@ -795,6 +795,47 @@ class TestVirtualInstancePlugin(tests.TestCase):
         expected = [host1] * 4 + [host2] * 4 + [host3] * 4
         self.assertEqual(expected, ret)
 
+    def test_list_allocations(self):
+        mock_host_list = self.patch(db_api, 'host_list')
+        mock_host_list.return_value = [{'id': 'host-1'}, {'id': 'host-2'}]
+
+        mock_get_reserv_allocs = self.patch(
+            db_utils, 'get_reservation_allocations_by_host_ids')
+        mock_get_reserv_allocs.return_value = [
+            {
+                'id': 'reservation-1',
+                'lease_id': 'lease-1',
+                'start_date': datetime.datetime(2020, 7, 7, 18, 0),
+                'end_date': datetime.datetime(2020, 7, 7, 19, 0),
+                'status': 'active',
+                'lease_name': 'lease-name-1',
+                'project_id': 'project-1',
+                'host_ids': ['host-1']
+            },
+        ]
+
+        plugin = instance_plugin.VirtualInstancePlugin()
+        ret = plugin.list_allocations({})
+
+        expected = [
+            {
+                'resource_id': 'host-1',
+                'reservations': [
+                    {
+                        'id': 'reservation-1',
+                        'lease_id': 'lease-1',
+                        'start_date': datetime.datetime(2020, 7, 7, 18, 0),
+                        'end_date': datetime.datetime(2020, 7, 7, 19, 0),
+                    }
+                ]
+            },
+            {
+                'resource_id': 'host-2',
+                'reservations': []
+            },
+        ]
+        self.assertEqual(expected, ret)
+
     def test_pickup_hosts_for_update(self):
         reservation = {'id': 'reservation-id1', 'status': 'pending'}
         plugin = instance_plugin.VirtualInstancePlugin()

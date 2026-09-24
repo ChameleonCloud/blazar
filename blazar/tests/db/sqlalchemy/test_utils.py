@@ -38,8 +38,7 @@ def _get_fake_phys_reservation_values(lease_id=_get_fake_lease_uuid(),
                                       resource_id='1234'):
     return {'lease_id': lease_id,
             'resource_id': resource_id,
-            'resource_type': 'physical:host',
-            'status': 'active'}
+            'resource_type': 'physical:host'}
 
 
 def _get_fake_inst_reservation_values(lease_id=_get_fake_lease_uuid(),
@@ -66,28 +65,8 @@ def _get_fake_phys_lease_values(id=_get_fake_lease_uuid(),
             'reservations': [_get_fake_phys_reservation_values(
                 lease_id=id,
                 resource_id=resource_id)],
-            'events': [],
-            'project_id': 'fake_project',
-            'status': 'ACTIVE'
+            'events': []
             }
-
-
-def _create_allocation_dicts(lease_ids):
-    allocs = []
-
-    for lease_id in lease_ids:
-        reservations = db_api.reservation_get_all_by_lease_id(
-            lease_id)
-
-        for reservation in reservations:
-            allocs.append(
-                {
-                    'id': reservation['id'],
-                    'host_ids': [
-                        x['compute_host_id'] for x
-                        in db_api.host_allocation_get_all_by_values(
-                            reservation_id=reservation['id'])]})
-    return allocs
 
 
 def _create_physical_lease(values=_get_fake_phys_lease_values(),
@@ -110,10 +89,6 @@ def _create_physical_lease(values=_get_fake_phys_lease_values(),
 def _delete_physical_lease(id):
     """Delete fake lease."""
     db_api.lease_destroy(id)
-
-
-def _filter_dicts_for_keys(keys, items):
-    return [{k: v for k, v in x.items() if k in keys} for x in items]
 
 
 class SQLAlchemyDBUtilsTestCase(tests.DBTestCase):
@@ -301,44 +276,120 @@ class SQLAlchemyDBUtilsTestCase(tests.DBTestCase):
         self._setup_leases()
 
         # query all allocations of lease1, lease2 and lease3
-        expected = _create_allocation_dicts(['lease1', 'lease2', 'lease3'])
+        expected = [
+            {
+                "id": db_api.reservation_get_all_by_lease_id(
+                    "lease1")[0]["id"],
+                "status": None,
+                "lease_id": "lease1",
+                "start_date": datetime.datetime(2030, 1, 1, 9, 0),
+                "end_date": datetime.datetime(2030, 1, 1, 10, 30),
+                "lease_name": "fake_phys_lease_r1",
+                "project_id": None,
+                "host_ids": ["r1"]
+            },
+            {
+                "id": db_api.reservation_get_all_by_lease_id(
+                    "lease2")[0]["id"],
+                "status": None,
+                "lease_id": "lease2",
+                "start_date": datetime.datetime(2030, 1, 1, 11, 0),
+                "end_date": datetime.datetime(2030, 1, 1, 12, 45),
+                "lease_name": "fake_phys_lease_r2",
+                "project_id": None,
+                "host_ids": ["r2"]
+            },
+            {
+                "id": db_api.reservation_get_all_by_lease_id(
+                    "lease3")[0]["id"],
+                "status": None,
+                "lease_id": "lease3",
+                "start_date": datetime.datetime(2030, 1, 1, 13, 0),
+                "end_date": datetime.datetime(2030, 1, 1, 14, 0),
+                "lease_name": "fake_phys_lease_r3",
+                "project_id": None,
+                "host_ids": ["r1"]
+            }
+        ]
         ret = db_utils.get_reservation_allocations_by_host_ids(
             ['r1', 'r2'], '2030-01-01 08:00', '2030-01-01 15:00')
-
-        self.assertListEqual(
-            expected, _filter_dicts_for_keys(['id', 'host_ids'], ret))
+        self.assertListEqual(expected, ret)
 
         # query allocations of lease2 and lease3
-        expected = _create_allocation_dicts(['lease2', 'lease3'])
+        expected = [
+            {
+                "id": db_api.reservation_get_all_by_lease_id(
+                    "lease2")[0]["id"],
+                "status": None,
+                "lease_id": "lease2",
+                "start_date": datetime.datetime(2030, 1, 1, 11, 0),
+                "end_date": datetime.datetime(2030, 1, 1, 12, 45),
+                "lease_name": "fake_phys_lease_r2",
+                "project_id": None,
+                "host_ids": ["r2"]
+            },
+            {
+                "id": db_api.reservation_get_all_by_lease_id(
+                    "lease3")[0]["id"],
+                "status": None,
+                "lease_id": "lease3",
+                "start_date": datetime.datetime(2030, 1, 1, 13, 0),
+                "end_date": datetime.datetime(2030, 1, 1, 14, 0),
+                "lease_name": "fake_phys_lease_r3",
+                "project_id": None,
+                "host_ids": ["r1"]
+            }
+        ]
         ret = db_utils.get_reservation_allocations_by_host_ids(
             ['r1', 'r2'], '2030-01-01 11:30', '2030-01-01 15:00')
 
-        self.assertListEqual(
-            expected, _filter_dicts_for_keys(['id', 'host_ids'], ret))
+        self.assertListEqual(expected, ret)
 
     def test_get_reservation_allocations_by_host_ids_with_lease_id(self):
         self._setup_leases()
 
         # query all allocations of lease1, lease2 and lease3
-        expected = _create_allocation_dicts(['lease1'])
+        expected = [
+            {
+                "id": db_api.reservation_get_all_by_lease_id(
+                    "lease1")[0]["id"],
+                "status": None,
+                "lease_id": "lease1",
+                "start_date": datetime.datetime(2030, 1, 1, 9, 0),
+                "end_date": datetime.datetime(2030, 1, 1, 10, 30),
+                "lease_name": "fake_phys_lease_r1",
+                "project_id": None,
+                "host_ids": ["r1"]
+            },
+        ]
         ret = db_utils.get_reservation_allocations_by_host_ids(
             ['r1', 'r2'], '2030-01-01 08:00', '2030-01-01 15:00', 'lease1')
 
-        self.assertListEqual(
-            expected, _filter_dicts_for_keys(['id', 'host_ids'], ret))
+        self.assertListEqual(expected, ret)
 
     def test_get_reservation_allocations_by_host_ids_with_reservation_id(self):
         self._setup_leases()
         reservation1 = db_api.reservation_get_all_by_lease_id('lease1')[0]
 
         # query allocations of lease1
-        expected = _create_allocation_dicts(['lease1'])
+        expected = [
+            {
+                "id": db_api.reservation_get_all_by_lease_id(
+                    "lease1")[0]["id"],
+                "status": None,
+                "lease_id": "lease1",
+                "start_date": datetime.datetime(2030, 1, 1, 9, 0),
+                "end_date": datetime.datetime(2030, 1, 1, 10, 30),
+                "lease_name": "fake_phys_lease_r1",
+                "project_id": None,
+                "host_ids": ["r1"]
+            },
+        ]
         ret = db_utils.get_reservation_allocations_by_host_ids(
             ['r1', 'r2'], '2030-01-01 08:00', '2030-01-01 15:00',
             reservation_id=reservation1['id'])
 
-        self.assertListEqual(
-            expected, _filter_dicts_for_keys(['id', 'host_ids'], ret))
+        self.assertListEqual(expected, ret)
 
     def test_get_plugin_reservation_with_instance(self):
         patch_inst_reservation_get = self.patch(db_api,
