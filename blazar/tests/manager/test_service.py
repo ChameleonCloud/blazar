@@ -330,7 +330,7 @@ class ServiceTestCase(tests.DBTestCase):
             # corresponding start_lease
             mock.call([events_values[2]]),
             # Then end_lease events
-            mock.call([events_values[1], events_values[5]]),
+            mock.call([events_values[1], events_values[5], events_values[6]]),
             # Then the start_lease event
             mock.call([events_values[0]]),
             # Then the before_end_lease which is for the same lease as the
@@ -338,9 +338,7 @@ class ServiceTestCase(tests.DBTestCase):
             mock.call([events_values[3]]),
             # Then the end_lease which is for the same lease as the previous
             # start_lease event
-            mock.call([events_values[4]]),
-            # Finally the event scheduled at the next minute
-            mock.call([events_values[6]])])
+            mock.call([events_values[4]])])
 
     # a timer periodically calls _process_events(). Each time `t` that 
     # _process_events() runs, it fetches all events that are in state UNDONE,
@@ -479,8 +477,8 @@ class ServiceTestCase(tests.DBTestCase):
         events = self.patch(self.db_api, 'event_get_all_sorted_by_filters')
         events.return_value = [{'id': '111-222-333',
                                 'lease_id': self.lease_id,
-                                'time': self.good_date,
-                                'event_type': 'start_lease'}]
+                                'event_type': 'start_lease',
+                                'time': self.good_date}]
 
         self.lease_get = self.patch(self.db_api, 'lease_get')
         lease = self.lease.copy()
