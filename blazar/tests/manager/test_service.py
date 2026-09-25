@@ -330,7 +330,7 @@ class ServiceTestCase(tests.DBTestCase):
             # corresponding start_lease
             mock.call([events_values[2]]),
             # Then end_lease events
-            mock.call([events_values[1], events_values[5]]),
+            mock.call([events_values[1], events_values[5], events_values[6]]),
             # Then the start_lease event
             mock.call([events_values[0]]),
             # Then the before_end_lease which is for the same lease as the
@@ -338,9 +338,108 @@ class ServiceTestCase(tests.DBTestCase):
             mock.call([events_values[3]]),
             # Then the end_lease which is for the same lease as the previous
             # start_lease event
-            mock.call([events_values[4]]),
-            # Finally the event scheduled at the next minute
-            mock.call([events_values[6]])])
+            mock.call([events_values[4]])])
+
+    # a timer periodically calls _process_events(). Each time `t` that 
+    # _process_events() runs, it fetches all events that are in state UNDONE,
+    #  and have a scheduled time <=t. This is usually just the set left from the 
+    # last timer, but can be longer if e.g. the manager was down for a while.
+    #
+    # This list of events is passed to _select_for_execution(), which splits them
+    # into batches. process_events() runs each batch sequentially, and events within
+    # a batch concurrently.
+    # 
+    # In the case that two leases share the same host, the first lease must end
+    # before the second one starts. For this reason, the batches are grouped by
+    # event type, and run in order of before_end_lease, end_lease, start_lease.
+    #
+    # The exception is the case when one lease has both start_lease and end_lease
+    # events fall into the same processing window. To avoid running end before start,
+    # this lease has its events bumped into lower priority "deferred_start" 
+    # and "deferred_end" batches.
+
+    def _event(self, lease_id, event_type, time):
+        return {
+            "id": f"{lease_id}-{event_type}",
+            "lease_id": lease_id,
+            "event_type": event_type,
+            "time": time,
+        }
+
+    def _events_to_batch_lookup(self, batches):
+        event_id_to_batch_idx = {}
+        for batch_idx, batch in enumerate(batches):
+            for event in batch:
+                event_id_to_batch_idx[event['id']] = batch_idx
+        return event_id_to_batch_idx
+
+    def assertEarlierBatch(self, batches, first, second):
+        """Assert that `first` is in an earlier batch than `second`."""
+        index = self._events_to_batch_lookup(batches)
+        self.assertLess(index[first['id']],index[second['id']])
+
+    def assertSameBatch(self, batches, first, second):
+        """Assert that `first` is the same batch as `second`."""
+        index = self._events_to_batch_lookup(batches)
+        self.assertEquals(index[first['id']],index[second['id']])
+
+
+    def test_select_for_execution_end_before_start(self):
+        t = self.good_date
+        minute = datetime.timedelta(minutes=1)
+        y_end = self._event("lease-y", "end_lease", t)
+        x_start = self._event("lease-x", "start_lease", t+minute)
+        batches = self.manager._select_for_execution([y_end, x_start])
+        self.assertEarlierBatch(batches, y_end, x_start)
+
+    def test_select_for_execution_end_before_start_same_time(self):
+        t = self.good_date
+        x_start = self._event("lease-x", "start_lease", t)
+        y_end = self._event("lease-y", "end_lease", t)
+        batches = self.manager._select_for_execution([x_start,y_end])
+        self.assertEarlierBatch(batches, y_end, x_start)
+
+    def test_select_for_execution_end_before_start_reversed(self):
+        t = self.good_date
+        minute = datetime.timedelta(minutes=1)
+        x_start = self._event("lease-x", "start_lease", t)
+        y_end = self._event("lease-y", "end_lease", t+minute)
+        batches = self.manager._select_for_execution([x_start,y_end])
+
+        # end runs before start within the same window, even if scheduled time of
+        # x_start was before scheduled time of y_end
+        self.assertEarlierBatch(batches, y_end, x_start)
+
+    def test_select_for_execution_end_before_start_same_later_time(self):
+        t = self.good_date
+        minute = datetime.timedelta(minutes=1)
+        # unrelated lease, so that t+minute is not the earliest time in the
+        # window
+        w_start = self._event("lease-w", "start_lease", t)
+        y_end = self._event("lease-y", "end_lease", t+minute)
+        x_start = self._event("lease-x", "start_lease", t+minute)
+        batches = self.manager._select_for_execution([w_start,y_end,x_start])
+        self.assertEarlierBatch(batches, y_end, x_start)
+
+    def test_select_for_execution_end_before_next_lease_starts(self):
+        t = self.good_date
+        minute = datetime.timedelta(minutes=1)
+
+        # Lease A's start and end events both fall into the polling window.
+        a_start = self._event("lease-a", "start_lease", t)
+        a_end = self._event("lease-a", "end_lease", t+minute)
+
+        # Lease B is scheduled to start at the same moment lease A ends
+        b_start = self._event("lease-b", "start_lease", t+minute)
+
+        batches = self.manager._select_for_execution([a_start, a_end, b_start])
+
+        # We need to see that a_start is in an earlier batch than a_end, likely
+        # by deferring a_end
+        self.assertEarlierBatch(batches, a_start, a_end)
+
+        # We also need to see that a_end is in an earlier batch than b_start
+        self.assertEarlierBatch(batches, a_end, b_start)
 
     def test_process_events_concurrently(self):
         events = [{'id': '111-222-333', 'time': self.good_date,
@@ -378,8 +477,8 @@ class ServiceTestCase(tests.DBTestCase):
         events = self.patch(self.db_api, 'event_get_all_sorted_by_filters')
         events.return_value = [{'id': '111-222-333',
                                 'lease_id': self.lease_id,
-                                'time': self.good_date,
-                                'event_type': 'start_lease'}]
+                                'event_type': 'start_lease',
+                                'time': self.good_date}]
 
         self.lease_get = self.patch(self.db_api, 'lease_get')
         lease = self.lease.copy()
