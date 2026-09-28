@@ -23,8 +23,14 @@ import blazar.manager
 import blazar.manager.service
 import blazar.notification.notifier
 import blazar.plugins.oshosts.host_plugin
+import blazar.utils.openstack.heat
+import blazar.utils.openstack.ironic
 import blazar.utils.openstack.keystone
+import blazar.utils.openstack.manila
+import blazar.utils.openstack.neutron
 import blazar.utils.openstack.nova
+import blazar.utils.openstack.placement
+import blazar.utils.openstack.zun
 
 
 def list_opts():
@@ -50,7 +56,13 @@ def list_opts():
             blazar.enforcement.filters.max_lease_duration_filter.MaxLeaseDurationFilter.enforcement_opts, # noqa
             blazar.enforcement.enforcement.enforcement_opts)),
         ('notifications', blazar.notification.notifier.notification_opts),
+        ('heat', blazar.utils.openstack.heat.heat_opts),
+        ('ironic', blazar.utils.openstack.ironic.ironic_opts),
+        ('manila', blazar.utils.openstack.manila.manila_opts),
+        ('neutron', blazar.utils.openstack.neutron.neutron_opts),
         ('nova', blazar.utils.openstack.nova.nova_opts),
+        ('placement', blazar.utils.openstack.placement.placement_opts),
+        ('zun', blazar.utils.openstack.zun.zun_opts),
         (blazar.plugins.oshosts.RESOURCE_TYPE,
          blazar.plugins.oshosts.host_plugin.plugin_opts),
     ]

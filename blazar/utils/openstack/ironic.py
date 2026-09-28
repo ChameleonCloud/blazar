@@ -20,6 +20,13 @@ from blazar.utils.openstack import base
 
 ironic_opts = [
     cfg.StrOpt(
+        'endpoint_type',
+        default='internal',
+        choices=['public', 'admin', 'internal'],
+        help='Type of the ironic endpoint to use. This endpoint will be '
+             'looked up in the keystone catalog and should be one of '
+             'public, internal or admin.'),
+    cfg.StrOpt(
         'ironic_api_version',
         default='1',
         help='Ironic API version'),
@@ -38,6 +45,7 @@ class BlazarIronicClient(object):
 
     def __init__(self, **kwargs):
         client_kwargs = base.client_kwargs(**kwargs)
+        client_kwargs.setdefault('interface', CONF.ironic.endpoint_type)
         client_kwargs.setdefault('os_ironic_api_version',
                                  CONF.ironic.ironic_api_microversion)
         self.ironic = ironic_client.Client(

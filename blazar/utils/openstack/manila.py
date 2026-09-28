@@ -22,6 +22,13 @@ from manilaclient import client as manila_client
 
 manila_opts = [
     cfg.StrOpt(
+        'endpoint_type',
+        default='internal',
+        choices=['public', 'admin', 'internal'],
+        help='Type of the manila endpoint to use. This endpoint will be '
+             'looked up in the keystone catalog and should be one of '
+             'public, internal or admin.'),
+    cfg.StrOpt(
         'manila_api_version',
         default='2',
         help='Manila API version'),
@@ -42,6 +49,8 @@ class BlazarManilaClient(object):
 
     def __init__(self, **kwargs):
         client_kwargs = base.client_kwargs(**kwargs)
+        client_kwargs.setdefault('endpoint_type',
+                                 CONF.manila.endpoint_type + 'URL')
         client_kwargs.setdefault('os_manila_api_version',
                                  CONF.manila.manila_api_microversion)
         self.manila = manila_client.Client(

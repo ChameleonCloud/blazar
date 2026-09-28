@@ -117,10 +117,9 @@ def client_user_kwargs(**_kwargs):
     # to authenticate to Blazar, and prevents having to re-authenticate
     # (which has issues for certain auth types, such as application creds)
     ctx = context.current()
-    admin_ks_client = keystone_client.Client(
-        version='3',
-        **client_kwargs(**_kwargs)
-    )
+    admin_kwargs = client_kwargs(**_kwargs)
+    admin_kwargs.setdefault('interface', CONF.endpoint_type)
+    admin_ks_client = keystone_client.Client(version='3', **admin_kwargs)
     data = admin_ks_client.tokens.get_token_data(ctx.auth_token)
     access_info = create_access_info(body=data, auth_token=ctx.auth_token)
     auth = access.AccessInfoPlugin(access_info, auth_url=auth_url)

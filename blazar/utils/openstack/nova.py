@@ -75,6 +75,8 @@ LOG = logging.getLogger(__name__)
 class BlazarNovaClient(object):
     def __init__(self, version=None, **kwargs):
         client_kwargs = base.client_kwargs(**kwargs)
+        client_kwargs.setdefault('endpoint_type',
+                                 CONF.nova.endpoint_type + 'URL')
         self.nova = nova_client.Client(
             version or CONF.nova.nova_client_version, **client_kwargs)
         self.nova.servers = ServerManager(self.nova)
