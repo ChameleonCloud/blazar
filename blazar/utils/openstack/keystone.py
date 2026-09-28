@@ -62,6 +62,7 @@ class BlazarKeystoneClient(object):
             client_kwargs = base.client_kwargs(**kwargs)
 
         client_kwargs.setdefault('version', cfg.CONF.keystone_client_version)
+        client_kwargs.setdefault('interface', CONF.endpoint_type)
         self.keystone = keystone_client.Client(**client_kwargs)
         self.exceptions = keystone_exception
 
