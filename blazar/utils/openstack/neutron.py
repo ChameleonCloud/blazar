@@ -17,12 +17,25 @@ import netaddr
 from neutronclient.common import exceptions as neutron_exceptions
 from neutronclient.v2_0 import client as neutron_client
 
+from oslo_config import cfg
 from oslo_log import log as logging
 
 from blazar.utils.openstack import base
 from blazar.utils.openstack import exceptions
 from blazar.manager import exceptions as manager_ex
 
+
+neutron_opts = [
+    cfg.StrOpt('endpoint_type',
+               default='internal',
+               choices=['public', 'admin', 'internal'],
+               help='Type of the neutron endpoint to use. This endpoint will '
+                    'be looked up in the keystone catalog and should be one '
+                    'of public, internal or admin.'),
+]
+
+CONF = cfg.CONF
+CONF.register_opts(neutron_opts, group='neutron')
 LOG = logging.getLogger(__name__)
 
 
@@ -31,6 +44,8 @@ class BlazarNeutronClient(object):
 
     def __init__(self, **kwargs):
         client_kwargs = base.client_kwargs(**kwargs)
+        client_kwargs.setdefault('endpoint_type',
+                                 CONF.neutron.endpoint_type + 'URL')
         self.neutron = neutron_client.Client(**client_kwargs)
 
     def __getattr__(self, attr):
