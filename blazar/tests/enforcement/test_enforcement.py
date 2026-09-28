@@ -118,7 +118,7 @@ class EnforcementTestCase(tests.TestCase):
             dict(
                 type='identity', endpoints=[
                     dict(
-                        interface='internal', region=self.region,
+                        interface='public', region=self.region,
                         url='https://fakeauth.com')
                 ]
             )
@@ -176,6 +176,28 @@ class EnforcementTestCase(tests.TestCase):
                         auth_url='https://fakeauth.com')
 
         self.assertDictEqual(expected, formatted_context)
+
+    def test_format_context_uses_public_auth_url(self):
+        service_catalog = tests.FakeServiceCatalog([
+            dict(
+                type='identity', endpoints=[
+                    dict(
+                        interface='internal', region=self.region,
+                        url='https://internal.fakeauth.com'),
+                    dict(
+                        interface='public', region=self.region,
+                        url='https://fakeauth.com'),
+                ]
+            )
+        ])
+        ctx = context.BlazarContext(
+            user_id='111', project_id='222',
+            service_catalog=service_catalog)
+
+        formatted_context = self.enforcement.format_context(
+            ctx, get_fake_lease())
+
+        self.assertEqual('https://fakeauth.com', formatted_context['auth_url'])
 
     def test_format_lease(self):
         lease_values, rsv, allocs = get_lease_rsv_allocs()

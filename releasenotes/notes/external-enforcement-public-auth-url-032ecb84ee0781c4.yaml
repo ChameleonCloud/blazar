@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    The ``ExternalServiceFilter`` usage enforcement filter now sends the
+    public Keystone endpoint as ``auth_url`` to the external service, instead
+    of the endpoint selected by ``[DEFAULT]/endpoint_type``, which defaults to
+    internal. For more details, see `bug XXXXXXX
+    <https://bugs.launchpad.net/blazar/+bug/XXXXXXX>`_.
