@@ -16,6 +16,7 @@
 
 import datetime
 import random
+import retrying
 
 from novaclient import exceptions as nova_exceptions
 from oslo_config import cfg
@@ -100,6 +101,7 @@ LOG = logging.getLogger(__name__)
 before_end_options = ['', 'snapshot', 'default', 'email']
 on_start_options = ['', 'default', 'orchestration']
 
+INSTANCE_DELETION_TIMEOUT = 10 * 60 * 1000  # 10 minutes
 QUERY_TYPE_ALLOCATION = 'allocation'
 
 MONITOR_ARGS = {"resource_type": plugin.RESOURCE_TYPE}
@@ -267,10 +269,11 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
     def on_end(self, resource_id, lease=None):
         """Remove the hosts from the pool."""
         host_reservation = db_api.host_reservation_get(resource_id)
+        reservation_id = host_reservation['reservation_id']
         db_api.host_reservation_update(host_reservation['id'],
                                        {'status': 'completed'})
         allocations = db_api.host_allocation_get_all_by_values(
-            reservation_id=host_reservation['reservation_id'])
+            reservation_id=reservation_id)
         for allocation in allocations:
             db_api.host_allocation_destroy(allocation['id'])
         pool = nova.ReservationPool()
@@ -284,10 +287,34 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
                              'concurrently.', server)
                 except Exception as e:
                     LOG.exception('Failed to delete %s: %s.', server, str(e))
+
+        # We need to check the deletion is complete before removing the host
+        # from the aggregate. See change
+        # https://review.opendev.org/c/openstack/nova/+/821423 for details.
+        if not self._check_server_deletion(pool, host_reservation):
+            LOG.error('Timed out while deleting servers on reservation %s',
+                      reservation_id)
+            raise manager_ex.ServerDeletionTimeout()
+
         try:
             pool.delete(host_reservation['aggregate_id'])
         except manager_ex.AggregateNotFound:
             pass
+
+    @retrying.retry(stop_max_delay=INSTANCE_DELETION_TIMEOUT,
+                    wait_fixed=5000,  # 5 seconds interval
+                    retry_on_result=lambda x: x is False)
+    def _check_server_deletion(self, pool, host_reservation):
+        servers = []
+        for host in pool.get_computehosts(host_reservation['aggregate_id']):
+            servers.extend(
+                self.nova.servers.list(search_opts={"node": host,
+                                                    "all_tenants": 1},
+                                       detailed=False))
+        if servers:
+            LOG.info('Waiting to delete servers: %s ', servers)
+            return False
+        return True
 
     def _reallocate(self, allocation, force=False):
         """Allocate an alternative host.
