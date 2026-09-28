@@ -296,8 +296,7 @@ class SQLAlchemyDBUtilsTestCase(tests.DBTestCase):
                 "start_date": datetime.datetime(2030, 1, 1, 11, 0),
                 "end_date": datetime.datetime(2030, 1, 1, 12, 45),
                 "lease_name": "fake_phys_lease_r2",
-                "project_id": None,
-                "host_ids": ["r2"]
+                "project_id": None, "host_ids": ["r2"]
             },
             {
                 "id": db_api.reservation_get_all_by_lease_id(
@@ -307,8 +306,7 @@ class SQLAlchemyDBUtilsTestCase(tests.DBTestCase):
                 "start_date": datetime.datetime(2030, 1, 1, 13, 0),
                 "end_date": datetime.datetime(2030, 1, 1, 14, 0),
                 "lease_name": "fake_phys_lease_r3",
-                "project_id": None,
-                "host_ids": ["r1"]
+                "project_id": None, "host_ids": ["r1"]
             }
         ]
         ret = db_utils.get_reservation_allocations_by_host_ids(
@@ -325,8 +323,7 @@ class SQLAlchemyDBUtilsTestCase(tests.DBTestCase):
                 "start_date": datetime.datetime(2030, 1, 1, 11, 0),
                 "end_date": datetime.datetime(2030, 1, 1, 12, 45),
                 "lease_name": "fake_phys_lease_r2",
-                "project_id": None,
-                "host_ids": ["r2"]
+                "project_id": None, "host_ids": ["r2"]
             },
             {
                 "id": db_api.reservation_get_all_by_lease_id(
@@ -336,8 +333,7 @@ class SQLAlchemyDBUtilsTestCase(tests.DBTestCase):
                 "start_date": datetime.datetime(2030, 1, 1, 13, 0),
                 "end_date": datetime.datetime(2030, 1, 1, 14, 0),
                 "lease_name": "fake_phys_lease_r3",
-                "project_id": None,
-                "host_ids": ["r1"]
+                "project_id": None, "host_ids": ["r1"]
             }
         ]
         ret = db_utils.get_reservation_allocations_by_host_ids(
