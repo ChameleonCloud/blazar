@@ -1869,7 +1869,9 @@ class ServiceTestCase(tests.DBTestCase):
         manager = service.ManagerService()
         enforcement_mngr = self.patch(manager, 'enforcement')
         enforcement_mngr.check_update.side_effect = (
-            enforcement.exceptions.ExternalServiceFilterException(message="filter exception"))
+            enforcement.exceptions.ExternalServiceFilterException(
+                message="filter exception")
+            )
         manager.plugins = {'virtual:instance': self.fake_plugin}
         manager.resource_actions = (
             {'virtual:instance':
