@@ -6,14 +6,18 @@ jobs:
   unittest:
     runs-on: ubuntu-22.04
     strategy:
+      fail-fast: false
       matrix:
-        python-version:
-        - "3.9"
-        - "3.10"
+        include:
+          - python-version: "3.9"
+            toxenv: py39
+          - python-version: "3.10"
+            toxenv: py310
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install tox
-      - run: tox -e py
+      # set python version explicitly to work around sets basepython = python310
+      - run: tox -e ${{ matrix.toxenv }}
