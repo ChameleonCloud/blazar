@@ -15,6 +15,7 @@
 
 from collections import defaultdict
 import datetime
+from operator import itemgetter
 
 from functools import lru_cache
 
@@ -161,13 +162,13 @@ class ManagerService(service_utils.RPCServer):
             try:
                 event_thread.wait()
             except Exception:
-                db_api.event_update(event_id,
+                db_api.event_update(event['id'],
                                     {'status': status.event.ERROR})
                 LOG.exception('Error occurred while handling event %s.',
                               event_id)
 
     def _select_for_execution(self, events):
-        """Selects the first events that can be safely executed concurrently.
+        """Orders the events such that they can be safely executed concurrently.
 
         Events are selected to be executed concurrently if they are of the same
         type, while keeping strict time ordering and the following priority of
@@ -188,8 +189,7 @@ class ManagerService(service_utils.RPCServer):
         events_by_lease = defaultdict(list)
         events_by_type = defaultdict(list)
 
-        first_events = [e for e in events if e['time'] == events[0]['time']]
-        for e in first_events:
+        for e in sorted(events, key=itemgetter('time')):
             events_by_lease[e['lease_id']].append(e)
             events_by_type[e['event_type']].append(e)
 
@@ -205,15 +205,12 @@ class ManagerService(service_utils.RPCServer):
                     events_by_type['end_lease'].remove(e)
                     deferred_end_events.append(e)
 
-        later_events = [e for e in events if e not in first_events]
-
         return [
             events_by_type['before_end_lease'],
             events_by_type['end_lease'],
             events_by_type['start_lease'],
             deferred_before_end_events,
-            deferred_end_events,
-            later_events,
+            deferred_end_events
         ]
 
     def _process_events(self):
