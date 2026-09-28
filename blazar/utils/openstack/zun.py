@@ -24,6 +24,13 @@ from zunclient import exceptions as zun_exception
 
 zun_opts = [
     cfg.StrOpt(
+        'endpoint_type',
+        default='internal',
+        choices=['public', 'admin', 'internal'],
+        help='Type of the zun endpoint to use. This endpoint will be '
+             'looked up in the keystone catalog and should be one of '
+             'public, internal or admin.'),
+    cfg.StrOpt(
         'zun_api_version',
         default='1',
         help='Zun API version'),
@@ -47,6 +54,7 @@ class BlazarZunClient(object):
 
     def __init__(self, **kwargs):
         client_kwargs = base.client_kwargs(**kwargs)
+        client_kwargs.setdefault('interface', CONF.zun.endpoint_type)
         client_kwargs.setdefault('os_zun_api_version',
                                  CONF.zun.zun_api_microversion)
         self.zun = zun_client.Client(

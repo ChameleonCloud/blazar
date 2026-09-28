@@ -23,6 +23,13 @@ from blazar.utils.openstack import base
 
 heat_opts = [
     cfg.StrOpt(
+        'endpoint_type',
+        default='internal',
+        choices=['public', 'admin', 'internal'],
+        help='Type of the heat endpoint to use. This endpoint will be '
+             'looked up in the keystone catalog and should be one of '
+             'public, internal or admin.'),
+    cfg.StrOpt(
         'heat_api_version',
         default='1',
         deprecated_group='DEFAULT',
@@ -50,6 +57,7 @@ class BlazarHeatClient(object):
         endpoint_override = base.url_for(
             ctx.service_catalog,
             CONF.heat.orchestration_service,
+            endpoint_interface=CONF.heat.endpoint_type,
             os_region_name=CONF.os_region_name)
 
         auth = token_endpoint.Token(endpoint_override, ctx.auth_token)
