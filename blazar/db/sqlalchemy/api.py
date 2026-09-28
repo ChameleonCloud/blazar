@@ -59,14 +59,11 @@ def _read_deleted_filter(query, db_model, deleted):
     return query
 
 
-def model_query(model, session=None, deleted=False):
+def model_query(model, session, deleted=False):
     """Query helper.
 
     :param model: base model to query
     """
-    if session is None:
-        with facade_wrapper.session_for_read() as session:
-            return _read_deleted_filter(session.query(model), model, deleted)
     return _read_deleted_filter(session.query(model), model, deleted)
 
 
@@ -78,7 +75,7 @@ def setup_db():
         facade_wrapper._clear_engine()
     except sa.exc.OperationalError as e:
         LOG.error("Database registration exception: %s", e)
-        return False
+        raise
     return True
 
 
@@ -90,7 +87,7 @@ def drop_db():
         facade_wrapper._clear_engine()
     except Exception as e:
         LOG.error("Database shutdown exception: %s", e)
-        return False
+        raise
     return True
 
 
@@ -457,13 +454,12 @@ def event_get_all():
         return _event_get_all(session).all()
 
 
-def _event_get_sorted_by_filters(sort_key, sort_dir, filters):
+def _event_get_sorted_by_filters(session, sort_key, sort_dir, filters):
     """Return an event query filtered and sorted by name of the field."""
 
     sort_fn = {'desc': desc, 'asc': asc}
 
-    with facade_wrapper.session_for_read() as session:
-        events_query = _event_get_all(session)
+    events_query = _event_get_all(session)
 
     if 'status' in filters:
         events_query = (
@@ -500,14 +496,16 @@ def event_get_first_sorted_by_filters(sort_key, sort_dir, filters):
     Return the first result for all events matching the filters
     and sorted by name of the field.
     """
-
-    return _event_get_sorted_by_filters(sort_key, sort_dir, filters).first()
+    with facade_wrapper.session_for_read() as session:
+        return _event_get_sorted_by_filters(
+            session, sort_key, sort_dir, filters).first()
 
 
 def event_get_all_sorted_by_filters(sort_key, sort_dir, filters):
     """Return events filtered and sorted by name of the field."""
-
-    return _event_get_sorted_by_filters(sort_key, sort_dir, filters).all()
+    with facade_wrapper.session_for_read() as session:
+        return _event_get_sorted_by_filters(
+            session, sort_key, sort_dir, filters).all()
 
 
 def event_create(values):
@@ -631,7 +629,7 @@ def instance_reservation_create(values):
 
 def instance_reservation_get(instance_reservation_id, session=None):
     if not session:
-        with facade_wrapper.session_for_write() as session:
+        with facade_wrapper.session_for_read() as session:
             query = model_query(models.InstanceReservations, session)
             return query.filter_by(id=instance_reservation_id).first()
     query = model_query(models.InstanceReservations, session)
@@ -767,11 +765,11 @@ def host_get_all_by_filters(filters):
     with facade_wrapper.session_for_read() as session:
         hosts_query = _host_get_all(session)
 
-    if 'status' in filters:
-        hosts_query = hosts_query.filter(
-            models.ComputeHost.status == filters['status'])
+        if 'status' in filters:
+            hosts_query = hosts_query.filter(
+                models.ComputeHost.status == filters['status'])
 
-    return hosts_query.all()
+        return hosts_query.all()
 
 
 def host_get_all_by_queries(queries):
@@ -785,87 +783,90 @@ def host_get_all_by_queries(queries):
     with facade_wrapper.session_for_read() as session:
         hosts_query = model_query(models.ComputeHost, session)
 
-    oper = {
-        '<': ['lt', lambda a, b: a >= b],
-        '>': ['gt', lambda a, b: a <= b],
-        '<=': ['le', lambda a, b: a > b],
-        '>=': ['ge', lambda a, b: a < b],
-        '==': ['eq', lambda a, b: a != b],
-        '!=': ['ne', lambda a, b: a == b],
-    }
+        oper = {
+            '<': ['lt', lambda a, b: a >= b],
+            '>': ['gt', lambda a, b: a <= b],
+            '<=': ['le', lambda a, b: a > b],
+            '>=': ['ge', lambda a, b: a < b],
+            '==': ['eq', lambda a, b: a != b],
+            '!=': ['ne', lambda a, b: a == b],
+        }
 
-    # loop over input queries. For each one, construct a sqlalchemy filter
-    # clause and append to hosts_query
-    for query in queries:
-        try:
-            key, op, value = query.split(' ', 2)
-        except ValueError:
-            raise db_exc.BlazarDBInvalidFilter(query_filter=query)
+        # loop over input queries. For each one, construct a sqlalchemy filter
+        # clause and append to hosts_query
+        for query in queries:
+            try:
+                key, op, value = query.split(' ', 2)
+            except ValueError:
+                raise db_exc.BlazarDBInvalidFilter(query_filter=query)
 
-        column = getattr(models.ComputeHost, key, None)
-        if column is not None:
-            if op == 'in':
-                filt = column.in_(value.split(','))
+            column = getattr(models.ComputeHost, key, None)
+            if column is not None:
+                if op == 'in':
+                    filt = column.in_(value.split(','))
+                else:
+                    if op in oper:
+                        op = oper[op][0]
+                    try:
+                        attr = [e for e in ['%s', '%s_', '__%s__']
+                                if hasattr(column, e % op)][0] % op
+                    except IndexError:
+                        raise db_exc.BlazarDBInvalidFilterOperator(
+                            filter_operator=op)
+
+                    if value == 'null':
+                        value = None
+
+                    filt = getattr(column, attr)(value)
+
+                hosts_query = hosts_query.filter(filt)
             else:
-                if op in oper:
-                    op = oper[op][0]
-                try:
-                    attr = [e for e in ['%s', '%s_', '__%s__']
-                            if hasattr(column, e % op)][0] % op
-                except IndexError:
-                    raise db_exc.BlazarDBInvalidFilterOperator(
-                        filter_operator=op)
-
-                if value == 'null':
-                    value = None
-
-                filt = getattr(column, attr)(value)
-
-            hosts_query = hosts_query.filter(filt)
-        else:
-            # Since `key` does not map to a host column directly, check if it
-            # maps to a resource property joined to at least one host by extra
-            # capability.
-            cap = models.ComputeHostExtraCapability
-            prop = models.ResourceProperty
-            with facade_wrapper.session_for_read() as session:
+                # Since `key` does not map to a host column directly, check
+                # if it maps to a resource property joined to at least one host
+                # by extra capability.
+                cap = models.ComputeHostExtraCapability
+                prop = models.ResourceProperty
                 # capability rows for this property name
                 caps_query = (model_query(cap, session)
                               .join(prop, cap.property_id == prop.id)
                               .filter(prop.property_name == key))
                 cap_found = caps_query.first()
 
-            if not cap_found:
-                raise db_exc.BlazarDBNotFound(
-                    id=key, model='ComputeHostExtraCapability')
+                if not cap_found:
+                    raise db_exc.BlazarDBNotFound(
+                        id=key, model='ComputeHostExtraCapability')
 
-            # Check if requested operator is supported for capabilities
-            if op not in oper:
-                msg = "Operator %s for resource properties not implemented"
-                raise NotImplementedError(msg % op)
+                # Check if requested operator is supported for capabilities
+                if op not in oper:
+                    msg = "Operator %s for resource properties not implemented"
+                    raise NotImplementedError(msg % op)
 
-            # the oper dict maps an input symbol, e.g. `>=` to a sqlalchemy 
-            # operator, e.g. `ge`, and to a python lambda implementing the op.
-            # look up the sqlalchemy operator, then look up which prefix form
-            # is a method on the extra capabilites column
-            op_name = oper[op][0]
-            try:
-                attr = [ e for e in ["%s", "%s_", "__%s__"]
-                    if hasattr(cap.capability_value, e % op_name)][0] % op_name
-            except IndexError:
-                raise db_exc.BlazarDBInvalidFilterOperator(filter_operator=op)
-            value_filter = getattr(cap.capability_value, attr)(value)
+                # the oper dict maps an input symbol, e.g. `>=` to a
+                # sqlalchemy operator, e.g. `ge`, and to a python lambda
+                # implementing the op. look up the sqlalchemy operator, then
+                # look up which prefix form is a method on the extra
+                # capabilites column
+                op_name = oper[op][0]
+                try:
+                    attr = [ e for e in ["%s", "%s_", "__%s__"]
+                        if hasattr(cap.capability_value,
+                                   e % op_name)][0] % op_name
+                except IndexError:
+                    raise db_exc.BlazarDBInvalidFilterOperator(
+                        filter_operator=op)
+                value_filter = getattr(cap.capability_value, attr)(value)
 
-            # keep hosts that have a capability row matching that clause
-            hosts_query = hosts_query.filter(
-                caps_query.filter(cap.computehost_id == models.ComputeHost.id)
-                .filter(value_filter)
-                .exists()
-            )
+                # keep hosts that have a capability row matching that clause
+                hosts_query = hosts_query.filter(
+                    caps_query
+                    .filter(cap.computehost_id == models.ComputeHost.id)
+                    .filter(value_filter)
+                    .exists()
+                )
 
-    # execute the constructed db query, containing filter clauses for each input
-    # query. 
-    return hosts_query.all()
+        # execute the constructed db query, containing filter clauses for each input
+        # query. 
+        return hosts_query.all()
 
 
 def reservable_host_get_all_by_queries(queries):
@@ -1261,45 +1262,45 @@ def fip_get_all_by_queries(queries):
     with facade_wrapper.session_for_read() as session:
         fips_query = model_query(models.FloatingIP, session)
 
-    oper = {
-        '<': ['lt', lambda a, b: a >= b],
-        '>': ['gt', lambda a, b: a <= b],
-        '<=': ['le', lambda a, b: a > b],
-        '>=': ['ge', lambda a, b: a < b],
-        '==': ['eq', lambda a, b: a != b],
-        '!=': ['ne', lambda a, b: a == b],
-    }
+        oper = {
+            '<': ['lt', lambda a, b: a >= b],
+            '>': ['gt', lambda a, b: a <= b],
+            '<=': ['le', lambda a, b: a > b],
+            '>=': ['ge', lambda a, b: a < b],
+            '==': ['eq', lambda a, b: a != b],
+            '!=': ['ne', lambda a, b: a == b],
+        }
 
-    for query in queries:
-        try:
-            key, op, value = query.split(' ', 2)
-        except ValueError:
-            raise db_exc.BlazarDBInvalidFilter(query_filter=query)
+        for query in queries:
+            try:
+                key, op, value = query.split(' ', 2)
+            except ValueError:
+                raise db_exc.BlazarDBInvalidFilter(query_filter=query)
 
-        column = getattr(models.FloatingIP, key, None)
-        if column is not None:
-            if op == 'in':
-                filt = column.in_(value.split(','))
+            column = getattr(models.FloatingIP, key, None)
+            if column is not None:
+                if op == 'in':
+                    filt = column.in_(value.split(','))
+                else:
+                    if op in oper:
+                        op = oper[op][0]
+                    try:
+                        attr = [e for e in ['%s', '%s_', '__%s__']
+                                if hasattr(column, e % op)][0] % op
+                    except IndexError:
+                        raise db_exc.BlazarDBInvalidFilterOperator(
+                            filter_operator=op)
+
+                    if value == 'null':
+                        value = None
+
+                    filt = getattr(column, attr)(value)
+
+                fips_query = fips_query.filter(filt)
             else:
-                if op in oper:
-                    op = oper[op][0]
-                try:
-                    attr = [e for e in ['%s', '%s_', '__%s__']
-                            if hasattr(column, e % op)][0] % op
-                except IndexError:
-                    raise db_exc.BlazarDBInvalidFilterOperator(
-                        filter_operator=op)
+                raise db_exc.BlazarDBInvalidFilter(query_filter=query)
 
-                if value == 'null':
-                    value = None
-
-                filt = getattr(column, attr)(value)
-
-            fips_query = fips_query.filter(filt)
-        else:
-            raise db_exc.BlazarDBInvalidFilter(query_filter=query)
-
-    return fips_query.all()
+        return fips_query.all()
 
 
 def reservable_fip_get_all_by_queries(queries):
@@ -1546,11 +1547,11 @@ def network_get_all_by_filters(filters):
     with facade_wrapper.session_for_read() as session:
         networks_query = _network_get_all(session)
 
-    if 'status' in filters:
-        networks_query = networks_query.filter(
-            models.NetworkSegment.status == filters['status'])
+        if 'status' in filters:
+            networks_query = networks_query.filter(
+                models.NetworkSegment.status == filters['status'])
 
-    return networks_query.all()
+        return networks_query.all()
 
 
 def network_get_all_by_queries(queries):
@@ -1563,67 +1564,69 @@ def network_get_all_by_queries(queries):
     with facade_wrapper.session_for_read() as session:
         networks_query = model_query(models.NetworkSegment, session)
 
-    oper = {
-        '<': ['lt', lambda a, b: a >= b],
-        '>': ['gt', lambda a, b: a <= b],
-        '<=': ['le', lambda a, b: a > b],
-        '>=': ['ge', lambda a, b: a < b],
-        '==': ['eq', lambda a, b: a != b],
-        '!=': ['ne', lambda a, b: a == b],
-    }
+        oper = {
+            '<': ['lt', lambda a, b: a >= b],
+            '>': ['gt', lambda a, b: a <= b],
+            '<=': ['le', lambda a, b: a > b],
+            '>=': ['ge', lambda a, b: a < b],
+            '==': ['eq', lambda a, b: a != b],
+            '!=': ['ne', lambda a, b: a == b],
+        }
 
-    networks = []
-    for query in queries:
-        try:
-            key, op, value = query.split(' ', 2)
-        except ValueError:
-            raise db_exc.BlazarDBInvalidFilter(query_filter=query)
+        networks = []
+        for query in queries:
+            try:
+                key, op, value = query.split(' ', 2)
+            except ValueError:
+                raise db_exc.BlazarDBInvalidFilter(query_filter=query)
 
-        column = getattr(models.NetworkSegment, key, None)
-        if column is not None:
-            if op == 'in':
-                filt = column.in_(value.split(','))
+            column = getattr(models.NetworkSegment, key, None)
+            if column is not None:
+                if op == 'in':
+                    filt = column.in_(value.split(','))
+                else:
+                    if op in oper:
+                        op = oper[op][0]
+                    try:
+                        attr = [e for e in ['%s', '%s_', '__%s__']
+                                if hasattr(column, e % op)][0] % op
+                    except IndexError:
+                        raise db_exc.BlazarDBInvalidFilterOperator(
+                            filter_operator=op)
+
+                    if value == 'null':
+                        value = None
+
+                    filt = getattr(column, attr)(value)
+
+                networks_query = networks_query.filter(filt)
             else:
-                if op in oper:
-                    op = oper[op][0]
-                try:
-                    attr = [e for e in ['%s', '%s_', '__%s__']
-                            if hasattr(column, e % op)][0] % op
-                except IndexError:
-                    raise db_exc.BlazarDBInvalidFilterOperator(
-                        filter_operator=op)
-
-                if value == 'null':
-                    value = None
-
-                filt = getattr(column, attr)(value)
-
-            networks_query = networks_query.filter(filt)
-        else:
-            # looking for extra capabilities matches
-            with facade_wrapper.session_for_read() as session:
+                # looking for extra capabilities matches
                 extra_filter = (
                     _network_extra_capability_query(session)
                     .filter(models.ResourceProperty.property_name == key)
                 ).all()
-            if not extra_filter:
-                raise db_exc.BlazarDBNotFound(
-                    id=key, model='NetworkSegmentExtraCapability')
-            for network, capability_name in extra_filter:
-                if op in oper and oper[op][1](network.capability_value, value):
-                    networks.append(network.network_id)
-                elif op not in oper:
-                    msg = 'Operator %s for extra capabilities not implemented'
-                    raise NotImplementedError(msg % op)
+                if not extra_filter:
+                    raise db_exc.BlazarDBNotFound(
+                        id=key, model='NetworkSegmentExtraCapability')
+                for network, capability_name in extra_filter:
+                    if op in oper and oper[op][1](network.capability_value,
+                                                  value):
+                        networks.append(network.network_id)
+                    elif op not in oper:
+                        msg = ('Operator %s for extra capabilities '
+                               'not implemented')
+                        raise NotImplementedError(msg % op)
 
-            # We must also avoid selecting any network which doesn't have the
-            # extra capability present.
-            all_networks = [h.id for h in networks_query.all()]
-            extra_filter_networks = [h.network_id for h, _ in extra_filter]
-            networks += [h for h in all_networks if h not in
-                         extra_filter_networks]
+                # We must also avoid selecting any network which doesn't have
+                # the extra capability present.
+                all_networks = [h.id for h in networks_query.all()]
+                extra_filter_networks = [h.network_id for h, _ in extra_filter]
+                networks += [h for h in all_networks if h not in
+                             extra_filter_networks]
 
-    return networks_query.filter(~models.NetworkSegment.id.in_(networks)).all()
+        return networks_query.filter(
+            ~models.NetworkSegment.id.in_(networks)).all()
 
 
 def reservable_network_get_all_by_queries(queries):
@@ -1942,11 +1945,11 @@ def device_get_all_by_filters(filters):
     with facade_wrapper.session_for_read() as session:
         devices_query = _device_get_all(session)
 
-    if 'status' in filters:
-        devices_query = devices_query.filter(
-            models.Device.status == filters['status'])
+        if 'status' in filters:
+            devices_query = devices_query.filter(
+                models.Device.status == filters['status'])
 
-    return devices_query.all()
+        return devices_query.all()
 
 
 def device_get_all_by_queries(queries):
@@ -1959,69 +1962,70 @@ def device_get_all_by_queries(queries):
     with facade_wrapper.session_for_read() as session:
         devices_query = model_query(models.Device, session)
 
-    oper = {
-        '<': ['lt', lambda a, b: a >= b],
-        '>': ['gt', lambda a, b: a <= b],
-        '<=': ['le', lambda a, b: a > b],
-        '>=': ['ge', lambda a, b: a < b],
-        '==': ['eq', lambda a, b: a != b],
-        '!=': ['ne', lambda a, b: a == b],
-    }
+        oper = {
+            '<': ['lt', lambda a, b: a >= b],
+            '>': ['gt', lambda a, b: a <= b],
+            '<=': ['le', lambda a, b: a > b],
+            '>=': ['ge', lambda a, b: a < b],
+            '==': ['eq', lambda a, b: a != b],
+            '!=': ['ne', lambda a, b: a == b],
+        }
 
-    devices = []
-    for query in queries:
-        try:
-            key, op, value = query.split(' ', 2)
-        except ValueError:
-            raise db_exc.BlazarDBInvalidFilter(query_filter=query)
+        devices = []
+        for query in queries:
+            try:
+                key, op, value = query.split(' ', 2)
+            except ValueError:
+                raise db_exc.BlazarDBInvalidFilter(query_filter=query)
 
-        column = getattr(models.Device, key, None)
-        if column is not None:
-            if op == 'in':
-                filt = column.in_(value.split(','))
+            column = getattr(models.Device, key, None)
+            if column is not None:
+                if op == 'in':
+                    filt = column.in_(value.split(','))
+                else:
+                    if op in oper:
+                        op = oper[op][0]
+                    try:
+                        attr = [e for e in ['%s', '%s_', '__%s__']
+                                if hasattr(column, e % op)][0] % op
+                    except IndexError:
+                        raise db_exc.BlazarDBInvalidFilterOperator(
+                            filter_operator=op)
+
+                    if value == 'null':
+                        value = None
+
+                    filt = getattr(column, attr)(value)
+
+                devices_query = devices_query.filter(filt)
             else:
-                if op in oper:
-                    op = oper[op][0]
-                try:
-                    attr = [e for e in ['%s', '%s_', '__%s__']
-                            if hasattr(column, e % op)][0] % op
-                except IndexError:
-                    raise db_exc.BlazarDBInvalidFilterOperator(
-                        filter_operator=op)
-
-                if value == 'null':
-                    value = None
-
-                filt = getattr(column, attr)(value)
-
-            devices_query = devices_query.filter(filt)
-        else:
-            # looking for extra capabilities matches
-            with facade_wrapper.session_for_read() as session:
+                # looking for extra capabilities matches
                 extra_filter = (
                     _device_extra_capability_query(session)
                     .filter(models.ResourceProperty.property_name == key)
                 ).all()
 
-            if not extra_filter:
-                raise db_exc.BlazarDBNotFound(
-                    id=key, model='DeviceExtraCapability')
+                if not extra_filter:
+                    raise db_exc.BlazarDBNotFound(
+                        id=key, model='DeviceExtraCapability')
 
-            for device, capability_name in extra_filter:
-                if op in oper and oper[op][1](device.capability_value, value):
-                    devices.append(device.device_id)
-                elif op not in oper:
-                    msg = 'Operator %s for extra capabilities not implemented'
-                    raise NotImplementedError(msg % op)
+                for device, capability_name in extra_filter:
+                    if op in oper and oper[op][1](device.capability_value,
+                                                  value):
+                        devices.append(device.device_id)
+                    elif op not in oper:
+                        msg = ('Operator %s for extra capabilities '
+                               'not implemented')
+                        raise NotImplementedError(msg % op)
 
-            # We must also avoid selecting any device which doesn't have the
-            # extra capability present.
-            all_devices = [h.id for h in devices_query.all()]
-            extra_filter_devices = [h.device_id for h, _ in extra_filter]
-            devices += [h for h in all_devices if h not in
-                        extra_filter_devices]
+                # We must also avoid selecting any device which doesn't have
+                # the extra capability present.
+                all_devices = [h.id for h in devices_query.all()]
+                extra_filter_devices = [h.device_id for h, _ in extra_filter]
+                devices += [h for h in all_devices if h not in
+                            extra_filter_devices]
 
-    return devices_query.filter(~models.Device.id.in_(devices)).all()
+        return devices_query.filter(~models.Device.id.in_(devices)).all()
 
 
 def reservable_device_get_all_by_queries(queries):
