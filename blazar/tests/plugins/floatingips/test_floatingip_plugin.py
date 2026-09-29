@@ -732,6 +732,25 @@ class FloatingIpPluginTest(tests.TestCase):
                           fip_plugin.update_reservation,
                           '441c1476-9f8f-4700-9f30-cd9b6fef3509', values)
 
+    def test_heal_reservations_flags_missing_resources(self):
+        get_reservations = self.patch(self.db_utils,
+                                      'get_reservations_by_floatingip_ids')
+        get_reservations.return_value = [{
+            'id': 'rsrv-1',
+            'resource_type': plugin.RESOURCE_TYPE,
+            'status': status.reservation.PENDING,
+            'floatingip_allocations': [
+                {'id': 'alloc-1', 'floatingip_id': 'fip-1'}],
+        }]
+
+        fip_plugin = floatingip_plugin.FloatingIpPlugin()
+        result = fip_plugin.monitor.heal_reservations(
+            [{'id': 'fip-1'}],
+            datetime.datetime(2020, 1, 1, 12, 0),
+            datetime.datetime(2020, 1, 1, 13, 0))
+
+        self.assertEqual({'rsrv-1': {'missing_resources': True}}, result)
+
     def test_on_start(self):
         fip_reservation_get = self.patch(self.db_api, 'fip_reservation_get')
         fip_reservation_get.return_value = {
