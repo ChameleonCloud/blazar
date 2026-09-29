@@ -15,6 +15,7 @@
 
 import collections
 import datetime
+import random
 from unittest import mock
 
 import ddt
@@ -23,7 +24,7 @@ from novaclient import client as nova_client
 from novaclient import exceptions as nova_exceptions
 from oslo_config import cfg
 from oslo_config import fixture as conf_fixture
-import random
+from oslo_utils import timeutils
 import testtools
 
 from blazar import context, policy
@@ -1152,7 +1153,7 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         self.assertDictEqual(expected, ret)
 
     def test_create_reservation_no_hosts_available(self):
-        now = datetime.datetime.utcnow()
+        now = timeutils.utcnow()
         values = {
             'lease_id': '018c1b43-e69e-4aef-a543-09681539cf4c',
             'min': 1,
@@ -2842,9 +2843,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         matching_hosts.return_value = [new_host['id']]
         alloc_update = self.patch(self.db_api, 'host_allocation_update')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(
                 2020, 1, 1, 11, 00)
             result = self.fake_phys_plugin._reallocate(dummy_allocation, force=True)
 
@@ -2902,9 +2902,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         matching_hosts.return_value = [new_host['id']]
         alloc_update = self.patch(self.db_api, 'host_allocation_update')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(
                 2020, 1, 1, 13, 00)
             self.nova_client.client.get.return_value = None, {'servers': []}
             result = self.fake_phys_plugin._reallocate(dummy_allocation, force=True)
@@ -2965,9 +2964,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         matching_hosts.return_value = []
         alloc_destroy = self.patch(self.db_api, 'host_allocation_destroy')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(
                 2020, 1, 1, 11, 00)
             result = self.fake_phys_plugin._reallocate(dummy_allocation, force=True)
 

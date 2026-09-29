@@ -19,6 +19,9 @@ import uuid
 
 import ddt
 from novaclient import exceptions as nova_exceptions
+from oslo_config import cfg
+from oslo_config import fixture as conf_fixture
+from oslo_utils import timeutils
 
 from blazar import context
 from blazar.db import api as db_api
@@ -29,7 +32,6 @@ from blazar.plugins.instances import instance_plugin
 from blazar.plugins import oshosts
 from blazar import tests
 from blazar.utils.openstack import nova
-from oslo_config import cfg
 
 CONF = cfg.CONF
 
@@ -1505,10 +1507,8 @@ class TestVirtualInstancePlugin(tests.TestCase):
         pickup_hosts.return_value = {'added': [new_host['id']], 'removed': []}
         alloc_update = self.patch(db_api, 'host_allocation_update')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
-                2020, 1, 1, 11, 00)
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(2020, 1, 1, 11, 00)
             result = plugin._heal_reservation(
                 dummy_reservation, list(failed_host.values()))
 
@@ -1564,10 +1564,8 @@ class TestVirtualInstancePlugin(tests.TestCase):
         mock_update_reservation_inventory = self.patch(
             plugin.placement_client, 'update_reservation_inventory')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
-                2020, 1, 1, 13, 00)
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(2020, 1, 1, 13, 00)
             result = plugin._heal_reservation(
                 dummy_reservation, list(failed_host.values()))
 
@@ -1621,10 +1619,8 @@ class TestVirtualInstancePlugin(tests.TestCase):
         pickup_hosts.side_effect = mgr_exceptions.NotEnoughHostsAvailable
         alloc_destroy = self.patch(db_api, 'host_allocation_destroy')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
-                2020, 1, 1, 11, 00)
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(2020, 1, 1, 11, 00)
             result = plugin._heal_reservation(
                 dummy_reservation, list(failed_host.values()))
 
@@ -1667,10 +1663,8 @@ class TestVirtualInstancePlugin(tests.TestCase):
         pickup_hosts.return_value = {'added': [new_host['id']], 'removed': []}
         alloc_update = self.patch(db_api, 'host_allocation_update')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
-                2020, 1, 1, 11, 00)
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(2020, 1, 1, 11, 00)
             result = plugin._heal_reservation(
                 dummy_reservation, list(failed_host.values()))
 
@@ -1730,10 +1724,8 @@ class TestVirtualInstancePlugin(tests.TestCase):
         mock_update_reservation_inventory = self.patch(
             plugin.placement_client, 'update_reservation_inventory')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
-                2020, 1, 1, 13, 00)
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(2020, 1, 1, 13, 00)
             result = plugin._heal_reservation(
                 dummy_reservation, list(failed_host.values()))
 
@@ -1791,10 +1783,8 @@ class TestVirtualInstancePlugin(tests.TestCase):
         pickup_hosts.side_effect = mgr_exceptions.NotEnoughHostsAvailable
         alloc_destroy = self.patch(db_api, 'host_allocation_destroy')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
-                2020, 1, 1, 11, 00)
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(2020, 1, 1, 11, 00)
             result = plugin._heal_reservation(
                 dummy_reservation, list(failed_host.values()))
 
