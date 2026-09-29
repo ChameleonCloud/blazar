@@ -401,6 +401,20 @@ class ReservationPoolTestCase(tests.TestCase):
         check.assert_called_once_with(self.fake_aggregate.id,
                                       {'projectY': None})
 
+    def test_terminate_preemptibles(self):
+        server1 = mock.MagicMock()
+        server2 = mock.MagicMock()
+        self.servers.list.return_value = [server1, server2]
+
+        self.pool.terminate_preemptibles('node-uuid')
+
+        # chi only: for ironic, aggregates hold node names, not compute
+        # hosts, so servers are searched by node.
+        self.servers.list.assert_called_once_with(
+            search_opts={"node": "node-uuid", "all_tenants": 1})
+        self.servers.delete.assert_has_calls(
+            [mock.call(server=server1), mock.call(server=server2)])
+
 
 class FakeNovaHypervisors(object):
 
