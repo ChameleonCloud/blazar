@@ -71,7 +71,7 @@ leases_policies = [
     ),
     policy.DocumentedRuleDefault(
         name=POLICY_ROOT % 'reallocate',
-        check_str=base.RULE_ADMIN_OR_OWNER,
+        check_str=base.PROJECT_MEMBER_OR_ADMIN,
         description="Policy rule which allows owners to reallocate "
                     "the host(s) for their lease",
         operations=[
