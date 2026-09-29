@@ -22,6 +22,7 @@ import eventlet
 import importlib
 from oslo_config import cfg
 import oslo_messaging as messaging
+from oslo_utils import timeutils
 from stevedore import enabled
 import testtools
 
@@ -504,10 +505,9 @@ class ServiceTestCase(tests.DBTestCase):
         start_lease.side_effect = exceptions.InvalidStatus
         event_update = self.patch(self.db_api, 'event_update')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = (self.good_date
-                                           + datetime.timedelta(seconds=1))
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = (self.good_date + datetime.timedelta(
+                seconds=1))
             self.manager._exec_event(event)
 
         start_lease.assert_called_once_with(lease_id=event['lease_id'],
@@ -525,10 +525,9 @@ class ServiceTestCase(tests.DBTestCase):
         start_lease.side_effect = exceptions.InvalidStatus
         event_update = self.patch(self.db_api, 'event_update')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = (self.good_date
-                                           + datetime.timedelta(days=1))
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = (self.good_date + datetime.timedelta(
+                days=1))
             self.manager._exec_event(event)
 
         start_lease.assert_called_once_with(lease_id=event['lease_id'],
@@ -801,7 +800,7 @@ class ServiceTestCase(tests.DBTestCase):
     def test_create_lease_start_date_in_past(self):
         lease_values = self.lease_values.copy()
         lease_values['start_date'] = datetime.datetime.strftime(
-            datetime.datetime.utcnow() - datetime.timedelta(days=1),
+            timeutils.utcnow() - datetime.timedelta(days=1),
             service.LEASE_DATE_FORMAT)
 
         self.assertRaises(
@@ -896,10 +895,8 @@ class ServiceTestCase(tests.DBTestCase):
     def test_update_lease_completed_lease_rename(self):
         lease_values = {'name': 'renamed'}
         target = datetime.datetime(2015, 1, 1)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
             lease = self.manager.update_lease(lease_id=self.lease_id,
                                               values=lease_values)
         self.lease_update.assert_called_once_with(self.lease_id, lease_values)
@@ -933,10 +930,8 @@ class ServiceTestCase(tests.DBTestCase):
         event_get = self.patch(db_api, 'event_get_first_sorted_by_filters')
         event_get.side_effect = fake_event_get
         target = datetime.datetime(2013, 12, 15)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
             self.manager.update_lease(lease_id=self.lease_id,
                                       values=lease_values)
         self.fake_plugin.update_reservation.assert_called_with(
@@ -990,10 +985,8 @@ class ServiceTestCase(tests.DBTestCase):
         event_get = self.patch(db_api, 'event_get_first_sorted_by_filters')
         event_get.side_effect = fake_event_get
         target = datetime.datetime(2013, 12, 15)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
             self.manager.update_lease(lease_id=self.lease_id,
                                       values=lease_values)
         self.fake_plugin.update_reservation.assert_called_with(
@@ -1037,10 +1030,8 @@ class ServiceTestCase(tests.DBTestCase):
             }
         ]
         target = datetime.datetime(2013, 12, 15)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
             self.assertRaises(
                 manager_ex.CantUpdateParameter, self.manager.update_lease,
                 lease_id=self.lease_id, values=lease_values)
@@ -1062,10 +1053,8 @@ class ServiceTestCase(tests.DBTestCase):
             }
         ]
         target = datetime.datetime(2013, 12, 15)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
             self.assertRaises(
                 manager_ex.MissingParameter, self.manager.update_lease,
                 lease_id=self.lease_id, values=lease_values)
@@ -1094,10 +1083,8 @@ class ServiceTestCase(tests.DBTestCase):
             }
         ]
         target = datetime.datetime(2013, 12, 15)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
         self.assertRaises(
             exceptions.InvalidInput, self.manager.update_lease,
             lease_id=self.lease_id, values=lease_values)
@@ -1128,10 +1115,8 @@ class ServiceTestCase(tests.DBTestCase):
         event_get = self.patch(db_api, 'event_get_first_sorted_by_filters')
         event_get.side_effect = fake_event_get
         target = datetime.datetime(2013, 12, 20, 14, 00)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
             self.manager.update_lease(lease_id=self.lease_id,
                                       values=lease_values)
         self.fake_plugin.update_reservation.assert_called_with(
@@ -1178,10 +1163,8 @@ class ServiceTestCase(tests.DBTestCase):
         event_get = self.patch(db_api, 'event_get_first_sorted_by_filters')
         event_get.side_effect = fake_event_get
         target = datetime.datetime(2013, 12, 20, 14, 00)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
             self.manager.update_lease(lease_id=self.lease_id,
                                       values=lease_values)
         self.fake_plugin.update_reservation.assert_called_with(
@@ -1240,10 +1223,8 @@ class ServiceTestCase(tests.DBTestCase):
         event_get = self.patch(db_api, 'event_get_first_sorted_by_filters')
         event_get.side_effect = fake_event_get
         target = datetime.datetime(2013, 12, 20, 14, 00)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
             self.manager.update_lease(lease_id=self.lease_id,
                                       values=lease_values)
         self.fake_plugin.update_reservation.assert_called_with(
@@ -1307,10 +1288,8 @@ class ServiceTestCase(tests.DBTestCase):
         event_get = self.patch(db_api, 'event_get_first_sorted_by_filters')
         event_get.side_effect = fake_event_get
         target = datetime.datetime(2013, 12, 20, 14, 00)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
             self.assertRaises(
                 exceptions.NotAuthorized, self.manager.update_lease,
                 lease_id=self.lease_id, values=lease_values)
@@ -1347,10 +1326,8 @@ class ServiceTestCase(tests.DBTestCase):
         event_get = self.patch(db_api, 'event_get_first_sorted_by_filters')
         event_get.side_effect = fake_event_get
         target = datetime.datetime(2013, 12, 20, 14, 00)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
             self.assertRaises(
                 exceptions.NotAuthorized, self.manager.update_lease,
                 lease_id=self.lease_id, values=lease_values)
@@ -1386,10 +1363,8 @@ class ServiceTestCase(tests.DBTestCase):
         event_get = self.patch(db_api, 'event_get_first_sorted_by_filters')
         event_get.side_effect = fake_event_get
         target = datetime.datetime(2013, 12, 20, 14, 00)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
             self.assertRaises(
                 manager_ex.InvalidDate, self.manager.update_lease,
                 lease_id=self.lease_id, values=lease_values)
@@ -1407,10 +1382,8 @@ class ServiceTestCase(tests.DBTestCase):
             'start_date': '2013-12-20 16:00'
         }
         target = datetime.datetime(2013, 12, 20, 14, 00)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
             self.assertRaises(
                 exceptions.InvalidInput, self.manager.update_lease,
                 lease_id=self.lease_id, values=lease_values)
@@ -1421,10 +1394,8 @@ class ServiceTestCase(tests.DBTestCase):
             'start_date': '2013-12-14 13:00'
         }
         target = datetime.datetime(2013, 12, 15)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
             self.assertRaises(
                 exceptions.InvalidInput, self.manager.update_lease,
                 lease_id=self.lease_id, values=lease_values)
@@ -1437,10 +1408,8 @@ class ServiceTestCase(tests.DBTestCase):
             'end_date': '2013-12-14 13:00'
         }
         target = datetime.datetime(2013, 12, 15)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
             self.assertRaises(
                 exceptions.InvalidInput, self.manager.update_lease,
                 lease_id=self.lease_id, values=lease_values)
@@ -1451,10 +1420,8 @@ class ServiceTestCase(tests.DBTestCase):
             'end_date': '2013-12-15 20:00'
         }
         target = datetime.datetime(2015, 12, 15)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
             self.assertRaises(
                 exceptions.InvalidInput, self.manager.update_lease,
                 lease_id=self.lease_id, values=lease_values)
@@ -1489,10 +1456,8 @@ class ServiceTestCase(tests.DBTestCase):
             'end_date': '2013-12-25 20:00'
         }
         target = datetime.datetime(2013, 12, 10)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
             self.assertRaises(exceptions.BlazarException,
                               self.manager.update_lease,
                               lease_id=self.lease_id, values=lease_values)
@@ -1538,10 +1503,8 @@ class ServiceTestCase(tests.DBTestCase):
         event_get = self.patch(db_api, 'event_get_first_sorted_by_filters')
         event_get.side_effect = fake_event_get
         target = datetime.datetime(2013, 12, 15)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
 
             self.assertRaises(exceptions.NotAuthorized,
                               self.manager.update_lease,
@@ -1786,10 +1749,8 @@ class ServiceTestCase(tests.DBTestCase):
             'prolong_for': '8d'
         }
         target = datetime.datetime(2013, 12, 14)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
             self.assertRaises(
                 enforcement_ex.MaxLeaseDurationException,
                 manager.update_lease,
@@ -1818,10 +1779,8 @@ class ServiceTestCase(tests.DBTestCase):
             'prolong_for': '8d'
         }
         target = datetime.datetime(2013, 12, 14)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
             self.assertRaises(
                 enforcement_ex.MaxLeaseUpdateWindowException,
                 manager.update_lease,
@@ -1850,10 +1809,8 @@ class ServiceTestCase(tests.DBTestCase):
             'prolong_for': '8d'
         }
         target = datetime.datetime(2013, 12, 14)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
             self.assertRaises(
                 enforcement.exceptions.ExternalServiceUnsupportedHTTPResponse,
                 manager.update_lease,
@@ -1884,10 +1841,8 @@ class ServiceTestCase(tests.DBTestCase):
             'prolong_for': '8d'
         }
         target = datetime.datetime(2013, 12, 14)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
             self.assertRaises(
                 enforcement.exceptions.ExternalServiceFilterException,
                 manager.update_lease,
@@ -1918,10 +1873,8 @@ class ServiceTestCase(tests.DBTestCase):
             'prolong_for': '8d'
         }
         target = datetime.datetime(2013, 12, 14)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
             self.assertRaises(
                 manager_ex.ExtraCapabilityTooLong,
                 manager.update_lease,

@@ -11,9 +11,6 @@ else
     BLAZAR_BIN_DIR=$(get_python_exec_prefix)
 fi
 
-# These packages should be tested under Python 3 when enabled by DevStack
-enable_python3_package blazar blazar-nova python-blazarclient
-
 # Test if any Blazar services are enabled
 # is_blazar_enabled
 function is_blazar_enabled {
@@ -83,7 +80,7 @@ function configure_blazar {
     iniadd $NOVA_CONF filter_scheduler available_filters "blazarnova.scheduler.filters.blazar_filter.BlazarFilter"
 
     if [[ "$BLAZAR_USE_MOD_WSGI" == "True" ]]; then
-        write_uwsgi_config "$BLAZAR_UWSGI_CONF" "$BLAZAR_UWSGI" "/reservation"
+        write_uwsgi_config "$BLAZAR_UWSGI_CONF" "$BLAZAR_UWSGI" "/reservation" "" "blazar"
     fi
 
     # Database

@@ -14,8 +14,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from datetime import timedelta
 import sys
-from datetime import datetime, timedelta
 from blazar.db.sqlalchemy import api
 from blazar.db.sqlalchemy import facade_wrapper
 from blazar.db.sqlalchemy import models
@@ -26,6 +26,7 @@ from blazar.plugins import devices as device_plugin
 from blazar.plugins import networks as network_plugin
 from blazar import status
 from collections import defaultdict
+from oslo_utils import timeutils
 import sqlalchemy as sa
 
 
@@ -300,7 +301,7 @@ def get_most_recent_reservation_info_by_network_id(network_id):
         network_id (): network id - primary key of NetworkSegment table
     """
     with facade_wrapper.session_for_read() as session:
-        curr_date = datetime.utcnow() + timedelta(seconds=300)
+        curr_date = timeutils.utcnow() + timedelta(seconds=300)
         query = (
             session.query(
                 models.NetworkSegment.id.label('network_id'),
@@ -365,7 +366,7 @@ def get_most_recent_reservation_info_by_host_id(host_id):
         host_id (): Host id - primary key of ComputeHost table
     """
     with facade_wrapper.session_for_read() as session:
-        curr_date = datetime.utcnow() + timedelta(seconds=300)
+        curr_date = timeutils.utcnow() + timedelta(seconds=300)
         query = (
             session.query(
                 models.ComputeHost.id.label('host_id'),
@@ -408,7 +409,7 @@ def get_most_recent_reservation_info_by_fip_id(fip_id):
         host_id (): Host id - primary key of ComputeHost table
     """
     with facade_wrapper.session_for_read() as session:
-        curr_date = datetime.utcnow() + timedelta(seconds=300)
+        curr_date = timeutils.utcnow() + timedelta(seconds=300)
         query = (
             session.query(
                 models.FloatingIP.id.label('fip_id'),

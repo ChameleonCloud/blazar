@@ -21,6 +21,7 @@ import ddt
 from unittest import skip
 from oslo_config import cfg
 from oslo_config import fixture as conf_fixture
+from oslo_utils import timeutils
 import random
 import testtools
 
@@ -621,7 +622,7 @@ class DevicePluginTestCase(tests.TestCase):
         self.assertDictEqual(expected, ret)
 
     def test_create_reservation_no_devices_available(self):
-        now = datetime.datetime.utcnow()
+        now = timeutils.utcnow()
         values = {
             'lease_id': '018c1b43-e69e-4aef-a543-09681539cf4c',
             'min': 1,
@@ -2088,9 +2089,8 @@ class DevicePluginTestCase(tests.TestCase):
         matching_devices.return_value = [new_device['id']]
         alloc_update = self.patch(self.db_api, 'device_allocation_update')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(
                 2020, 1, 1, 11, 00)
             result = self.fake_dev_plugin._reallocate(dummy_allocation)
 
@@ -2150,9 +2150,8 @@ class DevicePluginTestCase(tests.TestCase):
         matching_devices.return_value = [new_device['id']]
         alloc_update = self.patch(self.db_api, 'device_allocation_update')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(
                 2020, 1, 1, 13, 00)
             result = self.fake_dev_plugin._reallocate(dummy_allocation)
 
@@ -2203,9 +2202,8 @@ class DevicePluginTestCase(tests.TestCase):
         matching_devices.return_value = []
         alloc_destroy = self.patch(self.db_api, 'device_allocation_destroy')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(
                 2020, 1, 1, 11, 00)
             result = self.fake_dev_plugin._reallocate(dummy_allocation)
 

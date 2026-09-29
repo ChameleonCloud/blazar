@@ -19,6 +19,7 @@ import datetime
 
 from oslo_config import cfg
 from oslo_utils import strutils
+from oslo_utils import timeutils
 from stevedore import named
 
 from blazar.db import api as db_api
@@ -263,7 +264,7 @@ class DevicePlugin(base.BasePlugin):
 
     def is_updatable_extra_capability(self, capability, capability_name):
         reservations = db_utils.get_reservations_by_device_id(
-            capability['device_id'], datetime.datetime.utcnow(),
+            capability['device_id'], timeutils.utcnow(),
             datetime.date.max)
 
         for r in reservations:
@@ -402,7 +403,7 @@ class DevicePlugin(base.BasePlugin):
                 device, device_reservation, lease)
 
         # Allocate an alternative device.
-        start_date = max(datetime.datetime.utcnow(), lease['start_date'])
+        start_date = max(timeutils.utcnow(), lease['start_date'])
         new_deviceids = self._matching_devices(
             device_reservation['resource_properties'],
             '1-1', start_date, lease['end_date'], lease['project_id']
@@ -464,7 +465,7 @@ class DevicePlugin(base.BasePlugin):
                      ]
         }.
         """
-        start = datetime.datetime.utcnow()
+        start = timeutils.utcnow()
         end = datetime.date.max
 
         reservations = db_utils.get_reservation_allocations_by_device_ids(
