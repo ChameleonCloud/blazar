@@ -1768,7 +1768,8 @@ def network_extra_capability_get_all_per_name(network_id, capability_name):
     with session.begin():
         query = _network_extra_capability_get_all_per_network(
             session, network_id)
-        return query.filter_by(capability_name=capability_name).all()
+        return query.filter(
+            models.ResourceProperty.property_name == capability_name).all()
 
 
 def network_extra_capability_get_latest_per_name(network_id, capability_name):
@@ -1779,7 +1780,7 @@ def network_extra_capability_get_latest_per_name(network_id, capability_name):
                                                               network_id)
         return (
             query
-            .filter(models.ResourceProperty.capability_name == capability_name)
+            .filter(models.ResourceProperty.property_name == capability_name)
             .order_by(models.NetworkSegmentExtraCapability.created_at.desc())
             .first())
 
@@ -2176,7 +2177,8 @@ def device_extra_capability_get_all_per_name(device_id, capability_name):
     with session.begin():
         query = _device_extra_capability_get_all_per_device(
             session, device_id)
-        return query.filter_by(capability_name=capability_name).all()
+        return query.filter(
+            models.ResourceProperty.property_name == capability_name).all()
 
 
 def device_extra_capability_get_latest_per_name(device_id, capability_name):
