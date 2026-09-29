@@ -272,6 +272,61 @@ class SQLAlchemyDBUtilsTestCase(tests.DBTestCase):
         self.check_reservation([], ['r4'],
                                '2030-01-01 07:00', '2030-01-01 15:00')
 
+    def _create_active_reservation(self, resource_type):
+        db_api.lease_create({
+            'id': 'lease1', 'name': 'lease1', 'trust': 'trust',
+            'start_date': _get_datetime('2020-01-01 00:00'),
+            'end_date': _get_datetime('2020-01-02 00:00'),
+            'reservations': [{'resource_id': 'r1',
+                              'resource_type': resource_type,
+                              'status': 'active'}],
+            'events': []})
+        return db_api.reservation_get_all_by_lease_id('lease1')[0]
+
+    def test_get_most_recent_reservation_info_by_host_id(self):
+        reservation = self._create_active_reservation('physical:host')
+        db_api.host_create({
+            'id': 'host1', 'hypervisor_hostname': 'node1', 'vcpus': 1,
+            'availability_zone': 'az1', 'trust_id': 'trust',
+            'cpu_info': 'cpu', 'hypervisor_type': 'ironic',
+            'hypervisor_version': 1, 'memory_mb': 1, 'local_gb': 1})
+        db_api.host_reservation_create({'id': 'r1',
+                                        'reservation_id': reservation['id'],
+                                        'aggregate_id': 1})
+        db_api.host_allocation_create({'compute_host_id': 'host1',
+                                       'reservation_id': reservation['id']})
+
+        info = db_utils.get_most_recent_reservation_info_by_host_id('host1')
+
+        self.assertEqual('active', info['reservation_status'])
+        self.assertEqual(reservation['id'], info['reservation_id'])
+
+    def test_get_most_recent_reservation_info_by_network_id(self):
+        reservation = self._create_active_reservation('network')
+        db_api.network_create({'id': 'net1', 'network_type': 'vlan',
+                               'physical_network': 'physnet1',
+                               'segment_id': 1000})
+        db_api.network_allocation_create({'network_id': 'net1',
+                                          'reservation_id': reservation['id']})
+
+        info = db_utils.get_most_recent_reservation_info_by_network_id('net1')
+
+        self.assertEqual('active', info['status'])
+        self.assertEqual(reservation['id'], info['id'])
+
+    def test_get_most_recent_reservation_info_by_fip_id(self):
+        reservation = self._create_active_reservation('virtual:floatingip')
+        db_api.floatingip_create({'id': 'fip1', 'floating_network_id': 'net1',
+                                  'subnet_id': 'subnet1',
+                                  'floating_ip_address': '172.24.4.101'})
+        db_api.fip_allocation_create({'floatingip_id': 'fip1',
+                                      'reservation_id': reservation['id']})
+
+        info = db_utils.get_most_recent_reservation_info_by_fip_id('fip1')
+
+        self.assertEqual('active', info['status'])
+        self.assertEqual(reservation['id'], info['id'])
+
     def test_get_reservation_allocations_by_host_ids(self):
         self._setup_leases()
 

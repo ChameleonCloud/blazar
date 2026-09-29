@@ -329,7 +329,8 @@ def get_most_recent_reservation_info_by_network_id(network_id):
             .filter(models.Reservation.status != status.reservation.PENDING)
             .order_by(models.Lease.start_date.desc())
         )
-        return query.first()
+        row = query.first()
+        return row._asdict() if row else None
 
 
 def get_reservation_allocations_by_device_ids(device_ids, start_date, end_date,
@@ -398,7 +399,8 @@ def get_most_recent_reservation_info_by_host_id(host_id):
             .filter(models.Reservation.status != status.reservation.PENDING)
             .order_by(models.Lease.start_date.desc())
         )
-        return query.first()
+        row = query.first()
+        return row._asdict() if row else None
 
 
 def get_most_recent_reservation_info_by_fip_id(fip_id):
@@ -438,7 +440,8 @@ def get_most_recent_reservation_info_by_fip_id(fip_id):
             .filter(models.Reservation.status != status.reservation.PENDING)
             .order_by(models.Lease.start_date.desc())
         )
-        return query.first()
+        row = query.first()
+        return row._asdict() if row else None
 
 
 def get_user_ids_for_lease_ids(lease_ids):
