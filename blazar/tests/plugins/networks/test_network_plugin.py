@@ -17,6 +17,7 @@ import datetime
 import uuid
 
 from oslo_config import cfg
+from oslo_utils import timeutils
 from unittest import mock
 
 from blazar import context
@@ -366,7 +367,7 @@ class NetworkPluginTestCase(tests.TestCase):
             ]
 
     def test_create_reservation_no_network_available(self):
-        now = datetime.datetime.utcnow()
+        now = timeutils.utcnow()
         lease = {
             'id': u'018c1b43-e69e-4aef-a543-09681539cf4c',
             'user_id': '123',

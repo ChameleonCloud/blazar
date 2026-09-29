@@ -1779,10 +1779,8 @@ class ServiceTestCase(tests.DBTestCase):
             'prolong_for': '8d'
         }
         target = datetime.datetime(2013, 12, 14)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
             self.assertRaises(
                 enforcement_ex.MaxLeaseUpdateWindowException,
                 manager.update_lease,
@@ -1811,10 +1809,8 @@ class ServiceTestCase(tests.DBTestCase):
             'prolong_for': '8d'
         }
         target = datetime.datetime(2013, 12, 14)
-        with mock.patch.object(datetime,
-                               'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = target
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = target
             self.assertRaises(
                 enforcement.exceptions.ExternalServiceUnsupportedHTTPResponse,
                 manager.update_lease,

@@ -179,9 +179,8 @@ class MaxLeaseDurationTestCase(tests.TestCase):
 
         cfg.CONF.set_override('max_lease_duration', 1, group='enforcement')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(2014, 1, 1, 1, 1)
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(2014, 1, 1, 1, 1)
             self.assertRaises(exceptions.MaxLeaseDurationException,
                               self.enforcement.check_update, ctx, lease,
                               new_lease_values, current_allocations,

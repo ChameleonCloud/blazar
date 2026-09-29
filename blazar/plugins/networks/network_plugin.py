@@ -23,6 +23,7 @@ from keystoneauth1 import exceptions as keystone_excptions
 from neutronclient.common import exceptions as neutron_ex
 from oslo_config import cfg
 from oslo_log import log as logging
+from oslo_utils import timeutils
 from stevedore import named
 
 from blazar.db import api as db_api
@@ -443,7 +444,7 @@ class NetworkPlugin(base.BasePlugin):
 
     def is_updatable_extra_capability(self, capability, capability_name):
         reservations = db_utils.get_reservations_by_network_id(
-            capability['network_id'], datetime.datetime.utcnow(),
+            capability['network_id'], timeutils.utcnow(),
             datetime.date.max)
 
         for r in reservations:
@@ -603,7 +604,7 @@ class NetworkPlugin(base.BasePlugin):
                           ]
         }.
         """
-        start = datetime.datetime.utcnow()
+        start = timeutils.utcnow()
         end = datetime.date.max
 
         reservations = db_utils.get_reservation_allocations_by_network_ids(

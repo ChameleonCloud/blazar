@@ -17,6 +17,7 @@
 import datetime
 
 from oslo_config import cfg
+from oslo_utils import timeutils
 
 import abc
 from blazar.manager import exceptions as manager_ex
@@ -219,7 +220,7 @@ class GeneralMonitorPlugin(base.BaseMonitorPlugin, metaclass=abc.ABCMeta):
         reservation_flags = {}
         resources = self.get_unreservable_resourses()
 
-        interval_begin = datetime.datetime.utcnow()
+        interval_begin = timeutils.utcnow()
         interval = self.get_healing_interval()
         if interval == 0:
             interval_end = datetime.date.max

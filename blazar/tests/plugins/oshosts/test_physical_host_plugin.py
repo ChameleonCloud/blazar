@@ -3016,9 +3016,8 @@ class PhysicalHostPluginTestCase(tests.TestCase):
         matching_hosts.return_value = []
         alloc_destroy = self.patch(self.db_api, 'host_allocation_destroy')
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = datetime.datetime(
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = datetime.datetime(
                 2020, 1, 1, 11, 00)
             result = self.fake_phys_plugin._reallocate(dummy_allocation, force=False)
 
@@ -3763,9 +3762,8 @@ class PhysicalHostMonitorPluginTestCase(tests.TestCase):
         get_reservations = self.patch(db_utils, 'get_reservations_by_host_ids')
         get_reservations.return_value = [dummy_reservation]
 
-        with mock.patch.object(datetime, 'datetime',
-                               mock.Mock(wraps=datetime.datetime)) as patched:
-            patched.utcnow.return_value = start_date
+        with mock.patch.object(timeutils, 'utcnow') as patched:
+            patched.return_value = start_date
             result = self.host_monitor_plugin.heal()
 
         self.assertEqual(reservation_flags, result)
