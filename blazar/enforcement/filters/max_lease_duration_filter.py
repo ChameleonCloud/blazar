@@ -89,7 +89,7 @@ class MaxLeaseDurationFilter(base_filter.BaseFilter):
                 start_date >= new_lease_values['start_date']):
             return
 
-        if self.reservation_extension_window:
+        if self.reservation_extension_window > 0:
             min_window = current_lease_values['end_date'] - timedelta(
                 seconds=self.reservation_extension_window)
             update_at = timeutils.utcnow()
