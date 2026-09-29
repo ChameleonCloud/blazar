@@ -302,35 +302,15 @@ def get_most_recent_reservation_info_by_network_id(network_id):
     """
     with facade_wrapper.session_for_read() as session:
         curr_date = timeutils.utcnow() + timedelta(seconds=300)
-        query = (
-            session.query(
-                models.NetworkSegment.id.label('network_id'),
-                models.NetworkSegment.segment_id,
-                models.Lease.start_date,
-                models.Lease.end_date,
-                models.Reservation.status.label('status'),
-                models.Reservation.id,
-            )
-            .filter(models.NetworkSegment.id == network_id)
-            .join(
-                models.NetworkAllocation,
-                models.NetworkAllocation.network_id == models.NetworkSegment.id
-            )
-            .join(
-                models.Reservation,
-                models.Reservation.id ==
-                models.NetworkAllocation.reservation_id
-            )
-            .join(
-                models.Lease,
-                models.Lease.id == models.Reservation.lease_id
-            )
-            .filter(models.Lease.start_date < curr_date)
-            .filter(models.Reservation.status != status.reservation.PENDING)
-            .order_by(models.Lease.start_date.desc())
-        )
-        row = query.first()
-        return row._asdict() if row else None
+        query = (session.query(models.Reservation).join(models.Lease)
+                 .join(models.NetworkAllocation)
+                 .filter(models.NetworkAllocation.deleted.is_(None))
+                 .filter(models.NetworkAllocation.network_id == network_id)
+                 .filter(models.Lease.start_date < curr_date)
+                 .filter(models.Reservation.status !=
+                         status.reservation.PENDING)
+                 .order_by(models.Lease.start_date.desc()))
+        return query.first()
 
 
 def get_reservation_allocations_by_device_ids(device_ids, start_date, end_date,
@@ -368,39 +348,16 @@ def get_most_recent_reservation_info_by_host_id(host_id):
     """
     with facade_wrapper.session_for_read() as session:
         curr_date = timeutils.utcnow() + timedelta(seconds=300)
-        query = (
-            session.query(
-                models.ComputeHost.id.label('host_id'),
-                models.ComputeHost.hypervisor_hostname,
-                models.Reservation.status.label('reservation_status'),
-                models.Lease.start_date,
-                models.Lease.end_date,
-                models.ComputeHostReservation.aggregate_id,
-                models.ComputeHostReservation.reservation_id,
-            )
-            .filter(models.ComputeHost.id == host_id)
-            .join(
-                models.ComputeHostAllocation,
-                models.ComputeHostAllocation.compute_host_id == models.ComputeHost.id
-            )
-            .join(
-                models.ComputeHostReservation,
-                models.ComputeHostReservation.reservation_id == models.ComputeHostAllocation.reservation_id
-            )
-            .join(
-                models.Reservation,
-                models.Reservation.id == models.ComputeHostReservation.reservation_id
-            )
-            .join(
-                models.Lease,
-                models.Lease.id == models.Reservation.lease_id
-            )
-            .filter(models.Lease.start_date < curr_date)
-            .filter(models.Reservation.status != status.reservation.PENDING)
-            .order_by(models.Lease.start_date.desc())
-        )
-        row = query.first()
-        return row._asdict() if row else None
+        query = (session.query(models.Reservation).join(models.Lease)
+                 .join(models.ComputeHostAllocation)
+                 .filter(models.ComputeHostAllocation.deleted.is_(None))
+                 .filter(models.ComputeHostAllocation.compute_host_id ==
+                         host_id)
+                 .filter(models.Lease.start_date < curr_date)
+                 .filter(models.Reservation.status !=
+                         status.reservation.PENDING)
+                 .order_by(models.Lease.start_date.desc()))
+        return query.first()
 
 
 def get_most_recent_reservation_info_by_fip_id(fip_id):
@@ -408,40 +365,19 @@ def get_most_recent_reservation_info_by_fip_id(fip_id):
     pending status and start_date of the reservation is less than current date
 
     Args:
-        host_id (): Host id - primary key of ComputeHost table
+        fip_id (): floating IP id - primary key of FloatingIP table
     """
     with facade_wrapper.session_for_read() as session:
         curr_date = timeutils.utcnow() + timedelta(seconds=300)
-        query = (
-            session.query(
-                models.FloatingIP.id.label('fip_id'),
-                models.FloatingIP.floating_ip_address,
-                models.Lease.start_date,
-                models.Lease.end_date,
-                models.Reservation.status.label('status'),
-                models.Reservation.id,
-            )
-            .filter(models.FloatingIP.id == fip_id)
-            .join(
-                models.FloatingIPAllocation,
-                models.FloatingIPAllocation.floatingip_id ==
-                models.FloatingIP.id
-            )
-            .join(
-                models.Reservation,
-                models.Reservation.id ==
-                models.FloatingIPAllocation.reservation_id
-            )
-            .join(
-                models.Lease,
-                models.Lease.id == models.Reservation.lease_id
-            )
-            .filter(models.Lease.start_date < curr_date)
-            .filter(models.Reservation.status != status.reservation.PENDING)
-            .order_by(models.Lease.start_date.desc())
-        )
-        row = query.first()
-        return row._asdict() if row else None
+        query = (session.query(models.Reservation).join(models.Lease)
+                 .join(models.FloatingIPAllocation)
+                 .filter(models.FloatingIPAllocation.deleted.is_(None))
+                 .filter(models.FloatingIPAllocation.floatingip_id == fip_id)
+                 .filter(models.Lease.start_date < curr_date)
+                 .filter(models.Reservation.status !=
+                         status.reservation.PENDING)
+                 .order_by(models.Lease.start_date.desc()))
+        return query.first()
 
 
 def get_user_ids_for_lease_ids(lease_ids):
