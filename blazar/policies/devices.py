@@ -30,7 +30,8 @@ devices_policies = [
                 'path': '/{api_version}/devices/{device_id}',
                 'method': 'GET'
             }
-        ]
+        ],
+        scope_types=['project']
     ),
     policy.DocumentedRuleDefault(
         name=POLICY_ROOT % 'post',
@@ -41,7 +42,8 @@ devices_policies = [
                 'path': '/{api_version}/devices',
                 'method': 'POST'
             }
-        ]
+        ],
+        scope_types=['project']
     ),
     policy.DocumentedRuleDefault(
         name=POLICY_ROOT % 'put',
@@ -52,7 +54,8 @@ devices_policies = [
                 'path': '/{api_version}/devices/{device_id}',
                 'method': 'PUT'
             }
-        ]
+        ],
+        scope_types=['project']
     ),
     policy.DocumentedRuleDefault(
         name=POLICY_ROOT % 'delete',
@@ -63,7 +66,8 @@ devices_policies = [
                 'path': '/{api_version}/devices/{device_id}',
                 'method': 'DELETE'
             }
-        ]
+        ],
+        scope_types=['project']
     ),
     policy.DocumentedRuleDefault(
         name=POLICY_ROOT % 'get_allocations',
@@ -78,7 +82,8 @@ devices_policies = [
                 'path': '/{api_version}/devices/{device_id}/allocation',
                 'method': 'GET'
             }
-        ]
+        ],
+        scope_types=['project']
     ),
     policy.DocumentedRuleDefault(
         name=POLICY_ROOT % 'reallocate',
@@ -89,7 +94,8 @@ devices_policies = [
                 'path': '/{api_version}/devices/{device_id}/allocation',
                 'method': 'PUT'
             }
-        ]
+        ],
+        scope_types=['project']
     ),
     policy.DocumentedRuleDefault(
         name=POLICY_ROOT % 'get_resource_properties',
@@ -100,7 +106,8 @@ devices_policies = [
                 'path': '/{api_version}/devices/resource_properties',
                 'method': 'GET'
             }
-        ]
+        ],
+        scope_types=['project']
     ),
     policy.DocumentedRuleDefault(
         name=POLICY_ROOT % 'update_resource_properties',
@@ -112,7 +119,8 @@ devices_policies = [
                          '{property_name}'),
                 'method': 'PATCH'
             }
-        ]
+        ],
+        scope_types=['project']
     ),
 ]
 

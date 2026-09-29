@@ -30,7 +30,8 @@ networks_policies = [
                 'path': '/{api_version}/networks/{network_id}',
                 'method': 'GET'
             }
-        ]
+        ],
+        scope_types=['project']
     ),
     policy.DocumentedRuleDefault(
         name=POLICY_ROOT % 'post',
@@ -41,7 +42,8 @@ networks_policies = [
                 'path': '/{api_version}/networks',
                 'method': 'POST'
             }
-        ]
+        ],
+        scope_types=['project']
     ),
     policy.DocumentedRuleDefault(
         name=POLICY_ROOT % 'delete',
@@ -52,7 +54,8 @@ networks_policies = [
                 'path': '/{api_version}/networks/{network_id}',
                 'method': 'DELETE'
             }
-        ]
+        ],
+        scope_types=['project']
     ),
     policy.DocumentedRuleDefault(
         name=POLICY_ROOT % 'get_allocations',
@@ -67,7 +70,8 @@ networks_policies = [
                 'path': '/{api_version}/networks/{network_id}/allocation',
                 'method': 'GET'
             }
-        ]
+        ],
+        scope_types=['project']
     ),
     policy.DocumentedRuleDefault(
         name=POLICY_ROOT % 'get_resource_properties',
@@ -78,7 +82,8 @@ networks_policies = [
                 'path': '/{api_version}/networks/resource_properties',
                 'method': 'GET'
             }
-        ]
+        ],
+        scope_types=['project']
     ),
     policy.DocumentedRuleDefault(
         name=POLICY_ROOT % 'update_resource_properties',
@@ -90,7 +95,8 @@ networks_policies = [
                          '{property_name}'),
                 'method': 'PATCH'
             }
-        ]
+        ],
+        scope_types=['project']
     ),
 ]
 

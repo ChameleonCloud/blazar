@@ -79,7 +79,8 @@ leases_policies = [
                 'path': '/{api_version}/os-hosts/{host_id}/allocation',
                 'method': 'PUT'
             }
-        ]
+        ],
+        scope_types=['project']
     ),
     policy.DocumentedRuleDefault(
         name=POLICY_ROOT % 'delete',
