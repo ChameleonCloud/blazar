@@ -10,24 +10,26 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import itertools
+from oslo_policy import policy
 
 from blazar.policies import base
-from blazar.policies import devices
-from blazar.policies import flavor_instances
-from blazar.policies import floatingips
-from blazar.policies import leases
-from blazar.policies import networks
-from blazar.policies import oshosts
+
+POLICY_ROOT = 'blazar:flavor_instances:%s'
+
+flavor_instances_policies = [
+    policy.DocumentedRuleDefault(
+        name=POLICY_ROOT % 'get_availability',
+        check_str=base.RULE_ADMIN_OR_OWNER,
+        description='Policy rule for Flavor Instance Availability API.',
+        operations=[
+            {
+                'path': '/{api_version}/flavor-instances/availability',
+                'method': 'GET'
+            }
+        ]
+    ),
+]
 
 
 def list_rules():
-    return itertools.chain(
-        base.list_rules(),
-        leases.list_rules(),
-        oshosts.list_rules(),
-        floatingips.list_rules(),
-        networks.list_rules(),
-        devices.list_rules(),
-        flavor_instances.list_rules()
-    )
+    return flavor_instances_policies
