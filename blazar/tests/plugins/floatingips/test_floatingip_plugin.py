@@ -956,7 +956,8 @@ class FloatingIpMonitorPluginTestCase(tests.TestCase):
         super(FloatingIpMonitorPluginTestCase, self).setUp()
         self.db_api = db_api
         self.db_utils = db_utils
-        self.fip_monitor_plugin = floatingip_plugin.FloatingIpMonitorPlugin()
+        self.fip_monitor_plugin = floatingip_plugin.FloatingIpMonitorPlugin(
+            **floatingip_plugin.MONITOR_ARGS)
 
     def test_poll_fip_with_fip_in_pool(self):
         def fake_fetch_subnet(*args, **kwargs):
