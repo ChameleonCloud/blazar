@@ -421,6 +421,26 @@ class ServiceTestCase(tests.DBTestCase):
         batches = self.manager._select_for_execution([w_start,y_end,x_start])
         self.assertEarlierBatch(batches, y_end, x_start)
 
+    def test_select_for_execution_end_before_next_lease_starts(self):
+        t = self.good_date
+        minute = datetime.timedelta(minutes=1)
+
+        # Lease A's start and end events both fall into the polling window.
+        a_start = self._event("lease-a", "start_lease", t)
+        a_end = self._event("lease-a", "end_lease", t+minute)
+
+        # Lease B is scheduled to start at the same moment lease A ends
+        b_start = self._event("lease-b", "start_lease", t+minute)
+
+        batches = self.manager._select_for_execution([a_start, a_end, b_start])
+
+        # We need to see that a_start is in an earlier batch than a_end, likely
+        # by deferring a_end
+        self.assertEarlierBatch(batches, a_start, a_end)
+
+        # We also need to see that a_end is in an earlier batch than b_start
+        self.assertEarlierBatch(batches, a_end, b_start)
+
     def test_process_events_concurrently(self):
         events = [{'id': '111-222-333', 'time': self.good_date,
                    'lease_id': 'aaa-bbb-ccc',
