@@ -62,6 +62,7 @@ class FloatingIpPlugin(base.BasePlugin):
     def __init__(self):
         super(FloatingIpPlugin, self).__init__()
         self.monitor = FloatingIpMonitorPlugin(**MONITOR_ARGS)
+        self.monitor.register_reallocater(self._reallocate)
 
     def check_params(self, values):
         if 'network_id' not in values:
@@ -280,6 +281,16 @@ class FloatingIpPlugin(base.BasePlugin):
         for alloc in allocations:
             db_api.fip_allocation_destroy(alloc['id'])
 
+    def _reallocate(self, allocation):
+        """Don't allocate an alternative floating IP.
+
+        Floating IPs aren't healed yet, so the monitor flags the reservation
+        with missing resources instead.
+
+        :return: False
+        """
+        return False
+
     def allocation_candidates(self, values):
         self.check_params(values)
 
@@ -469,7 +480,7 @@ class FloatingIpMonitorPlugin(monitor.GeneralMonitorPlugin, neutron.NeutronClien
     def filter_allocations(self, reservation, resource_ids):
         return [alloc for alloc
                 in reservation["floatingip_allocations"]
-                if alloc["floating_ip_id"] in resource_ids]
+                if alloc["floatingip_id"] in resource_ids]
 
     def get_reservations_by_resource_ids(self, resource_ids,
                                          interval_begin, interval_end):
