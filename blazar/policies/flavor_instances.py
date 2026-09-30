@@ -19,14 +19,15 @@ POLICY_ROOT = 'blazar:flavor_instances:%s'
 flavor_instances_policies = [
     policy.DocumentedRuleDefault(
         name=POLICY_ROOT % 'get_availability',
-        check_str=base.RULE_ADMIN_OR_OWNER,
+        check_str=base.PROJECT_READER_OR_ADMIN,
         description='Policy rule for Flavor Instance Availability API.',
         operations=[
             {
                 'path': '/{api_version}/flavor-instances/availability',
                 'method': 'GET'
             }
-        ]
+        ],
+        scope_types=['project']
     ),
 ]
 

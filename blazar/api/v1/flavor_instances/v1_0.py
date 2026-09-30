@@ -13,6 +13,8 @@
 
 import datetime
 
+from oslo_utils import timeutils
+
 from blazar.api.v1.flavor_instances import service
 from blazar.api.v1 import utils as api_utils
 from blazar import exceptions as ex
@@ -56,7 +58,7 @@ def flavor_availability(req, query):
     raw_end = query.get('end_date')
 
     start_date = (_parse_date(raw_start, 'start_date')
-                  if raw_start else datetime.datetime.utcnow())
+                  if raw_start else timeutils.utcnow())
     end_date = (_parse_date(raw_end, 'end_date')
                 if raw_end else start_date + datetime.timedelta(days=30))
 
