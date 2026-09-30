@@ -453,6 +453,25 @@ class ServiceTestCase(tests.DBTestCase):
             mock.call('111-222-333', {'status': status.event.IN_PROGRESS}),
             mock.call('111-222-333', {'status': status.event.ERROR})])
 
+    # chi only: upstream sets ERROR on the last event of the batch, not on
+    # the event that failed.
+    def test_event_task_fail_sets_error_on_failed_event(self):
+        event_update = self.patch(self.db_api, 'event_update')
+
+        def exec_event(event):
+            if event['id'] == 'failed':
+                raise Exception()
+        self.patch(self.manager, '_exec_event').side_effect = exec_event
+
+        self.manager._process_events_concurrently(
+            [{'id': 'failed', 'lease_id': 'lease-1'},
+             {'id': 'succeeded', 'lease_id': 'lease-2'}])
+
+        event_update.assert_has_calls([
+            mock.call('failed', {'status': status.event.IN_PROGRESS}),
+            mock.call('succeeded', {'status': status.event.IN_PROGRESS}),
+            mock.call('failed', {'status': status.event.ERROR})])
+
     def test_event_pass(self):
         events = self.patch(self.db_api, 'event_get_all_sorted_by_filters')
         events.return_value = [{'id': '111-222-333',
