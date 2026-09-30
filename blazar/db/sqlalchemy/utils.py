@@ -28,6 +28,7 @@ from blazar import status
 from collections import defaultdict
 from oslo_utils import timeutils
 import sqlalchemy as sa
+from sqlalchemy.orm import contains_eager
 
 
 def get_backend():
@@ -111,6 +112,7 @@ def get_reservations_by_host_ids(host_ids, start_date, end_date):
         border0 = start_date <= models.Lease.end_date
         border1 = models.Lease.start_date <= end_date
         query = (session.query(models.Reservation).join(models.Lease)
+                 .options(contains_eager(models.Reservation.lease))
                  .join(models.ComputeHostAllocation)
                  .filter(models.ComputeHostAllocation.deleted.is_(None))
                  .filter(models.ComputeHostAllocation.compute_host_id
