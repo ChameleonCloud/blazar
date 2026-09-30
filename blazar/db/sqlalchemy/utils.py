@@ -27,6 +27,7 @@ from blazar.plugins import networks as network_plugin
 from blazar import status
 from collections import defaultdict
 import sqlalchemy as sa
+from sqlalchemy.orm import contains_eager
 
 
 get_session = facade_wrapper.get_session
@@ -111,6 +112,7 @@ def get_reservations_by_host_ids(host_ids, start_date, end_date):
     border0 = start_date <= models.Lease.end_date
     border1 = models.Lease.start_date <= end_date
     query = (session.query(models.Reservation).join(models.Lease)
+             .options(contains_eager(models.Reservation.lease))
              .join(models.ComputeHostAllocation)
              .filter(models.ComputeHostAllocation.deleted.is_(None))
              .filter(models.ComputeHostAllocation.compute_host_id
