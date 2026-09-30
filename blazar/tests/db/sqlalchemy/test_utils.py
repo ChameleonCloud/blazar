@@ -272,6 +272,25 @@ class SQLAlchemyDBUtilsTestCase(tests.DBTestCase):
         self.check_reservation([], ['r4'],
                                '2030-01-01 07:00', '2030-01-01 15:00')
 
+    def test_get_reservations_by_floatingip_ids(self):
+        db_api.lease_create({
+            'id': 'fip_lease',
+            'name': 'fake_fip_lease',
+            'start_date': _get_datetime('2030-01-01 09:00'),
+            'end_date': _get_datetime('2030-01-01 10:00'),
+            'trust': 'trust',
+            'reservations': [{'resource_id': 'fip_resv',
+                              'resource_type': 'virtual:floatingip'}],
+            'events': []})
+        reservation = db_api.reservation_get_all_by_lease_id('fip_lease')[0]
+        db_api.fip_allocation_create({'floatingip_id': 'fip1',
+                                      'reservation_id': reservation['id']})
+
+        ret = db_utils.get_reservations_by_floatingip_ids(
+            ['fip1'], '2030-01-01 08:00', '2030-01-01 11:00')
+
+        self.assertEqual([reservation['id']], [r['id'] for r in ret])
+
     def test_get_reservation_allocations_by_host_ids(self):
         self._setup_leases()
 

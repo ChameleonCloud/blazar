@@ -172,10 +172,7 @@ def get_reservations_by_floatingip_ids(floatingip_ids, start_date, end_date):
                 models.Lease,
                 models.Lease.id == models.Reservation.lease_id
              )
-             .join(
-                models.FloatingIPAllocation,
-                models.FloatingIPAllocation.reservation_id == models.Reservation.lease_id
-             )
+             .join(models.FloatingIPAllocation)
              .filter(models.FloatingIPAllocation.deleted.is_(None))
              .filter(models.FloatingIPAllocation.floatingip_id.in_(floatingip_ids))
              .filter(~sa.or_(border0, border1)))
