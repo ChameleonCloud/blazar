@@ -711,6 +711,26 @@ class SQLAlchemyDBApiTestCase(tests.DBTestCase):
                          db_api.host_extra_capability_get_all_per_name('1',
                                                                        'bad'))
 
+    def test_network_extra_capability_get_all_per_name(self):
+        db_api.network_extra_capability_create(
+            {'id': '1', 'network_id': '1', 'capability_name': 'vlan',
+             'capability_value': '2'})
+        res = db_api.network_extra_capability_get_all_per_name('1', 'vlan')
+        self.assertEqual(1, len(res))
+        self.assertEqual([],
+                         db_api.network_extra_capability_get_all_per_name(
+                             '1', 'bad'))
+
+    def test_device_extra_capability_get_all_per_name(self):
+        db_api.device_extra_capability_create(
+            {'id': '1', 'device_id': '1', 'capability_name': 'gpu',
+             'capability_value': '2'})
+        res = db_api.device_extra_capability_get_all_per_name('1', 'gpu')
+        self.assertEqual(1, len(res))
+        self.assertEqual([],
+                         db_api.device_extra_capability_get_all_per_name(
+                             '1', 'bad'))
+
     # Resource Inventory
 
     def test_host_resource_inventory_create(self):
