@@ -24,8 +24,6 @@ from oslo_service import service
 from blazar import context
 from blazar import rpc
 
-LOG = logging.getLogger(__name__)
-
 
 class RPCClient(object):
     def __init__(self, target):
@@ -70,18 +68,13 @@ class ContextEndpointHandler(object):
         self.target = target
 
     def __getattr__(self, name):
-        try:
-            method = getattr(self.__endpoint, name)
+        method = getattr(self.__endpoint, name)
 
-            def run_method(__ctx, **kwargs):
-                with context.BlazarContext.from_dict(__ctx):
-                    return method(**kwargs)
+        def run_method(__ctx, **kwargs):
+            with context.BlazarContext.from_dict(__ctx):
+                return method(**kwargs)
 
-            return run_method
-        except AttributeError:
-            LOG.error("No %(method)s method found implemented in "
-                      "%(class)s class",
-                      {'method': name, 'class': self.__endpoint})
+        return run_method
 
 
 def with_empty_context(func):
