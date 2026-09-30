@@ -35,28 +35,28 @@ class HostNotInFreePool(exceptions.NotFound):
     msg_fmt = _("Host %(host)s not in freepool '%(freepool_name)s'")
 
 
-class CantRemoveHost(exceptions.BlazarException):
+class CantRemoveHost(exceptions.BadRequest):
     code = 409
     msg_fmt = _("Can't remove host(s) %(host)s from Aggregate %(pool)s")
 
 
-class CantDeleteHost(exceptions.BlazarException):
+class CantDeleteHost(exceptions.BadRequest):
     code = 409
     msg_fmt = _("Can't delete host %(host)s. %(msg)s")
 
 
-class CantAddHost(exceptions.BlazarException):
+class CantAddHost(exceptions.BadRequest):
     code = 409
     msg_fmt = _("Can't add host(s) %(host)s to Aggregate %(pool)s")
 
 
-class AggregateHaveHost(exceptions.BlazarException):
+class AggregateHaveHost(exceptions.BadRequest):
     code = 409
     msg_fmt = _("Can't delete Aggregate '%(name)s', "
                 "host(s) attached to it : %(hosts)s")
 
 
-class AggregateAlreadyHasHost(exceptions.BlazarException):
+class AggregateAlreadyHasHost(exceptions.BadRequest):
     code = 409
     msg_fmt = _("Conflict while adding host %(host)s to aggregate %(pool)s: "
                 "%(nova_exception)s")
@@ -74,12 +74,12 @@ class InvalidHost(exceptions.NotAuthorized):
     msg_fmt = _("Invalid values for host %(host)s")
 
 
-class MultipleHostsFound(exceptions.BlazarException):
+class MultipleHostsFound(exceptions.BadRequest):
     code = 409
     msg_fmt = _("Multiple Hosts found for pattern '%(host)s'")
 
 
-class ResourceBusy(exceptions.BlazarException):
+class ResourceBusy(exceptions.BadRequest):
     code = 409
 
 
@@ -95,13 +95,14 @@ class EventError(exceptions.BlazarException):
     msg_fmt = '%(error)s'
 
 
-class InvalidDate(exceptions.BlazarException):
+class InvalidDate(exceptions.BadRequest):
     code = 400
     msg_fmt = _(
         '%(date)s is an invalid date. Required format: %(date_format)s')
 
 
 class UnsupportedResourceType(exceptions.BlazarException):
+    code = 400
     msg_fmt = _("The %(resource_type)s resource type is not supported")
 
 
@@ -146,7 +147,7 @@ class ServiceNotFound(exceptions.NotFound):
     msg_fmt = _("Service %(service)s not found")
 
 
-class WrongClientVersion(exceptions.BlazarException):
+class WrongClientVersion(exceptions.BadRequest):
     code = 400
     msg_fmt = _("Unfortunately you use wrong client version")
 
@@ -156,11 +157,11 @@ class NoManagementUrl(exceptions.NotFound):
     msg_fmt = _("You haven't management url for service")
 
 
-class HypervisorNotFound(exceptions.BlazarException):
+class HypervisorNotFound(exceptions.NotFound):
     msg_fmt = _("Aggregate '%(pool)s' not found!")
 
 
-class NotEnoughResourcesAvailable(exceptions.BlazarException):
+class NotEnoughResourcesAvailable(exceptions.BadRequest):
     pass
 
 
@@ -172,27 +173,27 @@ class NotEnoughResourcesDefaultProperties(NotEnoughResourcesAvailable):
     msg_fmt = _("Not enough resources available with query %(params)s")
 
 
-class MalformedParameter(exceptions.BlazarException):
+class MalformedParameter(exceptions.BadRequest):
     code = 400
     msg_fmt = _("Malformed parameter %(param)s")
 
 
-class MalformedRequirements(exceptions.BlazarException):
+class MalformedRequirements(exceptions.BadRequest):
     code = 400
     msg_fmt = _("Malformed requirements %(rqrms)s")
 
 
-class MissingParameter(exceptions.BlazarException):
+class MissingParameter(exceptions.BadRequest):
     code = 400
     msg_fmt = _("Missing parameter %(param)s")
 
 
-class ExtraCapabilityTooLong(exceptions.BlazarException):
+class ExtraCapabilityTooLong(exceptions.BadRequest):
     code = 400
     msg_fmt = _("Extra capability key too long")
 
 
-class InvalidState(exceptions.BlazarException):
+class InvalidState(exceptions.BadRequest):
     code = 409
     msg_fmt = _("Invalid State %(state)s for %(id)s")
 
@@ -201,22 +202,22 @@ class InvalidStateUpdate(InvalidState):
     msg_fmt = _("Unable to update ID %(id)s state with %(action)s:%(status)s")
 
 
-class ProjectIdNotFound(exceptions.BlazarException):
+class ProjectIdNotFound(exceptions.NotFound):
     msg_fmt = _("No project_id found in current context")
 
 
-class InvalidRange(exceptions.BlazarException):
+class InvalidRange(exceptions.BadRequest):
     code = 400
     msg_fmt = _('Invalid values for min/max of hosts. '
                 'Max must be equal to or larger than min.')
 
 
-class CantUpdateParameter(exceptions.BlazarException):
+class CantUpdateParameter(exceptions.BadRequest):
     code = 409
     msg_fmt = _("%(param)s cannot be updated")
 
 
-class InvalidPeriod(exceptions.BlazarException):
+class InvalidPeriod(exceptions.BadRequest):
     code = 400
     msg_fmt = _('The end_date must be later than the start_date.')
 
@@ -227,7 +228,7 @@ class FloatingIPNotFound(exceptions.NotFound):
     msg_fmt = _("Floating IP %(floatingip)s not found.")
 
 
-class CantDeleteFloatingIP(exceptions.BlazarException):
+class CantDeleteFloatingIP(exceptions.BadRequest):
     code = 409
     msg_fmt = _("Can't delete floating IP %(floatingip)s. %(msg)s")
 
@@ -246,13 +247,13 @@ class NotEnoughFloatingIPAvailable(NotEnoughResourcesAvailable):
     msg_fmt = _("Not enough floating IPs available")
 
 
-class CantUpdateFloatingIPReservation(exceptions.BlazarException):
+class CantUpdateFloatingIPReservation(exceptions.BadRequest):
     code = 400
     msg_fmt = _("Floating IP reservation cannot be updated with requested "
                 "parameters. %(msg)s")
 
 
-class NeutronClientError(exceptions.BlazarException):
+class NeutronClientError(exceptions.BadRequest):
     msg_fmt = _("Failed to create Neutron resources for the reservation")
 
 
@@ -283,24 +284,24 @@ class NotEnoughNetworksAvailable(NotEnoughResourcesAvailable):
     msg_fmt = _("Not enough networks available")
 
 
-class NetworkCreationFailed(exceptions.BlazarException):
+class NetworkCreationFailed(exceptions.BadRequest):
     msg_fmt = _("Failed to create network %(name)s for reservation %(id)s. "
                 "%(msg)s")
 
 
-class NetworkExtraOnStartFailed(exceptions.BlazarException):
+class NetworkExtraOnStartFailed(exceptions.BadRequest):
     msg_fmt = _("Failed on extra on start steps for reservation %(id)s. "
                 "%(msg)s")
 
 
-class NetworkDeletionFailed(exceptions.BlazarException):
+class NetworkDeletionFailed(exceptions.BadRequest):
     msg_fmt = _("Failed to delete network %(network_id)s for reservation "
                 "%(reservation_id)s")
 
 
 # Device plugin related exceptions
 
-class CantDeleteDevice(exceptions.BlazarException):
+class CantDeleteDevice(exceptions.BadRequest):
     code = 409
     msg_fmt = _("Can't delete device %(device)s. %(msg)s")
 
@@ -313,7 +314,7 @@ class NotEnoughDevicesAvailable(NotEnoughResourcesAvailable):
     msg_fmt = _("Not enough devices available")
 
 
-class InvalidDevice(exceptions.NotAuthorized):
+class InvalidDevice(exceptions.BadRequest):
     msg_fmt = _("Invalid values for device %(device)s")
 
 
