@@ -11,8 +11,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from oslo_config import cfg
+from oslo_config import fixture as conf_fixture
+
+from blazar.db import utils as db_utils
 from blazar.plugins import base
 from blazar import tests
+from blazar.utils.openstack import keystone
 
 
 class BasePluginDummy(base.BasePlugin):
@@ -72,3 +77,19 @@ class BasePluginTestCase(tests.TestCase):
         self.assertTrue(self.plugin.is_project_allowed(project_id, resource))
         project_id = "923cf8d0-e65c-11eb-ba80-0242ac130004"
         self.assertFalse(self.plugin.is_project_allowed(project_id, resource))
+
+    def test_add_extra_allocation_info_deleted_user(self):
+        conf = self.useFixture(conf_fixture.Config(cfg.CONF))
+        conf.config(allocation_extras=['user_name'], group='api')
+        # The user of lease-1 has been deleted from Keystone.
+        self.patch(db_utils, 'get_user_ids_for_lease_ids').return_value = [
+            ('lease-1', 'deleted-user-id')]
+        keystone_client = self.patch(keystone, 'BlazarKeystoneClient')
+        keystone_client.return_value.users.list.return_value = []
+
+        allocation = {'lease_id': 'lease-1'}
+        self.plugin.add_extra_allocation_info({'host-1': [allocation]})
+
+        # The user ID is shown instead of the user name.
+        self.assertEqual({'user_name': 'deleted-user-id'},
+                         allocation['extras'])
