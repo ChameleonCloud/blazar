@@ -198,8 +198,8 @@ class BasePlugin(object, metaclass=abc.ABCMeta):
             user_map = {user.id: user for user in users}
             lease_to_name = dict()
             for lease_id, user_id in items:
-                user = user_map[user_id]
-                lease_to_name[lease_id] = user.name
+                user = user_map.get(user_id)
+                lease_to_name[lease_id] = user.name if user else user_id
 
             for allocations in resource_allocations.values():
                 for alloc in allocations:
