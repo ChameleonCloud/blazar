@@ -1184,7 +1184,6 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                                  in invalid_provision_states]
 
                 for host in reservable_hosts:
-                    print(host['hypervisor_hostname'])
                     if host['hypervisor_hostname'] in failed_bm_ids:
                         node = nodes_by_uuid.get(host['hypervisor_hostname'])
                         error = f"Node status is maintenance {node.maintenance}, power state {node.power_state} and provision state {node.provision_state}"
