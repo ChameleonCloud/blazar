@@ -163,7 +163,7 @@ class ManagerService(service_utils.RPCServer):
             try:
                 event_thread.wait()
             except Exception:
-                db_api.event_update(event['id'],
+                db_api.event_update(event_id,
                                     {'status': status.event.ERROR})
                 LOG.exception('Error occurred while handling event %s.',
                               event_id)
