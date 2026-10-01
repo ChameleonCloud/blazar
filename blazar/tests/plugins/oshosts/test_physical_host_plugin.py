@@ -3771,8 +3771,8 @@ class PhysicalHostMonitorPluginTestCase(tests.TestCase):
     def test_poll_resource_failures_aggregate_cleanup(self):
         def fake_get_reservations_by_host_id(host_id):
             host_reservations = {
-                1 : {'reservation_status': status.reservation.ERROR, 'reservation_id': 1},
-                2 : {'reservation_status': status.reservation.ACTIVE, 'reservation_id': 2},
+                1 : {'status': status.reservation.ERROR, 'id': 1},
+                2 : {'status': status.reservation.ACTIVE, 'id': 2},
                 # if the host has no reservations, it should be moved to freepool
                 3: None
             }
@@ -3832,7 +3832,7 @@ class PhysicalHostMonitorPluginTestCase(tests.TestCase):
 
     def test_poll_resource_failures_agg_cleanup_dry_run(self):
         def fake_get_reservations_by_host_id(host_id):
-            return {'reservation_status': status.reservation.ERROR, 'reservation_id': 1}
+            return {'status': status.reservation.ERROR, 'id': 1}
 
         self.cfg.CONF.set_override('enable_polling_monitor_dry_run', 'true', group='physical:host')
 

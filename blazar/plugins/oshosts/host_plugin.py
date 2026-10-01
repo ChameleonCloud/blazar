@@ -1238,9 +1238,9 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                 if not reservation:
                     continue
                 # ignore the reservation which is active, as the host must already be in the right pool
-                if reservation and reservation["reservation_status"] == status.reservation.ACTIVE:
+                if reservation and reservation["status"] == status.reservation.ACTIVE:
                     LOG.debug(f"{host['hypervisor_hostname']} is in an active reservation"
-                             f" {reservation['reservation_id']} - skipping aggregate clean up")
+                             f" {reservation['id']} - skipping aggregate clean up")
                     continue
                 # host not in 'active' or 'pending' reservation should be in freepool
                 host_uuid = host['hypervisor_hostname']
@@ -1261,8 +1261,8 @@ class PhysicalHostMonitorPlugin(monitor.GeneralMonitorPlugin,
                     msg = (
                         f"Moving {host['hypervisor_hostname']}"
                         f" from aggregate {curr_agg.name} to freepool"
-                        f" (reservation {reservation['reservation_id']}"
-                        f" status {reservation['reservation_status']})"
+                        f" (reservation {reservation['id']}"
+                        f" status {reservation['status']})"
                     )
                     if dry_run:
                         LOG.info(f"DRY RUN: {msg}")

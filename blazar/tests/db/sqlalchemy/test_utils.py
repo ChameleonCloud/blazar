@@ -283,7 +283,7 @@ class SQLAlchemyDBUtilsTestCase(tests.DBTestCase):
             'events': []})
         return db_api.reservation_get_all_by_lease_id('lease1')[0]
 
-    def test_get_most_recent_reservation_info_by_host_id(self):
+    def _create_host_allocation(self):
         reservation = self._create_active_reservation('physical:host')
         db_api.host_create({
             'id': 'host1', 'hypervisor_hostname': 'node1', 'vcpus': 1,
@@ -293,13 +293,24 @@ class SQLAlchemyDBUtilsTestCase(tests.DBTestCase):
         db_api.host_reservation_create({'id': 'r1',
                                         'reservation_id': reservation['id'],
                                         'aggregate_id': 1})
-        db_api.host_allocation_create({'compute_host_id': 'host1',
-                                       'reservation_id': reservation['id']})
+        allocation = db_api.host_allocation_create(
+            {'compute_host_id': 'host1', 'reservation_id': reservation['id']})
+        return reservation, allocation
+
+    def test_get_most_recent_reservation_info_by_host_id(self):
+        reservation, _ = self._create_host_allocation()
 
         info = db_utils.get_most_recent_reservation_info_by_host_id('host1')
 
-        self.assertEqual('active', info['reservation_status'])
-        self.assertEqual(reservation['id'], info['reservation_id'])
+        self.assertEqual('active', info['status'])
+        self.assertEqual(reservation['id'], info['id'])
+
+    def test_get_most_recent_reservation_info_skips_deleted_allocation(self):
+        _, allocation = self._create_host_allocation()
+        db_api.host_allocation_destroy(allocation['id'])
+
+        self.assertIsNone(
+            db_utils.get_most_recent_reservation_info_by_host_id('host1'))
 
     def test_get_most_recent_reservation_info_by_network_id(self):
         reservation = self._create_active_reservation('network')
