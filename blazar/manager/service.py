@@ -917,10 +917,12 @@ class ManagerService(service_utils.RPCServer):
                 raise common_ex.BlazarException(
                     'Invalid plugin names are specified: %s' % resource_type)
 
+            # One entry per allocation, so a host holding several
+            # instances of a flavor reservation is listed once per instance
             resource_ids = [
                 x['resource_id'] for x in plugin.list_allocations(
                     dict(reservation_id=reservation['id']))
-                if x['reservations']]
+                for _ in x['reservations']]
 
             allocations[resource_type] = [
                 plugin.get(rid) for rid in resource_ids]
