@@ -387,8 +387,7 @@ class ManagerService(service_utils.RPCServer):
             lease_values['start_date'] = start_date
             lease_values['end_date'] = end_date
 
-            allocations = self._allocation_candidates(
-                lease_values, reservations)
+            self._allocation_candidates(lease_values, reservations)
 
             events.append({'event_type': 'start_lease',
                            'time': start_date,
@@ -459,7 +458,7 @@ class ManagerService(service_utils.RPCServer):
                         context.current(),
                         lease_values,
                         db_reservations,
-                        allocations,
+                        self._existing_allocations(db_reservations),
                     )
                 except common_ex.NotAuthorized as e:
                     LOG.warning("Enforcement checks failed. %s", str(e))
