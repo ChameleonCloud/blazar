@@ -387,8 +387,7 @@ class ManagerService(service_utils.RPCServer):
             lease_values['start_date'] = start_date
             lease_values['end_date'] = end_date
 
-            allocations = self._allocation_candidates(
-                lease_values, reservations)
+            self._allocation_candidates(lease_values, reservations)
 
             events.append({'event_type': 'start_lease',
                            'time': start_date,
@@ -459,7 +458,7 @@ class ManagerService(service_utils.RPCServer):
                         context.current(),
                         lease_values,
                         db_reservations,
-                        allocations,
+                        self._existing_allocations(db_reservations),
                     )
                 except common_ex.NotAuthorized as e:
                     LOG.warning("Enforcement checks failed. %s", str(e))
@@ -918,10 +917,12 @@ class ManagerService(service_utils.RPCServer):
                 raise common_ex.BlazarException(
                     'Invalid plugin names are specified: %s' % resource_type)
 
+            # One entry per allocation, so a host holding several
+            # instances of a flavor reservation is listed once per instance
             resource_ids = [
                 x['resource_id'] for x in plugin.list_allocations(
                     dict(reservation_id=reservation['id']))
-                if x['reservations']]
+                for _ in x['reservations']]
 
             allocations[resource_type] = [
                 plugin.get(rid) for rid in resource_ids]

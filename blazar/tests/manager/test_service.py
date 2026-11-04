@@ -622,6 +622,29 @@ class ServiceTestCase(tests.DBTestCase):
         passed = self.enforcement.check_create.call_args[0][2]
         self.assertEqual(db_reservations, passed)
 
+    def test_create_lease_enforcement_gets_reserved_allocations(self):
+        lease_values = copy.deepcopy(self.lease_values)
+        lease_values['reservations'] = [{'resource_type': 'virtual:instance',
+                                         'flavor_id': 'm1.xsmall',
+                                         'amount': 2}]
+        self.reservation_get_all_by_lease_id.return_value = [
+            {'id': '111', 'resource_type': 'virtual:instance'}]
+        self.fake_plugin.allocation_candidates.return_value = ['candidate']
+        self.fake_plugin.list_allocations.return_value = [
+            {'resource_id': 'reserved', 'reservations': [{'id': '111'},
+                                                         {'id': '111'}]},
+            {'resource_id': 'unrelated', 'reservations': []}]
+        self.fake_plugin.get.side_effect = lambda rid: {'id': rid}
+
+        self.manager.create_lease(lease_values)
+
+        self.fake_plugin.list_allocations.assert_called_once_with(
+            {'reservation_id': '111'})
+        passed = self.enforcement.check_create.call_args[0][3]
+        self.assertEqual(
+            {'virtual:instance': [{'id': 'reserved'}, {'id': 'reserved'}]},
+            passed)
+
     def test_create_lease_some_time(self):
         lease_values = self.lease_values.copy()
         self.lease['start_date'] = '2046-11-13 13:13'
