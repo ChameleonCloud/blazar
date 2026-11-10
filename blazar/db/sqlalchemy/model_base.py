@@ -18,8 +18,8 @@ from oslo_db.sqlalchemy import models
 from oslo_utils import timeutils
 from sqlalchemy import Column
 from sqlalchemy import DateTime
-from sqlalchemy.ext import declarative
 from sqlalchemy.orm import attributes
+from sqlalchemy.orm import declarative_base
 from sqlalchemy import String
 
 
@@ -77,4 +77,4 @@ def datetime_to_str(dct, attr_name):
         dct[attr_name] = dct[attr_name].isoformat(' ')
 
 
-BlazarBase = declarative.declarative_base(cls=_BlazarBase)
+BlazarBase = declarative_base(cls=_BlazarBase)
