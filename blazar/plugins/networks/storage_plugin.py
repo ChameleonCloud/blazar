@@ -91,18 +91,6 @@ class StoragePlugin():
                     }
             }
             subet = self.neutron_client.create_subnet(body=subnet_body)
-            # share the network with service project
-            rbac_policy_body = {
-                "rbac_policy": {
-                    "object_type": "network",
-                    "action": "access_as_shared",
-                    "target_tenant": CONF.os_admin_project_name,
-                    "object_id": neutron_network["id"],
-                }
-            }
-            self.neutron_client.create_rbac_policy(
-                rbac_policy_body
-            )
             # add the subnet to ganesha router
             interface_body = {
                 'subnet_id': subet["subnet"]["id"],
