@@ -110,10 +110,6 @@ class LeaseNameAlreadyExists(exceptions.BlazarException):
     msg_fmt = _("The lease with name: %(name)s already exists")
 
 
-class MissingTrustId(exceptions.BlazarException):
-    msg_fmt = _("A trust id is required")
-
-
 class NovaClientError(exceptions.BlazarException):
     msg_fmt = _("Failed to create Nova resources for the reservation")
 

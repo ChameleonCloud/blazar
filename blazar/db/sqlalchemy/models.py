@@ -293,7 +293,7 @@ class ComputeHost(mb.BlazarBase, mb.SoftDeleteMixinWithUuid):
     local_gb = sa.Column(sa.Integer, nullable=False)
     status = sa.Column(sa.String(13))
     availability_zone = sa.Column(sa.String(255), nullable=False)
-    trust_id = sa.Column(sa.String(36), nullable=False)
+    trust_id = sa.Column(sa.String(36), nullable=False, default='')
     reservable = sa.Column(sa.Boolean, nullable=False,
                            server_default=sa.true())
     disabled = sa.Column(sa.Boolean, nullable=False,

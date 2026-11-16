@@ -36,7 +36,6 @@ from blazar.plugins import devices as plugin
 from blazar.plugins.devices import device_plugin
 from blazar import tests
 from blazar.utils.openstack import base
-from blazar.utils import trusts
 
 from kubernetes import client
 from kubernetes import config
@@ -114,10 +113,6 @@ class DevicePluginTestCase(tests.TestCase):
         }
 
         self.fake_dev_plugin.setup(None)
-
-        self.trusts = trusts
-        self.trust_ctx = self.patch(self.trusts, 'create_ctx_from_trust')
-        self.trust_create = self.patch(self.trusts, 'create_trust')
 
         self.cfg = cfg
         self.cfg.CONF.set_override('plugins', ["k8s.plugin"], group=plugin.RESOURCE_TYPE)
