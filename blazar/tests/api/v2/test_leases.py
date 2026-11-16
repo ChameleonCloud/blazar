@@ -17,7 +17,6 @@ Tests for API /leases/ methods
 from oslo_utils import uuidutils
 
 from blazar.tests import api
-from blazar.utils import trusts
 
 
 def fake_lease(**kw):
@@ -50,12 +49,6 @@ def fake_lease_request_body(exclude=[], **kw):
     lease_body = fake_lease(**kw)
     return dict((key, lease_body[key])
                 for key in lease_body if key not in exclude)
-
-
-def fake_trust(id=fake_lease()['trust_id']):
-    return type('Trust', (), {
-        'id': id,
-    })
 
 
 class TestIncorrectLeaseFromRPC(api.APITest):
@@ -180,9 +173,6 @@ class TestCreateLease(api.APITest):
         self.fake_lease_body = fake_lease_request_body(id=self.id1)
         self.path = '/leases'
         self.patch(self.rpcapi, 'create_lease').return_value = self.fake_lease
-
-        self.trusts = trusts
-        self.patch(self.trusts, 'create_trust').return_value = fake_trust()
 
     def test_create_one(self):
         response = self.post_json(self.path, self.fake_lease_body)

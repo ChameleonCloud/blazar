@@ -34,7 +34,6 @@ from blazar.utils.openstack import base
 from blazar.utils.openstack import ironic
 from blazar.utils.openstack import neutron
 from blazar.utils.openstack import nova
-from blazar.utils import trusts
 
 CONF = cfg.CONF
 
@@ -97,10 +96,6 @@ class NetworkPluginTestCase(tests.TestCase):
             'buzz': 'word',
         }
         self.fake_network_plugin.setup(None)
-
-        self.trusts = trusts
-        self.trust_ctx = self.patch(self.trusts, 'create_ctx_from_trust')
-        self.trust_create = self.patch(self.trusts, 'create_trust')
 
         self.ServerManager = nova.ServerManager
 

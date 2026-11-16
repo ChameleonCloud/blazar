@@ -16,7 +16,6 @@
 from blazar import context
 from blazar.manager.service import get_plugins
 from blazar import policy
-from blazar.utils import trusts
 
 
 class API(object):
@@ -29,7 +28,6 @@ class API(object):
         return self.plugin.list_devices()
 
     @policy.authorize('devices', 'post')
-    @trusts.use_trust_auth()
     def create_device(self, data):
         """Create new device.
 

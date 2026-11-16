@@ -18,7 +18,6 @@ from oslo_log import log as logging
 from blazar.cmd.manager import ManagerServiceSingleton
 from blazar import context
 from blazar import policy
-from blazar.utils import trusts
 
 LOG = logging.getLogger(__name__)
 
@@ -46,16 +45,12 @@ class API(object):
                                                 query=query)
 
     @policy.authorize('leases', 'post')
-    @trusts.use_trust_auth()
     def create_lease(self, data):
         """Create new lease.
 
         :param data: New lease characteristics.
         :type data: dict
         """
-        # TODO(priteau): If possible, extend the context object used in the
-        # manager to keep track of the trustor, instead of using the following
-        # two lines
         ctx = context.current()
         data['user_id'] = ctx.user_id
         return self.manager_service.create_lease(data)

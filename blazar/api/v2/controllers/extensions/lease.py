@@ -24,7 +24,6 @@ from blazar import exceptions
 from blazar.i18n import _
 from blazar.manager import service
 from blazar import policy
-from blazar.utils import trusts
 
 
 class Lease(base._Base):
@@ -105,7 +104,6 @@ class LeasesController(extensions.BaseController):
 
     @policy.authorize('leases', 'post')
     @wsme_pecan.wsexpose(Lease, body=Lease, status_code=201)
-    @trusts.use_trust_auth()
     def post(self, lease):
         """Creates a new lease.
 
