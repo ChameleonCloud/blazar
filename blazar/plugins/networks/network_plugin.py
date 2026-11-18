@@ -350,8 +350,6 @@ class NetworkPlugin(base.BasePlugin):
             db_api.network_allocation_destroy(allocation['id'])
         network_id = network_reservation['network_id']
 
-        # The call to delete must be done without trust_id so the admin role is
-        # used
         self.delete_neutron_network(network_id, reservation_id)
 
     def _get_extra_capabilities(self, network_id):
