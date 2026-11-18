@@ -36,9 +36,9 @@ from blazar.manager import exceptions
 from blazar import monitor
 from blazar.notification import api as notification_api
 from blazar import status
+from blazar.utils.openstack import keystone
 from blazar.utils.openstack import placement
 from blazar.utils import service as service_utils
-from blazar.utils import trusts
 import eventlet
 from oslo_log import log as logging
 
@@ -354,11 +354,6 @@ class ManagerService(service_utils.RPCServer):
         """
         lease_values['status'] = status.lease.CREATING
 
-        try:
-            trust_id = lease_values.pop('trust_id')
-        except KeyError:
-            raise exceptions.MissingTrustId()
-
         self.validate_params(lease_values, ['name', 'start_date', 'end_date'])
 
         # Remove and keep event and reservation values
@@ -379,117 +374,111 @@ class ManagerService(service_utils.RPCServer):
             raise common_ex.InvalidInput(
                 'End date must be later than start date.')
 
-        with trusts.create_ctx_from_trust(trust_id) as ctx:
-            # NOTE(priteau): We should not get user_id from ctx, because we are
-            # in the context of the trustee (blazar user).
-            # lease_values['user_id'] is set in blazar/api/v1/service.py
-            lease_values['project_id'] = ctx.project_id
-            lease_values['start_date'] = start_date
-            lease_values['end_date'] = end_date
+        lease_values['project_id'] = context.current().project_id
+        lease_values['start_date'] = start_date
+        lease_values['end_date'] = end_date
 
-            self._allocation_candidates(lease_values, reservations)
+        self._allocation_candidates(lease_values, reservations)
 
-            events.append({'event_type': 'start_lease',
-                           'time': start_date,
-                           'status': status.event.UNDONE})
-            events.append({'event_type': 'end_lease',
-                           'time': end_date,
-                           'status': status.event.UNDONE})
+        events.append({'event_type': 'start_lease',
+                       'time': start_date,
+                       'status': status.event.UNDONE})
+        events.append({'event_type': 'end_lease',
+                       'time': end_date,
+                       'status': status.event.UNDONE})
 
-            before_end_date = lease_values.get('before_end_date', None)
-            if before_end_date:
-                # incoming param. Validation check
-                try:
-                    before_end_date = self._date_from_string(
-                        before_end_date)
-                    self._check_date_within_lease_limits(before_end_date,
-                                                         lease_values)
-                except common_ex.BlazarException as e:
-                    LOG.warning("Invalid before_end_date param. %s", str(e))
-                    raise e
-            elif CONF.manager.minutes_before_end_lease > 0:
-                delta = datetime.timedelta(
-                    minutes=CONF.manager.minutes_before_end_lease)
-                before_end_date = lease_values['end_date'] - delta
+        before_end_date = lease_values.get('before_end_date', None)
+        if before_end_date:
+            # incoming param. Validation check
+            try:
+                before_end_date = self._date_from_string(
+                    before_end_date)
+                self._check_date_within_lease_limits(before_end_date,
+                                                     lease_values)
+            except common_ex.BlazarException as e:
+                LOG.warning("Invalid before_end_date param. %s", str(e))
+                raise e
+        elif CONF.manager.minutes_before_end_lease > 0:
+            delta = datetime.timedelta(
+                minutes=CONF.manager.minutes_before_end_lease)
+            before_end_date = lease_values['end_date'] - delta
 
-            if before_end_date:
-                event = {'event_type': 'before_end_lease',
-                         'status': status.event.UNDONE}
-                events.append(event)
-                self._update_before_end_event_date(event, before_end_date,
-                                                   lease_values)
+        if before_end_date:
+            event = {'event_type': 'before_end_lease',
+                     'status': status.event.UNDONE}
+            events.append(event)
+            self._update_before_end_event_date(event, before_end_date,
+                                               lease_values)
+
+        try:
+            lease = db_api.lease_create(lease_values)
+            lease_id = lease['id']
+        except db_ex.BlazarDBDuplicateEntry:
+            LOG.exception('Cannot create a lease - duplicated lease name')
+            raise exceptions.LeaseNameAlreadyExists(
+                name=lease_values['name'])
+        except db_ex.BlazarDBException:
+            with save_and_reraise_exception():
+                LOG.exception('Cannot create a lease')
+        else:
+            try:
+                for reservation in reservations:
+                    reservation['lease_id'] = lease['id']
+                    reservation['start_date'] = lease['start_date']
+                    reservation['end_date'] = lease['end_date']
+                    reservation['project_id'] = lease['project_id']
+                    reservation["id"] = self._create_reservation(reservation)
+            except Exception:
+                with save_and_reraise_exception():
+                    LOG.exception("Failed to create reservation for a "
+                                  "lease. Rollback the lease and "
+                                  "associated reservations")
+                    db_api.lease_destroy(lease_id)
 
             try:
-                if trust_id:
-                    lease_values.update({'trust_id': trust_id})
-                lease = db_api.lease_create(lease_values)
-                lease_id = lease['id']
-            except db_ex.BlazarDBDuplicateEntry:
-                LOG.exception('Cannot create a lease - duplicated lease name')
-                raise exceptions.LeaseNameAlreadyExists(
-                    name=lease_values['name'])
-            except db_ex.BlazarDBException:
+                # Plugins may take the reservation request and add extra 
+                # data before persisting to the DB. Ensure that enforcement
+                # acts on the version from the DB, rather than the request 
+                # body from lease_values
+                db_reservations = db_api.reservation_get_all_by_lease_id(
+                    lease_id
+                )
+                self.enforcement.check_create(
+                    context.current(),
+                    lease_values,
+                    db_reservations,
+                    self._existing_allocations(db_reservations),
+                )
+            except common_ex.NotAuthorized as e:
+                LOG.warning("Enforcement checks failed. %s", str(e))
+                db_api.lease_destroy(lease_id)
+                raise common_ex.NotAuthorized(e)
+            except Exception:
                 with save_and_reraise_exception():
-                    LOG.exception('Cannot create a lease')
-            else:
-                try:
-                    for reservation in reservations:
-                        reservation['lease_id'] = lease['id']
-                        reservation['start_date'] = lease['start_date']
-                        reservation['end_date'] = lease['end_date']
-                        reservation['project_id'] = lease['project_id']
-                        reservation["id"] = self._create_reservation(reservation)
-                except Exception:
-                    with save_and_reraise_exception():
-                        LOG.exception("Failed to create reservation for a "
-                                      "lease. Rollback the lease and "
-                                      "associated reservations")
-                        db_api.lease_destroy(lease_id)
-
-                try:
-                    # Plugins may take the reservation request and add extra 
-                    # data before persisting to the DB. Ensure that enforcement
-                    # acts on the version from the DB, rather than the request 
-                    # body from lease_values
-                    db_reservations = db_api.reservation_get_all_by_lease_id(
-                        lease_id
-                    )
-                    self.enforcement.check_create(
-                        context.current(),
-                        lease_values,
-                        db_reservations,
-                        self._existing_allocations(db_reservations),
-                    )
-                except common_ex.NotAuthorized as e:
-                    LOG.warning("Enforcement checks failed. %s", str(e))
+                    LOG.exception("Unexpected enforcement error. "
+                                  "Destroying lease and associated "
+                                  "reservations")
                     db_api.lease_destroy(lease_id)
-                    raise common_ex.NotAuthorized(e)
-                except Exception:
-                    with save_and_reraise_exception():
-                        LOG.exception("Unexpected enforcement error. "
-                                      "Destroying lease and associated "
-                                      "reservations")
-                        db_api.lease_destroy(lease_id)
 
-                try:
-                    for event in events:
-                        event['lease_id'] = lease['id']
-                        db_api.event_create(event)
-                except (exceptions.UnsupportedResourceType,
-                        common_ex.BlazarException):
-                    with save_and_reraise_exception():
-                        LOG.exception("Failed to create event for a lease. "
-                                      "Rollback the lease and associated "
-                                      "reservations")
-                        db_api.lease_destroy(lease_id)
+            try:
+                for event in events:
+                    event['lease_id'] = lease['id']
+                    db_api.event_create(event)
+            except (exceptions.UnsupportedResourceType,
+                    common_ex.BlazarException):
+                with save_and_reraise_exception():
+                    LOG.exception("Failed to create event for a lease. "
+                                  "Rollback the lease and associated "
+                                  "reservations")
+                    db_api.lease_destroy(lease_id)
 
-                else:
-                    db_api.lease_update(
-                        lease_id,
-                        {'status': status.lease.PENDING})
-                    lease = db_api.lease_get(lease_id)
-                    self._send_notification(lease, events=['create'])
-                    return lease
+            else:
+                db_api.lease_update(
+                    lease_id,
+                    {'status': status.lease.PENDING})
+                lease = db_api.lease_get(lease_id)
+                self._send_notification(lease, events=['create'])
+                return lease
 
     def _add_resource_type(self, reservations, existing_reservations):
         rsvns_by_id = {}
@@ -752,11 +741,13 @@ class ManagerService(service_utils.RPCServer):
         lease = self.get_lease(lease_id)
         allocations = self._existing_allocations(lease['reservations'])
         try:
-            # no rpc call with authentication context, i.e.
-            # context.current() doesn't work here.
-            # so need to get context from the lease trust.
-            self.enforcement.on_end(trusts.create_ctx_from_trust(
-                lease['trust_id']), lease, allocations)
+            # Events run in an empty context with no service catalog, so give
+            # enforcement Blazar's own catalog to find the identity endpoint.
+            session = keystone.BlazarKeystoneClient().session
+            ctx = context.current()
+            ctx.service_catalog = session.auth.get_auth_ref(
+                session).service_catalog
+            self.enforcement.on_end(ctx, lease, allocations)
         except Exception as e:
             LOG.error(e)
 

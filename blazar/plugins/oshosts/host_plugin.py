@@ -412,10 +412,7 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         #  - Exception handling for HostNotFound
         host_id = host_values.pop('id', None)
         host_name = host_values.pop('name', None)
-        try:
-            trust_id = host_values.pop('trust_id')
-        except KeyError:
-            raise manager_ex.MissingTrustId()
+        host_values.pop('trust_id', None)
 
         host_ref = host_id or host_name
         if host_ref is None:
@@ -455,8 +452,6 @@ class PhysicalHostPlugin(base.BasePlugin, nova.NovaClientWrapper):
         host = None
         cantaddextracapability = []
         try:
-            if trust_id:
-                host_details.update({'trust_id': trust_id})
             host = db_api.host_create(host_details)
         except db_ex.BlazarDBException as e:
             # We need to rollback

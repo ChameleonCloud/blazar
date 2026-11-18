@@ -17,7 +17,6 @@ Tests for API /os-hosts/ methods
 from oslo_utils import uuidutils
 
 from blazar.tests import api
-from blazar.utils import trusts
 
 
 def fake_computehost(**kw):
@@ -59,12 +58,6 @@ def fake_computehost_from_rpc(**kw):
     if extra_capas is not None:
         computehost.update(extra_capas)
     return computehost
-
-
-def fake_trust(id=fake_computehost()['trust_id']):
-    return type('Trust', (), {
-        'id': id,
-    })
 
 
 class TestIncorrectHostFromRPC(api.APITest):
@@ -211,9 +204,6 @@ class TestCreateHost(api.APITest):
         ).return_value = fake_computehost_from_rpc(id=self.id1)
 
         self.headers = {'X-Roles': 'admin'}
-
-        self.trusts = trusts
-        self.patch(self.trusts, 'create_trust').return_value = fake_trust()
 
     def test_create_one(self):
         response = self.post_json(self.path, self.fake_computehost_body,

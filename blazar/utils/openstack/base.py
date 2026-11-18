@@ -52,7 +52,6 @@ def client_kwargs(**_kwargs):
                                   CONF.os_admin_user_domain_name)
     project_domain_name = kwargs.pop('project_domain_name',
                                      CONF.os_admin_project_domain_name)
-    trust_id = kwargs.pop('trust_id', None)
     auth_url = kwargs.pop('auth_url', None)
     region_name = kwargs.pop('region_name', CONF.os_region_name)
     if ctx is None:
@@ -75,13 +74,9 @@ def client_kwargs(**_kwargs):
         username=username,
         password=password,
         user_domain_name=user_domain_name,
-        project_domain_name=project_domain_name
+        project_domain_name=project_domain_name,
+        project_name=project_name
     )
-
-    if trust_id is not None:
-        auth_kwargs.update(trust_id=trust_id)
-    else:
-        auth_kwargs.update(project_name=project_name)
 
     auth = v3.Password(**auth_kwargs)
 

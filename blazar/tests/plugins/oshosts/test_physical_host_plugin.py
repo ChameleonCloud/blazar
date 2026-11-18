@@ -40,7 +40,6 @@ from blazar import tests
 from blazar.utils.openstack import base
 from blazar.utils.openstack import nova
 from blazar.utils.openstack import placement
-from blazar.utils import trusts
 
 CONF = cfg.CONF
 
@@ -175,10 +174,6 @@ class PhysicalHostPluginTestCase(tests.TestCase):
                                       'delete_reservation_provider')
 
         self.fake_phys_plugin.setup(None)
-
-        self.trusts = trusts
-        self.trust_ctx = self.patch(self.trusts, 'create_ctx_from_trust')
-        self.trust_create = self.patch(self.trusts, 'create_trust')
 
         self.ServerManager = nova.ServerManager
 
@@ -474,9 +469,28 @@ class PhysicalHostPluginTestCase(tests.TestCase):
                           self.fake_phys_plugin.create_computehost,
                           fake_request)
 
-    def test_create_host_without_trust_id(self):
-        self.assertRaises(manager_exceptions.MissingTrustId,
-                          self.fake_phys_plugin.create_computehost, {})
+    @mock.patch.object(placement.BlazarPlacementClient, 'get_traits')
+    @mock.patch.object(placement.BlazarPlacementClient, 'get_inventory')
+    @mock.patch.object(placement.BlazarPlacementClient,
+                       'list_resource_providers')
+    @mock.patch.object(placement.BlazarPlacementClient,
+                       'get_resource_provider')
+    def test_create_host_without_trust_id(
+            self, mock_get_rp, mock_list_rp, mock_get_inventory,
+            mock_get_traits):
+        mock_get_rp.return_value = {"uuid": "fake_rp_uuid"}
+        mock_list_rp.return_value = [{"uuid": "fake_rp_uuid"}]
+        mock_get_inventory.return_value = {"inventories": {}}
+        mock_get_traits.return_value = []
+        self.get_extra_capabilities.return_value = {}
+        fake_request = self.fake_host.copy()
+        del fake_request['trust_id']
+        self.db_host_create.return_value = self.fake_host
+
+        host = self.fake_phys_plugin.create_computehost(fake_request)
+
+        self.assertEqual(self.fake_host, host)
+        self.db_host_extra_capability_create.assert_not_called()
 
     def test_create_host_without_host_id(self):
         self.assertRaises(manager_exceptions.InvalidHost,

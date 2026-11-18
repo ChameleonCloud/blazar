@@ -24,7 +24,6 @@ from blazar.api.v2.controllers import types
 from blazar import exceptions
 from blazar.i18n import _
 from blazar import policy
-from blazar.utils import trusts
 
 LOG = logging.getLogger(__name__)
 
@@ -128,13 +127,11 @@ class HostsController(extensions.BaseController):
 
     @policy.authorize('oshosts', 'post')
     @wsme_pecan.wsexpose(Host, body=Host, status_code=201)
-    @trusts.use_trust_auth()
     def post(self, host):
         """Creates a new host.
 
         :param host: a host within the request body.
         """
-        # here API should go to Keystone API v3 and create trust
         host_dct = host.as_dict()
         # FIXME(sbauza): DB exceptions are currently catched and return a lease
         #                equal to None instead of being sent to the API

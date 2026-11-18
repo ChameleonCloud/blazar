@@ -41,7 +41,7 @@ from blazar.plugins.oshosts import host_plugin
 from blazar import status
 from blazar import tests
 from blazar.utils.openstack import base as base_utils
-from blazar.utils import trusts
+from blazar.utils.openstack import keystone
 
 
 class FakeExtension():
@@ -119,7 +119,6 @@ class ServiceTestCase(tests.DBTestCase):
         self.datetime = datetime
         self.db_api = db_api
         self.dummy_plugin = dummy_vm_plugin
-        self.trusts = trusts
         self.notifier_api = notifier_api
         self.base_utils = base_utils
         self.status = status
@@ -196,8 +195,6 @@ class ServiceTestCase(tests.DBTestCase):
 
         self.ctx = self.patch(self.context, 'BlazarContext')
         self.ctx_current = self.patch(context, 'current')
-        self.trust_ctx = self.patch(self.trusts, 'create_ctx_from_trust')
-        self.trust_create = self.patch(self.trusts, 'create_trust')
         self.patch(enforcement.UsageEnforcement, 'format_context')
         self.lease_get = self.patch(self.db_api, 'lease_get')
         self.lease_get.return_value = self.lease
@@ -592,7 +589,8 @@ class ServiceTestCase(tests.DBTestCase):
 
         self.enforcement.check_create.assert_called_once()
 
-        self.trust_ctx.assert_called_once_with(lease_values['trust_id'])
+        self.assertEqual(self.ctx_current.return_value.project_id,
+                         lease_values['project_id'])
         self.lease_create.assert_called_once_with(lease_values)
         self.assertEqual(lease, self.lease)
         self.fake_notifier.assert_called_once_with(
@@ -651,7 +649,6 @@ class ServiceTestCase(tests.DBTestCase):
 
         lease = self.manager.create_lease(lease_values)
 
-        self.trust_ctx.assert_called_once_with(lease_values['trust_id'])
         self.lease_create.assert_called_once_with(lease_values)
         self.assertEqual(lease, self.lease)
 
@@ -879,8 +876,10 @@ class ServiceTestCase(tests.DBTestCase):
         lease_values = self.lease_values.copy()
         del lease_values['trust_id']
 
-        self.assertRaises(manager_ex.MissingTrustId,
-                          self.manager.create_lease, lease_values)
+        lease = self.manager.create_lease(lease_values)
+
+        self.lease_create.assert_called_once_with(lease_values)
+        self.assertEqual(lease, self.lease)
 
     def test_create_lease_without_required_params(self):
         name_missing_values = {
@@ -1690,12 +1689,17 @@ class ServiceTestCase(tests.DBTestCase):
     def test_end_lease(self):
         basic_action = self.patch(self.manager, '_basic_action')
         enforcement_on_end = self.patch(self.enforcement, 'on_end')
+        keystone_client = self.patch(keystone, 'BlazarKeystoneClient')
+        auth = keystone_client.return_value.session.auth
 
         self.manager.end_lease(self.lease_id, '1')
 
         basic_action.assert_called_once_with(self.lease_id, '1', 'on_end',
                                              'deleted')
-        enforcement_on_end.assert_called_once()
+        ctx = self.ctx_current.return_value
+        self.assertEqual(auth.get_auth_ref.return_value.service_catalog,
+                         ctx.service_catalog)
+        enforcement_on_end.assert_called_once_with(ctx, mock.ANY, mock.ANY)
 
     def test_before_end_lease(self):
         basic_action = self.patch(self.manager, '_basic_action')
