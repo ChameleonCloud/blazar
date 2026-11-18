@@ -1696,10 +1696,10 @@ class ServiceTestCase(tests.DBTestCase):
 
         basic_action.assert_called_once_with(self.lease_id, '1', 'on_end',
                                              'deleted')
-        self.ctx.assert_called_once_with(
-            service_catalog=auth.get_auth_ref.return_value.service_catalog)
-        enforcement_on_end.assert_called_once_with(
-            self.ctx.return_value, mock.ANY, mock.ANY)
+        ctx = self.ctx_current.return_value
+        self.assertEqual(auth.get_auth_ref.return_value.service_catalog,
+                         ctx.service_catalog)
+        enforcement_on_end.assert_called_once_with(ctx, mock.ANY, mock.ANY)
 
     def test_before_end_lease(self):
         basic_action = self.patch(self.manager, '_basic_action')
