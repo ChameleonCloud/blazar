@@ -741,12 +741,12 @@ class ManagerService(service_utils.RPCServer):
         lease = self.get_lease(lease_id)
         allocations = self._existing_allocations(lease['reservations'])
         try:
-            # Events run without a request context, so give enforcement
-            # Blazar's own service catalog to find the identity endpoint.
+            # Events run in an empty context with no service catalog, so give
+            # enforcement Blazar's own catalog to find the identity endpoint.
             session = keystone.BlazarKeystoneClient().session
-            ctx = context.BlazarContext(
-                service_catalog=session.auth.get_auth_ref(
-                    session).service_catalog)
+            ctx = context.current()
+            ctx.service_catalog = session.auth.get_auth_ref(
+                session).service_catalog
             self.enforcement.on_end(ctx, lease, allocations)
         except Exception as e:
             LOG.error(e)
