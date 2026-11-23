@@ -20,6 +20,7 @@ from oslo_log import log as logging
 
 from blazar.api import app as wsgi_app
 from blazar.api.v2 import app as v2_app
+from blazar.notification import notifier
 from blazar.utils import service as service_utils
 
 
@@ -42,6 +43,7 @@ def init_app():
     config_files = _get_config_files()
     CONF([], project='blazar', prog='blazar-api',
          default_config_files=config_files)
+    notifier.init()
     service_utils.prepare_service()
     if not CONF.enable_v1_api:
         app = v2_app.make_app()
