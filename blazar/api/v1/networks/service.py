@@ -14,19 +14,19 @@
 # limitations under the License.
 
 from blazar import context
-from blazar.manager.service import get_plugins
+from blazar.manager.networks import rpcapi as manager_rpcapi
 from blazar import policy
 from blazar.utils import trusts
 
 
 class API(object):
     def __init__(self):
-        self.plugin = get_plugins()["network"]
+        self.manager_rpcapi = manager_rpcapi.ManagerRPCAPI()
 
     @policy.authorize('networks', 'get')
     def get_networks(self):
         """List all existing networks."""
-        return self.plugin.list_networks()
+        return self.manager_rpcapi.list_networks()
 
     @policy.authorize('networks', 'post')
     @trusts.use_trust_auth()
@@ -37,7 +37,7 @@ class API(object):
         :type data: dict
         """
 
-        return self.plugin.create_network(data)
+        return self.manager_rpcapi.create_network(data)
 
     @policy.authorize('networks', 'get')
     def get_network(self, network_id):
@@ -46,7 +46,7 @@ class API(object):
         :param network_id: ID of the network in Blazar DB.
         :type network_id: str
         """
-        return self.plugin.get_network(network_id)
+        return self.manager_rpcapi.get_network(network_id)
 
     @policy.authorize('networks', 'put')
     def update_network(self, network_id, data):
@@ -57,7 +57,7 @@ class API(object):
         :param data: New network characteristics.
         :type data: dict
         """
-        return self.plugin.update_network(network_id, data)
+        return self.manager_rpcapi.update_network(network_id, data)
 
     @policy.authorize('networks', 'delete')
     def delete_network(self, network_id):
@@ -66,7 +66,7 @@ class API(object):
         :param network_id: ID of the network in Blazar DB.
         :type network_id: str
         """
-        self.plugin.delete_network(network_id)
+        self.manager_rpcapi.delete_network(network_id)
 
     @policy.authorize('networks', 'get_allocations')
     def list_allocations(self, query):
@@ -81,7 +81,7 @@ class API(object):
         if policy.enforce(ctx, 'admin', {}, do_raise=False):
             detail = True
 
-        return self.plugin.list_allocations(query, detail=detail)
+        return self.manager_rpcapi.list_allocations(query, detail=detail)
 
     @policy.authorize('networks', 'get_allocations')
     def get_allocations(self, network_id, query):
@@ -92,14 +92,15 @@ class API(object):
         :param query: parameters to query allocation
         :type query: dict
         """
-        return self.plugin.get_allocations(network_id, query)
+        return self.manager_rpcapi.get_allocations(network_id, query)
 
     @policy.authorize('networks', 'get_resource_properties')
     def list_resource_properties(self, query):
         """List resource properties for networks."""
-        return self.plugin.list_resource_properties(query)
+        return self.manager_rpcapi.list_resource_properties(query)
 
     @policy.authorize('networks', 'update_resource_properties')
     def update_resource_property(self, property_name, data):
         """Update a network resource property."""
-        return self.plugin.update_resource_property(property_name, data)
+        return self.manager_rpcapi.update_resource_property(
+            property_name, data)

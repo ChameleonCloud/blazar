@@ -57,6 +57,7 @@ LOG = logging.getLogger(__name__)
 before_end_options = ['', 'snapshot', 'default', 'email']
 
 QUERY_TYPE_ALLOCATION = 'allocation'
+AVAILABILITY_DATE_FORMAT = "%Y-%m-%d %H:%M"
 
 
 class FlavorPlugin(base.BasePlugin):
@@ -574,6 +575,26 @@ class FlavorPlugin(base.BasePlugin):
         if action == 'email':
             plugins_utils.send_lease_extension_reminder(
                 lease, CONF.os_region_name)
+
+    def get_availability(self, flavor_id, start_date, end_date, project_id):
+        """Availability timelines for one flavor, or all if flavor_id is None.
+
+        Entry point for the flavor-instances API over RPC. Dates cross RPC
+        as strings in AVAILABILITY_DATE_FORMAT, in both directions.
+        """
+        fmt = AVAILABILITY_DATE_FORMAT
+        start = datetime.datetime.strptime(start_date, fmt)
+        end = datetime.datetime.strptime(end_date, fmt)
+        if flavor_id:
+            results = [self.compute_availability(
+                flavor_id, start, end, project_id)]
+        else:
+            results = self.compute_all_availability(start, end, project_id)
+        for result in results:
+            for seg in result.get('availability', []):
+                seg['start'] = seg['start'].strftime(fmt)
+                seg['end'] = seg['end'].strftime(fmt)
+        return results
 
     def compute_all_availability(self, start_date, end_date, project_id):
         """Return compute_availability results for every public Nova flavor."""

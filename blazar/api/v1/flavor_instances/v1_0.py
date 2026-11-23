@@ -44,12 +44,6 @@ def _parse_date(value, param_name):
             % {'param': param_name, 'fmt': DATE_FORMAT})
 
 
-def _format_date(dt):
-    if dt is None:
-        return None
-    return datetime.datetime.strftime(dt, DATE_FORMAT)
-
-
 @rest.get('/availability', query=True)
 def flavor_availability(req, query):
     """Return available slot count timeline for a Nova flavor."""
@@ -62,11 +56,8 @@ def flavor_availability(req, query):
     end_date = (_parse_date(raw_end, 'end_date')
                 if raw_end else start_date + datetime.timedelta(days=30))
 
-    results = _api.get_flavor_availability(flavor_id, start_date, end_date)
-
-    for flavor_result in results:
-        for seg in flavor_result.get('availability', []):
-            seg['start'] = _format_date(seg['start'])
-            seg['end'] = _format_date(seg['end'])
+    results = _api.get_flavor_availability(
+        flavor_id, start_date.strftime(DATE_FORMAT),
+        end_date.strftime(DATE_FORMAT))
 
     return api_utils.render(flavor_instances=results)

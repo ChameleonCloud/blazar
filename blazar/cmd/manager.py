@@ -16,7 +16,6 @@
 import eventlet
 eventlet.monkey_patch()
 
-from functools import partial
 import gettext
 import sys
 
@@ -30,29 +29,13 @@ from blazar.notification import notifier
 from blazar.utils import service as service_utils
 
 
-class ManagerServiceSingleton:
-    _instance = None
-
-    def __new__(self, resource_type=None):
-        if not ManagerServiceSingleton._instance:
-            ManagerServiceSingleton._instance = \
-                manager_service.ManagerService()
-        if resource_type:
-            return partial(
-                ManagerServiceSingleton._instance.call, resource_type)
-        return ManagerServiceSingleton._instance
-
-
-manager_service_instance = None
-
-
 def main():
     cfg.CONF(project='blazar', prog='blazar-manager')
     service_utils.prepare_service(sys.argv)
     notifier.init()
     service.launch(
         cfg.CONF,
-        ManagerServiceSingleton(),
+        manager_service.ManagerService(),
         restart_method='mutate'
     ).wait()
 

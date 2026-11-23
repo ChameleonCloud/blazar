@@ -147,8 +147,6 @@ class ServiceTestCase(tests.DBTestCase):
             importlib.reload(service)
         self.service = service
         self.manager = self.service.ManagerService()
-        self.get_plugins = self.service.get_plugins
-        self.get_plugins.cache_clear()
         self.enforcement = self.patch(self.manager, 'enforcement')
 
         self.lease_id = '11-22-33'
@@ -240,7 +238,7 @@ class ServiceTestCase(tests.DBTestCase):
             FakeExtension("fake.plugin.2", FakePlugin)]
 
         self.assertRaises(manager_ex.PluginConfigurationError,
-                          self.get_plugins)
+                          self.manager._get_plugins)
 
     def test_plugins_that_fail_to_init(self):
         config = self.patch(cfg.CONF, "manager")
@@ -249,7 +247,7 @@ class ServiceTestCase(tests.DBTestCase):
             FakeExtension("fake.plugin.1", FakePlugin),
             FakeExtension("fake.plugin.2", FakePluginRaisesException)]
 
-        plugins = self.get_plugins()
+        plugins = self.manager._get_plugins()
         self.assertIn("fake:plugin", plugins)
         self.assertNotIn("fake:plugin:raise", plugins)
 
@@ -258,7 +256,7 @@ class ServiceTestCase(tests.DBTestCase):
         config.plugins = ['foo.plugin']
 
         self.assertRaises(exceptions.BlazarException,
-                          self.get_plugins)
+                          self.manager._get_plugins)
 
     def test_setup_actions(self):
         actions = {'virtual:instance':

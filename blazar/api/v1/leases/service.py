@@ -15,8 +15,8 @@
 
 from oslo_log import log as logging
 
-from blazar.cmd.manager import ManagerServiceSingleton
 from blazar import context
+from blazar.manager.leases import rpcapi as manager_rpcapi
 from blazar import policy
 from blazar.utils import trusts
 
@@ -26,7 +26,7 @@ LOG = logging.getLogger(__name__)
 class API(object):
 
     def __init__(self):
-        self.manager_service = ManagerServiceSingleton()
+        self.manager_rpcapi = manager_rpcapi.ManagerRPCAPI()
 
     # Leases operations
 
@@ -42,8 +42,8 @@ class API(object):
             project_id = query.get("project_id")
         else:
             project_id = ctx.project_id
-        return self.manager_service.list_leases(project_id=project_id,
-                                                query=query)
+        return self.manager_rpcapi.list_leases(project_id=project_id,
+                                               query=query)
 
     @policy.authorize('leases', 'post')
     @trusts.use_trust_auth()
@@ -58,7 +58,7 @@ class API(object):
         # two lines
         ctx = context.current()
         data['user_id'] = ctx.user_id
-        return self.manager_service.create_lease(data)
+        return self.manager_rpcapi.create_lease(data)
 
     @policy.authorize('leases', 'get')
     def get_lease(self, lease_id):
@@ -67,7 +67,7 @@ class API(object):
         :param lease_id: ID of the lease in Blazar DB.
         :type lease_id: str
         """
-        return self.manager_service.get_lease(lease_id)
+        return self.manager_rpcapi.get_lease(lease_id)
 
     @policy.authorize('leases', 'get')
     def hosts_in_lease(self, lease_id):
@@ -76,7 +76,7 @@ class API(object):
         :param lease_id: ID of the lease in Blazar DB.
         :type lease_id: str
         """
-        return self.manager_service.hosts_in_lease(lease_id)
+        return self.manager_rpcapi.hosts_in_lease(lease_id)
 
     @policy.authorize('leases', 'get')
     def networks_in_lease(self, lease_id):
@@ -85,7 +85,7 @@ class API(object):
         :param lease_id: ID of the lease in Blazar DB.
         :type lease_id: str
         """
-        return self.manager_service.networks_in_lease(lease_id)
+        return self.manager_rpcapi.networks_in_lease(lease_id)
 
     @policy.authorize('leases', 'get')
     def devices_in_lease(self, lease_id):
@@ -94,7 +94,7 @@ class API(object):
         :param lease_id: ID of the lease in Blazar DB.
         :type lease_id: str
         """
-        return self.manager_service.devices_in_lease(lease_id)
+        return self.manager_rpcapi.devices_in_lease(lease_id)
 
     @policy.authorize('leases', 'put')
     def update_lease(self, lease_id, data):
@@ -105,7 +105,7 @@ class API(object):
         :param data: New lease characteristics.
         :type data: dict
         """
-        return self.manager_service.update_lease(lease_id, data)
+        return self.manager_rpcapi.update_lease(lease_id, data)
 
     @policy.authorize('leases', 'delete')
     def delete_lease(self, lease_id):
@@ -114,7 +114,7 @@ class API(object):
         :param lease_id: ID of the lease in Blazar DB.
         :type lease_id: str
         """
-        self.manager_service.delete_lease(lease_id)
+        self.manager_rpcapi.delete_lease(lease_id)
 
     # Plugins operations
 

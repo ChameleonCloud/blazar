@@ -12,20 +12,20 @@
 # limitations under the License.
 
 from blazar import context
-from blazar.manager.service import get_plugins
+from blazar.manager.flavor_instances import rpcapi as manager_rpcapi
 from blazar import policy
-from blazar.plugins import flavor as flavor_plugin
 
 
 class API(object):
     def __init__(self):
-        self.plugin = get_plugins()[flavor_plugin.RESOURCE_TYPE]
+        self.manager_rpcapi = manager_rpcapi.ManagerRPCAPI()
 
     @policy.authorize('flavor_instances', 'get_availability')
     def get_flavor_availability(self, flavor_id, start_date, end_date):
+        """Availability timelines for a flavor, or all flavors.
+
+        Dates are strings in the plugin's AVAILABILITY_DATE_FORMAT.
+        """
         ctx = context.current()
-        if flavor_id:
-            return [self.plugin.compute_availability(
-                flavor_id, start_date, end_date, ctx.project_id)]
-        return self.plugin.compute_all_availability(
-            start_date, end_date, ctx.project_id)
+        return self.manager_rpcapi.get_availability(
+            flavor_id, start_date, end_date, ctx.project_id)
