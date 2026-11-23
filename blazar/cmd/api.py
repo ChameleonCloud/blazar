@@ -28,7 +28,6 @@ gettext.install('blazar')
 
 from blazar.api import app as wsgi_app
 from blazar.api.v2 import app as v2_app
-from blazar.notification import notifier
 from blazar.utils import service as service_utils
 
 
@@ -51,7 +50,6 @@ CONF.import_opt('enable_v1_api', 'blazar.config')
 def main():
     """Entry point to start Blazar API wsgi server."""
     cfg.CONF(sys.argv[1:], project='blazar', prog='blazar-api')
-    notifier.init()
     service_utils.prepare_service(sys.argv)
     if not CONF.enable_v1_api:
         app = v2_app.make_app()

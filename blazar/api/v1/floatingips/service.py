@@ -14,19 +14,19 @@
 # limitations under the License.
 
 from blazar import context
-from blazar.manager.service import get_plugins
+from blazar.manager.floatingips import rpcapi as manager_rpcapi
 from blazar import policy
 from blazar.utils import trusts
 
 
 class API(object):
     def __init__(self):
-        self.plugin = get_plugins()["virtual:floatingip"]
+        self.manager_rpcapi = manager_rpcapi.ManagerRPCAPI()
 
     @policy.authorize('floatingips', 'get')
     def get_floatingips(self):
         """List all existing floatingip."""
-        return self.plugin.list_floatingip()
+        return self.manager_rpcapi.list_floatingips()
 
     @policy.authorize('floatingips', 'post')
     @trusts.use_trust_auth()
@@ -37,7 +37,7 @@ class API(object):
         :type data: dict
         """
 
-        return self.plugin.create_floatingip(data)
+        return self.manager_rpcapi.create_floatingip(data)
 
     @policy.authorize('floatingips', 'get')
     def get_floatingip(self, floatingip_id):
@@ -46,7 +46,7 @@ class API(object):
         :param floatingip_id: ID of the floatingip in Blazar DB.
         :type floatingip_id: str
         """
-        return self.plugin.get_floatingip(floatingip_id)
+        return self.manager_rpcapi.get_floatingip(floatingip_id)
 
     @policy.authorize('floatingips', 'delete')
     def delete_floatingip(self, floatingip_id):
@@ -55,7 +55,7 @@ class API(object):
         :param floatingip_id: ID of the floatingip in Blazar DB.
         :type floatingip_id: str
         """
-        self.plugin.delete_floatingip(floatingip_id)
+        self.manager_rpcapi.delete_floatingip(floatingip_id)
 
     @policy.authorize('floatingips', 'get_allocations')
     def list_allocations(self, query):
@@ -70,4 +70,4 @@ class API(object):
         if policy.enforce(ctx, 'admin', {}, do_raise=False):
             detail = True
 
-        return self.plugin.list_allocations(query, detail=detail)
+        return self.manager_rpcapi.list_allocations(query, detail=detail)

@@ -15,9 +15,7 @@
 
 import ddt
 import flask
-from oslo_config import cfg
 from oslo_utils import uuidutils
-from stevedore import enabled
 from testtools import matchers
 
 from oslo_middleware import request_id as id
@@ -29,8 +27,6 @@ from blazar.api.v1.oshosts import v1_0 as hosts_api_v1_0
 from blazar.api.v1 import request_id
 from blazar.api.v1 import request_log
 from blazar import context
-from blazar.manager import service
-from blazar.plugins.oshosts import host_plugin
 from blazar import tests
 
 
@@ -85,18 +81,6 @@ class OsHostAPITestCase(tests.TestCase):
 
     def setUp(self):
         super(OsHostAPITestCase, self).setUp()
-
-        class FakeExtension():
-            def __init__(self, name, plugin):
-                self.name = name
-                self.plugin = plugin
-        ext_manager = self.patch(enabled, 'EnabledExtensionManager')
-        ext_manager.return_value.extensions = [
-            FakeExtension('physical:host', host_plugin.PhysicalHostPlugin),
-        ]
-        cfg.CONF.set_override('plugins', ['physical:host'], group='manager')
-        service.get_plugins.cache_clear()
-
         self.app = make_app()
         self.headers = {'Accept': 'application/json',
                         'OpenStack-API-Version': 'reservation 1.0'}
@@ -120,10 +104,6 @@ class OsHostAPITestCase(tests.TestCase):
                                                    'list_resource_properties')
         self.update_resource_property = self.patch(service_api.API,
                                                    'update_resource_property')
-
-    def tearDown(self):
-        super(OsHostAPITestCase, self).tearDown()
-        cfg.CONF.clear_override('plugins', 'manager')
 
     def _assert_response(self, actual_resp, expected_status_code,
                          expected_resp_body, key='host',
